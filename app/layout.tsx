@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { PullToRefreshWrapper } from "@/components/pull-to-refresh-wrapper";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
 
@@ -54,7 +55,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <QueryProvider>
-          {children}
+          <PullToRefreshWrapper>
+            {children}
+          </PullToRefreshWrapper>
           <MobileBottomNav />
         </QueryProvider>
       </body>
