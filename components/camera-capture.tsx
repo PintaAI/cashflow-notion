@@ -9,8 +9,7 @@ import {
   Camera01Icon,
   Cancel01Icon,
   Tick02Icon,
-  FlashIcon,
-  FlashOffIcon
+  RotateIcon
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 
@@ -23,7 +22,6 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
   const webcamRef = useRef<Webcam>(null)
   const [isReady, setIsReady] = useState(false)
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment")
-  const [flash, setFlash] = useState(false)
 
   const videoConstraints = {
     facingMode,
@@ -100,7 +98,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
           className="rounded-full bg-white/10 hover:bg-white/20 text-white size-12"
           onClick={toggleCamera}
         >
-          <HugeiconsIcon icon={FlashIcon} strokeWidth={2} className="size-6" />
+          <HugeiconsIcon icon={RotateIcon} strokeWidth={2} className="size-6" />
         </Button>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { PullToRefreshWrapper } from "@/components/pull-to-refresh-wrapper";
 
@@ -51,15 +52,23 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-mono", jetbrainsMono.variable)}
     >
       <body className="min-h-full flex flex-col">
-        <QueryProvider>
-          <PullToRefreshWrapper>
-            {children}
-          </PullToRefreshWrapper>
-          <MobileBottomNav />
-        </QueryProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <QueryProvider>
+            <PullToRefreshWrapper>
+              {children}
+            </PullToRefreshWrapper>
+            <MobileBottomNav />
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

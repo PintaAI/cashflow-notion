@@ -120,14 +120,28 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
       const result = await apiResponse.json()
 
       if (result.success && result.data) {
+        // Fill in the name/description
+        if (result.data.name) {
+          setName(result.data.name)
+        }
+        // Fill in the amount
         if (result.data.amount) {
           setNominal(String(result.data.amount))
         }
+        // Fill in the date
         if (result.data.date) {
           const parsedDate = new Date(result.data.date)
           if (!isNaN(parsedDate.getTime())) {
             setDate(parsedDate)
           }
+        }
+        // Fill in the category (only for expenses)
+        if (result.data.category && result.data.io !== 'Income') {
+          setCategory(result.data.category as CategoryType)
+        }
+        // Set the I/O type
+        if (result.data.io) {
+          setIo(result.data.io as IOType)
         }
       }
     } catch (error) {
@@ -159,14 +173,28 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
       const result = await response.json()
 
       if (result.success && result.data) {
+        // Fill in the name/description
+        if (result.data.name) {
+          setName(result.data.name)
+        }
+        // Fill in the amount
         if (result.data.amount) {
           setNominal(String(result.data.amount))
         }
+        // Fill in the date
         if (result.data.date) {
           const parsedDate = new Date(result.data.date)
           if (!isNaN(parsedDate.getTime())) {
             setDate(parsedDate)
           }
+        }
+        // Fill in the category (only for expenses)
+        if (result.data.category && result.data.io !== 'Income') {
+          setCategory(result.data.category as CategoryType)
+        }
+        // Set the I/O type
+        if (result.data.io) {
+          setIo(result.data.io as IOType)
         }
       }
     } catch (error) {
