@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import confetti from "canvas-confetti"
 import {
   Drawer,
@@ -10,7 +11,6 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-  DrawerClose
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -91,6 +91,7 @@ interface ExpenseFormDrawerProps {
 
 export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -250,7 +251,10 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
       // Close drawer
       setOpen(false)
       
-      // Refresh data
+      // Invalidate React Query cache to refetch data
+      queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] })
+      
+      // Refresh server-side data
       router.refresh()
       onSuccess?.()
     } catch (error) {
