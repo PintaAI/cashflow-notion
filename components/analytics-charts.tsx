@@ -104,7 +104,7 @@ export function AnalyticsCharts({ analytics, filters, categories }: AnalyticsCha
       />
 
       {/* Filter Section */}
-      <div className="rounded-lg border p-3 sm:p-4 mb-4 sm:mb-6">
+      <div className="rounded-lg border mt-4 p-3 sm:p-4 mb-4 sm:mb-6">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h2 className="text-base sm:text-lg font-semibold">Filters</h2>
           <AnalyticsFilter filters={filters} categories={categories} />
