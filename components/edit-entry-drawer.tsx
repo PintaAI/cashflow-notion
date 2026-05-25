@@ -1,16 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import confetti from "canvas-confetti"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   Drawer,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
-  DrawerClose
+  DrawerClose,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,19 +17,18 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
 } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { addEntry } from "@/app/actions/cashflow"
-import type { CategoryType, IOType } from "@/lib/notion"
+import { editEntry } from "@/app/actions/cashflow"
+import type { CashflowEntry, CategoryType, IOType } from "@/lib/notion"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Add01Icon,
   Calendar03Icon,
-  Delete02Icon,
   Tick02Icon,
+  Delete02Icon,
   UserGroupIcon,
   Home01Icon,
   TShirtIcon,
@@ -46,14 +43,9 @@ import {
   More01Icon,
   MoneyReceiveIcon,
   MoneySendIcon,
-  Camera01Icon,
-  Loading03Icon,
-  Image01Icon
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
-import { CameraCapture } from "@/components/camera-capture"
 
-// Category configuration with colors and icons (same as cashflow-table)
 const categoryConfig: Record<CategoryType, { color: string; bgColor: string; icon: typeof UserGroupIcon }> = {
   sosial: { color: "text-pink-700 dark:text-pink-300", bgColor: "bg-pink-100 dark:bg-pink-900/30", icon: UserGroupIcon },
   keluarga: { color: "text-amber-700 dark:text-amber-300", bgColor: "bg-amber-100 dark:bg-amber-900/30", icon: Home01Icon },
@@ -67,194 +59,59 @@ const categoryConfig: Record<CategoryType, { color: string; bgColor: string; ico
   Hiburan: { color: "text-purple-700 dark:text-purple-300", bgColor: "bg-purple-100 dark:bg-purple-900/30", icon: GameController01Icon },
   Kesehatan: { color: "text-teal-700 dark:text-teal-300", bgColor: "bg-teal-100 dark:bg-teal-900/30", icon: HealthIcon },
   Lainnya: { color: "text-slate-700 dark:text-slate-300", bgColor: "bg-slate-100 dark:bg-slate-900/30", icon: More01Icon },
-};
+}
 
 const EXPENSE_CATEGORIES: CategoryType[] = [
-  "sosial",
-  "keluarga",
-  "clothing",
-  "skincare",
-  "tidak terduga",
-  "Jajan",
-  "Transportasi",
-  "Belanja",
-  "Tagihan",
-  "Hiburan",
-  "Kesehatan",
-  "Lainnya"
+  "sosial", "keluarga", "clothing", "skincare", "tidak terduga",
+  "Jajan", "Transportasi", "Belanja", "Tagihan", "Hiburan", "Kesehatan", "Lainnya",
 ]
 
-interface ExpenseFormDrawerProps {
-  trigger?: React.ReactNode
+interface EditEntryDrawerProps {
+  entry: CashflowEntry
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onSuccess?: () => void
 }
 
-export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps) {
+export function EditEntryDrawer({ entry, open, onOpenChange, onSuccess }: EditEntryDrawerProps) {
   const router = useRouter()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [open, setOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [showCamera, setShowCamera] = useState(false)
-  const [name, setName] = useState("")
-  const [nominal, setNominal] = useState("")
-  const [category, setCategory] = useState<CategoryType | "">("")
-  const [date, setDate] = useState<Date | undefined>(new Date())
-  const [io, setIo] = useState<IOType>("Expenses")
+  const queryClient = useQueryClient()
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [name, setName] = React.useState(entry.name)
+  const [nominal, setNominal] = React.useState(String(entry.nominal))
+  const [category, setCategory] = React.useState<CategoryType | "">(entry.category ?? "")
+  const [date, setDate] = React.useState<Date | undefined>(entry.date ? new Date(entry.date) : new Date())
+  const [io, setIo] = React.useState<IOType>(entry.io ?? "Expenses")
 
-  const celebrateSave = () => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-
-    navigator.vibrate?.(12)
-    confetti({
-      particleCount: 70,
-      spread: 60,
-      startVelocity: 36,
-      scalar: 0.85,
-      origin: { x: 0.5, y: 0.78 },
-    })
-  }
-
-  const extractFromImage = async (imageData: string) => {
-    setIsExtracting(true)
-    try {
-      // Convert base64 data URL to blob for FormData
-      const response = await fetch(imageData)
-      const blob = await response.blob()
-      const file = new File([blob], 'receipt.jpg', { type: 'image/jpeg' })
-
-      const formData = new FormData()
-      formData.append('image', file)
-
-      const apiResponse = await fetch('/api/extract-receipt', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await apiResponse.json()
-
-      if (result.success && result.data) {
-        // Fill in the name/description
-        if (result.data.name) {
-          setName(result.data.name)
-        }
-        // Fill in the amount
-        if (result.data.amount) {
-          setNominal(String(result.data.amount))
-        }
-        // Fill in the date
-        if (result.data.date) {
-          const parsedDate = new Date(result.data.date)
-          if (!isNaN(parsedDate.getTime())) {
-            setDate(parsedDate)
-          }
-        }
-        // Fill in the category (only for expenses)
-        if (result.data.category && result.data.io !== 'Income') {
-          setCategory(result.data.category as CategoryType)
-        }
-        // Set the I/O type
-        if (result.data.io) {
-          setIo(result.data.io as IOType)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to extract receipt data:', error)
-    } finally {
-      setIsExtracting(false)
+  React.useEffect(() => {
+    if (open) {
+      setName(entry.name)
+      setNominal(String(entry.nominal))
+      setCategory(entry.category ?? "")
+      setDate(entry.date ? new Date(entry.date) : new Date())
+      setIo(entry.io ?? "Expenses")
     }
-  }
-
-  const handleCameraCapture = (imageData: string) => {
-    setShowCamera(false)
-    extractFromImage(imageData)
-  }
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsExtracting(true)
-    try {
-      const formData = new FormData()
-      formData.append('image', file)
-
-      const response = await fetch('/api/extract-receipt', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (result.success && result.data) {
-        // Fill in the name/description
-        if (result.data.name) {
-          setName(result.data.name)
-        }
-        // Fill in the amount
-        if (result.data.amount) {
-          setNominal(String(result.data.amount))
-        }
-        // Fill in the date
-        if (result.data.date) {
-          const parsedDate = new Date(result.data.date)
-          if (!isNaN(parsedDate.getTime())) {
-            setDate(parsedDate)
-          }
-        }
-        // Fill in the category (only for expenses)
-        if (result.data.category && result.data.io !== 'Income') {
-          setCategory(result.data.category as CategoryType)
-        }
-        // Set the I/O type
-        if (result.data.io) {
-          setIo(result.data.io as IOType)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to extract receipt data:', error)
-    } finally {
-      setIsExtracting(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }
+  }, [open, entry])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // Category is required only for Expenses
     if (!name.trim() || !nominal || (io === "Expenses" && !category)) return
 
     setIsSubmitting(true)
-    
     try {
-      await addEntry({
+      await editEntry(entry.id, {
         name: name.trim(),
         nominal: Number(nominal),
         category: io === "Expenses" ? (category as CategoryType) : undefined,
-        date: date?.toISOString().split('T')[0],
+        date: date?.toISOString().split("T")[0],
         io,
       })
-      celebrateSave()
-       
-      // Reset form
-      setName("")
-      setNominal("")
-      setCategory("")
-      setDate(new Date())
-      setIo("Expenses")
-      
-      // Close drawer
-      setOpen(false)
-      
-      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] })
+      onOpenChange(false)
       router.refresh()
       onSuccess?.()
     } catch (error) {
-      console.error("Failed to add entry:", error)
+      console.error("Failed to edit entry:", error)
     } finally {
       setIsSubmitting(false)
     }
@@ -269,24 +126,15 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
   }
 
   return (
-    <Drawer open={open} onOpenChange={setOpen}>
-      <DrawerTrigger asChild>
-        {trigger || (
-          <Button size="lg" className="gap-2 w-full sm:w-auto">
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-5" />
-            Add Expense
-          </Button>
-        )}
-      </DrawerTrigger>
+    <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[96vh]">
         <DrawerHeader className="pb-2">
           <DrawerTitle className="text-lg font-semibold text-center">
-            Add New Entry
+            Edit Entry
           </DrawerTitle>
         </DrawerHeader>
-        
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto">
-          {/* I/O Type Toggle - Large touch targets */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -316,64 +164,12 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </button>
           </div>
 
-          {/* Scan Receipt Buttons */}
           <div className="space-y-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-              disabled={isExtracting}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 gap-2"
-                onClick={() => setShowCamera(true)}
-                disabled={isExtracting}
-              >
-                {isExtracting ? (
-                  <>
-                    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
-                    Extracting...
-                  </>
-                ) : (
-                  <>
-                    <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-5" />
-                    Camera
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 gap-2"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isExtracting}
-              >
-                <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-5" />
-                Upload
-              </Button>
-            </div>
-          </div>
-
-          {/* Camera Capture Modal */}
-          {showCamera && (
-            <CameraCapture
-              onCapture={handleCameraCapture}
-              onClose={() => setShowCamera(false)}
-            />
-          )}
-
-          {/* Name Input */}
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">
+            <label htmlFor="edit-name" className="text-sm font-medium text-foreground">
               Description
             </label>
             <Input
-              id="name"
+              id="edit-name"
               type="text"
               placeholder="What did you spend on?"
               value={name}
@@ -383,13 +179,12 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             />
           </div>
 
-          {/* Amount Input */}
           <div className="space-y-2">
-            <label htmlFor="nominal" className="text-sm font-medium text-foreground">
+            <label htmlFor="edit-nominal" className="text-sm font-medium text-foreground">
               Amount (IDR)
             </label>
             <Input
-              id="nominal"
+              id="edit-nominal"
               type="number"
               placeholder="0"
               value={nominal}
@@ -398,33 +193,8 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
               min="0"
               required
             />
-            {/* Quick Amount Buttons - IDR currency note colors */}
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { value: 1000, label: "1k", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" },
-                { value: 2000, label: "2k", color: "bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200" },
-                { value: 5000, label: "5k", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-                { value: 10000, label: "10k", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
-                { value: 20000, label: "20k", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-                { value: 50000, label: "50k", color: "bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200" },
-                { value: 100000, label: "100k", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-              ].map((btn) => (
-                <button
-                  key={btn.value}
-                  type="button"
-                  onClick={() => setNominal(String((Number(nominal) || 0) + btn.value))}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95",
-                    btn.color
-                  )}
-                >
-                  {btn.label}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Category Select - Only for Expenses */}
           {io === "Expenses" && (
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
@@ -444,7 +214,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
                 <SelectContent>
                   <ScrollArea className="h-[200px]">
                     {EXPENSE_CATEGORIES.map((cat) => {
-                      const config = categoryConfig[cat];
+                      const config = categoryConfig[cat]
                       return (
                         <SelectItem key={cat} value={cat} className="py-3 text-base">
                           <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
@@ -452,7 +222,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
                             {cat}
                           </span>
                         </SelectItem>
-                      );
+                      )
                     })}
                   </ScrollArea>
                 </SelectContent>
@@ -460,7 +230,6 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </div>
           )}
 
-          {/* Date Picker */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
               Date
@@ -479,7 +248,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
                     weekday: "short",
                     day: "numeric",
                     month: "short",
-                    year: "numeric"
+                    year: "numeric",
                   }) : "Select date"}
                 </Button>
               </PopoverTrigger>
@@ -493,7 +262,6 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </Popover>
           </div>
 
-          {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-3 pt-4">
             <Button
               type="button"

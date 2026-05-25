@@ -1,9 +1,9 @@
 /**
  * PWA Icon Generator Script
- * 
- * This script generates PWA icons from a base SVG.
+ *
+ * This script generates PWA icons from a base PNG image (cashflow.png).
  * Run with: bun run scripts/generate-icons.ts
- * 
+ *
  * Prerequisites: bun add sharp
  */
 
@@ -20,13 +20,13 @@ async function generateIcons() {
     mkdirSync(iconsDir, { recursive: true });
   }
 
-  const svgPath = join(iconsDir, 'icon.svg');
+  const sourcePath = join(process.cwd(), 'cashflow.png');
   
   for (const size of sizes) {
     const outputPath = join(iconsDir, `icon-${size}x${size}.png`);
     
     try {
-      await sharp(svgPath)
+      await sharp(sourcePath)
         .resize(size, size)
         .png()
         .toFile(outputPath);
@@ -39,7 +39,7 @@ async function generateIcons() {
 
   // Generate favicon.ico
   try {
-    await sharp(svgPath)
+    await sharp(sourcePath)
       .resize(32, 32)
       .toFile(join(process.cwd(), 'public', 'favicon.ico'));
     console.log('✓ Generated favicon.ico');
@@ -49,7 +49,7 @@ async function generateIcons() {
 
   // Generate apple-touch-icon.png
   try {
-    await sharp(svgPath)
+    await sharp(sourcePath)
       .resize(180, 180)
       .toFile(join(iconsDir, 'apple-touch-icon.png'));
     console.log('✓ Generated apple-touch-icon.png');

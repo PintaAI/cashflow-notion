@@ -2,6 +2,7 @@
 
 import { notion, DATA_SOURCE_ID } from "@/lib/notion";
 import type { IOType, CategoryType } from "@/lib/notion";
+import type { QueryDataSourceParameters } from "@notionhq/client";
 
 // Filter options for analytics
 export interface AnalyticsFilter {
@@ -42,6 +43,20 @@ export interface DailyAnalytics {
   income: number;
   expenses: number;
   net: number;
+}
+
+export interface ActivityDay {
+  date: string;
+  count: number;
+  income: number;
+  expenses: number;
+}
+
+export interface ActivityOverview {
+  days: ActivityDay[];
+  totalEntries: number;
+  activeDays: number;
+  currentStreak: number;
 }
 
 export interface AnalyticsData {
@@ -91,6 +106,32 @@ function addOneDayToDate(dateStr: string): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function formatDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function subtractDays(date: Date, days: number): Date {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() - days);
+  return nextDate;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getCurrentStreak(activeDateKeys: Set<string>, today: Date): number {
+  let streak = 0;
+  let cursor = startOfDay(today);
+
+  while (activeDateKeys.has(formatDateKey(cursor))) {
+    streak += 1;
+    cursor = subtractDays(cursor, 1);
+  }
+
+  return streak;
+}
+
 /**
  * Convert URL-based filter to AnalyticsFilter
  * URL params use 'from' and 'to' while internal uses 'startDate' and 'endDate'
@@ -110,7 +151,10 @@ function urlFilterToAnalyticsFilter(urlFilter: URLAnalyticsFilter): AnalyticsFil
  * Uses the same pattern as getEntriesFiltered in lib/notion.ts
  * Uses 'as any' to bypass Notion SDK's complex filter type checking
  */
-function buildNotionFilter(filter: AnalyticsFilter): any {
+type QueryDataSourceFilter = NonNullable<QueryDataSourceParameters["filter"]>;
+type QueryDataSourcePropertyFilter = Extract<QueryDataSourceFilter, { property: string }>;
+
+function buildNotionFilter(filter: AnalyticsFilter): QueryDataSourceFilter | undefined {
   // Build individual filters
   const ioFilter = filter.io ? {
     property: "I/O",
@@ -131,7 +175,7 @@ function buildNotionFilter(filter: AnalyticsFilter): any {
   } : null;
 
   // Combine filters
-  const allFilters = [ioFilter, categoryFilter, dateFilter].filter(Boolean);
+  const allFilters = [ioFilter, categoryFilter, dateFilter].filter(Boolean) as QueryDataSourcePropertyFilter[];
 
   if (allFilters.length === 0) {
     return undefined;
@@ -308,6 +352,97 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}): Promise<Anal
     byMonth,
     byDay,
     filteredBy: filter,
+  };
+}
+
+function getMondayOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return startOfDay(d);
+}
+
+interface PageWithCreatedTime {
+  id: string;
+  created_time: string;
+  properties: Record<string, unknown>;
+}
+
+function extractCreatedTime(page: { created_time?: string }): string | null {
+  if (!page.created_time) return null;
+  return page.created_time.split("T")[0];
+}
+
+export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOverview> {
+  const today = startOfDay(new Date());
+  const startDate = subtractDays(today, daysBack - 1);
+  const alignedStartDate = getMondayOfWeek(startDate);
+  const startDateKey = formatDateKey(alignedStartDate);
+  const dayMap = new Map<string, ActivityDay>();
+  let nextCursor: string | null = null;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: DATA_SOURCE_ID,
+      filter: {
+        timestamp: "created_time",
+        created_time: {
+          on_or_after: startDateKey,
+        },
+      },
+      page_size: 100,
+      start_cursor: nextCursor || undefined,
+    });
+
+    for (const page of response.results) {
+      if ("properties" in page && "created_time" in page) {
+        const props = (page as PageWithProperties).properties as Record<
+          string,
+          { type: string; [key: string]: unknown }
+        >;
+
+        const createdDate = extractCreatedTime(page as PageWithCreatedTime);
+        if (!createdDate) continue;
+
+        const nominal = extractNumber(props["Nominal"]);
+        const io = extractSelect(props["I/O"]);
+        const existing = dayMap.get(createdDate) || {
+          date: createdDate,
+          count: 0,
+          income: 0,
+          expenses: 0,
+        };
+
+        existing.count += 1;
+        if (io === "Income") {
+          existing.income += nominal;
+        } else if (io === "Expenses") {
+          existing.expenses += nominal;
+        }
+
+        dayMap.set(createdDate, existing);
+      }
+    }
+
+    nextCursor = response.next_cursor;
+  } while (nextCursor);
+
+  const totalDays = daysBack + (alignedStartDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
+  const days: ActivityDay[] = [];
+  for (let i = 0; i < Math.ceil(totalDays); i += 1) {
+    const date = subtractDays(alignedStartDate, -i);
+    const dateKey = formatDateKey(date);
+    days.push(dayMap.get(dateKey) || { date: dateKey, count: 0, income: 0, expenses: 0 });
+  }
+
+  const activeDateKeys = new Set(days.filter((day) => day.count > 0).map((day) => day.date));
+
+  return {
+    days,
+    totalEntries: days.reduce((total, day) => total + day.count, 0),
+    activeDays: activeDateKeys.size,
+    currentStreak: getCurrentStreak(activeDateKeys, today),
   };
 }
 

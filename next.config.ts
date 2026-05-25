@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
   // Empty turbopack config to acknowledge Turbopack usage
   // PWA requires webpack, so builds will use webpack
   turbopack: {},
+  allowedDevOrigins: ["jennie-linux.tail2268a1.ts.net"],
 };
 
 export default withPWA(nextConfig);

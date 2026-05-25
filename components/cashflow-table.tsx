@@ -31,6 +31,8 @@ import {
   Tag01Icon,
   Calendar01Icon,
   ArrowUpDownIcon,
+  AiEditingIcon,
+  Delete03Icon,
 } from "@hugeicons/core-free-icons";
 
 import {
@@ -44,14 +46,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CashflowEntry, IOType, CategoryType } from "@/lib/notion";
-import { fetchEntriesFiltered } from "@/app/actions/cashflow";
+import { fetchEntriesFiltered, removeEntry } from "@/app/actions/cashflow";
+import { EditEntryDrawer } from "@/components/edit-entry-drawer";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Category configuration with colors and icons
 const categoryConfig: Record<CategoryType, { color: string; bgColor: string; icon: typeof UserGroupIcon }> = {
@@ -69,8 +80,28 @@ const categoryConfig: Record<CategoryType, { color: string; bgColor: string; ico
   Lainnya: { color: "text-slate-700 dark:text-slate-300", bgColor: "bg-slate-100 dark:bg-slate-900/30", icon: More01Icon },
 };
 
+// Module-level ref to let the component expose the edit handler to the inline column cell
+const columnActionsRef: { current: { onEdit: (e: CashflowEntry) => void } | null } = { current: null };
+
 // Column definitions
 const columns: ColumnDef<CashflowEntry>[] = [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={table.getIsAllRowsSelected()}
+        onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+  },
   {
     accessorKey: "name",
     header: () => (
@@ -92,12 +123,20 @@ const columns: ColumnDef<CashflowEntry>[] = [
     cell: ({ row }) => {
       const amount = row.getValue("nominal") as number;
       const io = row.getValue("io") as IOType | null;
-      const formatted = new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 0,
-      }).format(amount);
       const isIncome = io === "Income";
+
+      const abs = Math.abs(amount);
+      let formatted: string;
+      if (abs >= 1_000_000) {
+        const val = abs / 1_000_000;
+        formatted = `Rp${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+      } else if (abs >= 1_000) {
+        const val = abs / 1_000;
+        formatted = `Rp${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })}k`;
+      } else {
+        formatted = `Rp${abs.toLocaleString("id-ID")}`;
+      }
+
       return (
         <div className={`text-right font-medium ${isIncome ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500"}`}>
           {formatted}
@@ -175,6 +214,29 @@ const columns: ColumnDef<CashflowEntry>[] = [
       return value === "all" || row.getValue(id) === value;
     },
   },
+  {
+    id: "actions",
+    header: () => <span className="sr-only">Actions</span>,
+    cell: ({ row }) => {
+      const entry = row.original;
+      return (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              columnActionsRef.current?.onEdit(entry);
+            }}
+          >
+            <HugeiconsIcon icon={AiEditingIcon} size={16} />
+            <span className="sr-only">Edit</span>
+          </Button>
+        </div>
+      );
+    },
+  },
 ];
 
 // Category options from the database
@@ -204,6 +266,36 @@ export function CashflowTable() {
   
   // Separate state for I/O filter to drive the query
   const [ioQueryFilter, setIoQueryFilter] = React.useState<string>("all");
+
+  // State for the edit drawer
+  const [editingEntry, setEditingEntry] = React.useState<CashflowEntry | null>(null);
+  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
+
+  const queryClient = useQueryClient();
+
+  // Bulk delete handler
+  const handleBulkDelete = React.useCallback(async () => {
+    const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Hapus ${selectedIds.length} entri terpilih?`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => removeEntry(id)));
+      setRowSelection({});
+      queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] });
+    } catch (error) {
+      console.error("Failed to delete entries:", error);
+    }
+  }, [rowSelection, queryClient]);
+
+  // Sync handlers into module-level ref so columns can access them
+  React.useEffect(() => {
+    columnActionsRef.current = {
+      onEdit: setEditingEntry,
+    };
+    return () => {
+      columnActionsRef.current = null;
+    };
+  }, []);
 
   // Ref for the sentinel element at the bottom
   const loadMoreRef = React.useRef<HTMLDivElement>(null);
@@ -248,10 +340,14 @@ export function CashflowTable() {
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: true,
+    getRowId: (row) => row.id,
     state: {
       sorting,
       columnFilters,
       globalFilter,
+      rowSelection,
     },
   });
 
@@ -289,10 +385,9 @@ export function CashflowTable() {
     return (
       <div className="space-y-4">
         {/* Filters Skeleton */}
-        <div className="flex flex-wrap items-center gap-4">
-          <Skeleton className="h-10 w-full max-w-sm" />
-          <Skeleton className="h-10 w-[140px]" />
-          <Skeleton className="h-10 w-[160px]" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 flex-1" />
+          <Skeleton className="h-10 w-10 shrink-0" />
         </div>
 
         {/* Table Skeleton */}
@@ -335,53 +430,91 @@ export function CashflowTable() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex items-center gap-2">
         {/* Global Search */}
         <Input
           placeholder="Search by name..."
           value={globalFilter}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
+          className="flex-1 min-w-0"
         />
 
-        {/* I/O Filter - This controls both query and table filter */}
-        <Select
-          value={ioQueryFilter}
-          onValueChange={handleIoFilterChange}
-        >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="I/O" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            {ioOptions.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Filter Popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="icon" className="shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" />
+                <path d="M7 12h10" />
+                <path d="M11 18h2" />
+              </svg>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-56 p-3 space-y-3">
+            {/* I/O Filter */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Type</label>
+              <Select
+                value={ioQueryFilter}
+                onValueChange={handleIoFilterChange}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="I/O" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {ioOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        {/* Category Filter - Only filters table data (client-side) */}
-        <Select
-          value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
-          onValueChange={(value: string) =>
-            table.getColumn("category")?.setFilterValue(value)
-          }
-        >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            {categoryOptions.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            {/* Category Filter */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Category</label>
+              <Select
+                value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
+                onValueChange={(value: string) =>
+                  table.getColumn("category")?.setFilterValue(value)
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {categoryOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {Object.values(rowSelection).filter(Boolean).length > 0 && (
+        <div className="flex items-center justify-between rounded-md border bg-muted/50 px-4 py-2">
+          <span className="text-sm text-muted-foreground">
+            {Object.values(rowSelection).filter(Boolean).length} selected
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleBulkDelete}
+          >
+            <HugeiconsIcon icon={Delete03Icon} strokeWidth={2} className="size-4" />
+            Delete Selected
+          </Button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-md border">
@@ -465,6 +598,13 @@ export function CashflowTable() {
           )}
         </div>
       </div>
+      {editingEntry && (
+        <EditEntryDrawer
+          entry={editingEntry}
+          open={!!editingEntry}
+          onOpenChange={(open) => { if (!open) setEditingEntry(null); }}
+        />
+      )}
     </div>
   );
 }

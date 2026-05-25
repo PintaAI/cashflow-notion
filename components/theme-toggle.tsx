@@ -9,20 +9,6 @@ import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <Button variant="ghost" size="icon" className="h-9 w-9">
-        <HugeiconsIcon icon={Sun01Icon} size={18} />
-        <span className="sr-only">Toggle theme</span>
-      </Button>
-    );
-  }
 
   return (
     <Button
@@ -30,6 +16,7 @@ export function ThemeToggle() {
       size="icon"
       className="h-9 w-9"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      suppressHydrationWarning
     >
       {theme === "dark" ? (
         <HugeiconsIcon icon={Sun01Icon} size={18} />

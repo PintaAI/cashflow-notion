@@ -45,6 +45,29 @@ export interface CashflowEntry {
   io: IOType | null;
 }
 
+export interface CategorySpend {
+  category: string;
+  total: number;
+  count: number;
+  percentage: number;
+}
+
+export interface WeeklyStats {
+  weekNumber: number;
+  weekStart: string;
+  weekEnd: string;
+  income: number;
+  expenses: number;
+}
+
+export interface MonthlyStats {
+  month: string;
+  monthName: string;
+  year: number;
+  income: number;
+  expenses: number;
+}
+
 export interface CashflowSummary {
   totalEntries: number;
   totalIncome: number;
@@ -52,6 +75,10 @@ export interface CashflowSummary {
   balance: number;
   byCategory: Record<string, number>;
   byIO: Record<string, number>;
+  currentWeek: WeeklyStats;
+  currentMonth: MonthlyStats;
+  topExpenseCategories: CategorySpend[];
+  weeklyBreakdown: WeeklyStats[];
 }
 
 // Type for page with properties
@@ -145,7 +172,36 @@ export async function getAllEntries(): Promise<CashflowEntry[]> {
  * and sums from one consistent result set.
  */
 export async function getSummary(): Promise<CashflowSummary> {
-  const summary: CashflowSummary = {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const getWeekNumber = (date: Date): number => {
+    const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    const pastDaysOfMonth = date.getDate() + firstDayOfMonth.getDay() - 1;
+    return Math.ceil(pastDaysOfMonth / 7);
+  };
+
+  const getWeekStartEnd = (date: Date): { start: Date; end: Date } => {
+    const day = date.getDay();
+    const diff = date.getDate() - day;
+    const start = new Date(date.getFullYear(), date.getMonth(), diff);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start, end };
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const { start: weekStart, end: weekEnd } = getWeekStartEnd(now);
+
+  const categoryMap = new Map<string, { total: number; count: number }>();
+  const weeklyMap = new Map<string, { income: number; expenses: number }>();
+  const monthlyMap = new Map<string, { income: number; expenses: number }>();
+
+  const summary: Omit<CashflowSummary, 'currentWeek' | 'currentMonth' | 'topExpenseCategories' | 'weeklyBreakdown'> = {
     totalEntries: 0,
     totalIncome: 0,
     totalExpenses: 0,
@@ -167,14 +223,15 @@ export async function getSummary(): Promise<CashflowSummary> {
       if ('properties' in page) {
         const props = (page as PageWithProperties).properties as Record<string, { type: string; [key: string]: unknown }>;
         
-        // Extract only what we need for summary
         const nominalProp = props['Nominal'];
         const ioProp = props['I/O'];
         const categoryProp = props['Category'];
+        const dateProp = props['Date'];
         
         const nominal = extractNumber(nominalProp);
         const io = extractSelect(ioProp);
         const category = extractSelect(categoryProp);
+        const dateStr = extractDate(dateProp);
 
         summary.totalEntries += 1;
         
@@ -188,6 +245,38 @@ export async function getSummary(): Promise<CashflowSummary> {
         
         if (category) {
           summary.byCategory[category] = (summary.byCategory[category] || 0) + nominal;
+          
+          if (io === 'Expenses') {
+            const existing = categoryMap.get(category) || { total: 0, count: 0 };
+            categoryMap.set(category, {
+              total: existing.total + nominal,
+              count: existing.count + 1,
+            });
+          }
+        }
+
+        if (dateStr) {
+          const entryDate = new Date(dateStr);
+          const weekKey = formatDate(getWeekStartEnd(entryDate).start);
+          const monthKey = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+
+          if (!weeklyMap.has(weekKey)) {
+            weeklyMap.set(weekKey, { income: 0, expenses: 0 });
+          }
+          if (!monthlyMap.has(monthKey)) {
+            monthlyMap.set(monthKey, { income: 0, expenses: 0 });
+          }
+
+          const weekData = weeklyMap.get(weekKey)!;
+          const monthData = monthlyMap.get(monthKey)!;
+
+          if (io === 'Income') {
+            weekData.income += nominal;
+            monthData.income += nominal;
+          } else if (io === 'Expenses') {
+            weekData.expenses += nominal;
+            monthData.expenses += nominal;
+          }
         }
       }
     }
@@ -196,7 +285,65 @@ export async function getSummary(): Promise<CashflowSummary> {
   } while (nextCursor);
 
   summary.balance = summary.totalIncome - summary.totalExpenses;
-  return summary;
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+  const currentWeekKey = formatDate(weekStart);
+
+  const currentMonthData = monthlyMap.get(currentMonthKey) || { income: 0, expenses: 0 };
+  const currentWeekData = weeklyMap.get(currentWeekKey) || { income: 0, expenses: 0 };
+
+  const topExpenseCategories: CategorySpend[] = Array.from(categoryMap.entries())
+    .map(([category, data]) => ({
+      category,
+      total: data.total,
+      count: data.count,
+      percentage: summary.totalExpenses > 0 ? (data.total / summary.totalExpenses) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  const weeklyBreakdown: WeeklyStats[] = Array.from(weeklyMap.entries())
+    .map(([weekStart, data]) => {
+      const startDate = new Date(weekStart);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      const weekNum = getWeekNumber(startDate);
+      
+      return {
+        weekNumber: weekNum,
+        weekStart: formatDate(startDate),
+        weekEnd: formatDate(endDate),
+        income: data.income,
+        expenses: data.expenses,
+      };
+    })
+    .sort((a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime())
+    .slice(0, 8);
+
+  return {
+    ...summary,
+    currentWeek: {
+      weekNumber: getWeekNumber(now),
+      weekStart: formatDate(weekStart),
+      weekEnd: formatDate(weekEnd),
+      income: currentWeekData.income,
+      expenses: currentWeekData.expenses,
+    },
+    currentMonth: {
+      month: currentMonthKey,
+      monthName: monthNames[currentMonth],
+      year: currentYear,
+      income: currentMonthData.income,
+      expenses: currentMonthData.expenses,
+    },
+    topExpenseCategories: topExpenseCategories,
+    weeklyBreakdown: weeklyBreakdown,
+  };
 }
 
 /**

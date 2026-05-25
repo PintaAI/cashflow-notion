@@ -1,4 +1,6 @@
 import { fetchSummary } from "@/app/actions/cashflow";
+import { fetchActivityOverview } from "@/app/actions/analytics";
+import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { CashflowTable } from "@/components/cashflow-table";
 import { Stats, type StatsData } from "@/components/stats";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -7,14 +9,21 @@ import { HugeiconsIcon } from "@hugeicons/react";
 
 export default async function HomePage() {
   // Fetch summary on the server (static data, good for SSR)
-  const summary = await fetchSummary();
+  const [summary, activity] = await Promise.all([
+    fetchSummary(),
+    fetchActivityOverview(),
+  ]);
 
   // Transform summary to StatsData format
   const statsData: StatsData = {
-    entryCount: summary.totalEntries,
+    totalEntries: summary.totalEntries,
     totalIncome: summary.totalIncome,
     totalExpenses: summary.totalExpenses,
     balance: summary.balance,
+    currentWeek: summary.currentWeek,
+    currentMonth: summary.currentMonth,
+    topExpenseCategories: summary.topExpenseCategories,
+    weeklyBreakdown: summary.weeklyBreakdown,
   };
 
   return (
@@ -33,6 +42,8 @@ export default async function HomePage() {
 
       {/* Summary Cards */}
       <Stats stats={statsData} />
+
+      <ActivityHeatmap activity={activity} />
 
       {/* Table with infinite loading */}
       <CashflowTable />

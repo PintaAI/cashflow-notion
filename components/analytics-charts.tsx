@@ -96,7 +96,7 @@ export function AnalyticsCharts({ analytics, filters, categories }: AnalyticsCha
       {/* Summary Cards */}
       <Stats
         stats={{
-          entryCount: analytics.summary.entryCount,
+          totalEntries: analytics.summary.entryCount,
           totalIncome: analytics.summary.totalIncome,
           totalExpenses: analytics.summary.totalExpenses,
           balance: analytics.summary.balance,
