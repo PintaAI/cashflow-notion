@@ -343,26 +343,16 @@ export async function getEntries(options?: {
   startCursor?: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
   const pageSize = options?.pageSize || 100;
-  
-  const query = await notion.views.queries.create({
-    view_id: VIEW_ID,
-  });
 
-  // Get view query results with pagination - need both view_id and query_id
-  const results = await notion.views.queries.results({
-    view_id: VIEW_ID,
-    query_id: query.id,
+  const response = await notion.dataSources.query({
+    data_source_id: DATA_SOURCE_ID,
     page_size: pageSize,
     start_cursor: options?.startCursor,
   });
 
   const entries: CashflowEntry[] = [];
   
-  for (const pageRef of results.results) {
-    const page = await notion.pages.retrieve({
-      page_id: pageRef.id,
-    });
-    
+  for (const page of response.results) {
     if ('properties' in page) {
       entries.push(parsePageToEntry(page as PageWithProperties));
     }
@@ -370,8 +360,8 @@ export async function getEntries(options?: {
 
   return {
     entries,
-    nextCursor: results.next_cursor,
-    hasMore: results.has_more,
+    nextCursor: response.next_cursor,
+    hasMore: response.has_more,
   };
 }
 
@@ -612,17 +602,17 @@ function extractTitle(prop: { type: string; title?: { plain_text?: string }[] } 
   return prop.title?.[0]?.plain_text || '';
 }
 
-function extractNumber(prop: { type: string; number?: number } | undefined): number {
+export function extractNumber(prop: { type: string; number?: number } | undefined): number {
   if (!prop || prop.type !== 'number') return 0;
   return prop.number || 0;
 }
 
-function extractSelect(prop: { type: string; select?: { name?: string } } | undefined): string | null {
+export function extractSelect(prop: { type: string; select?: { name?: string } } | undefined): string | null {
   if (!prop || prop.type !== 'select') return null;
   return prop.select?.name || null;
 }
 
-function extractDate(prop: { type: string; date?: { start?: string } } | undefined): string | null {
+export function extractDate(prop: { type: string; date?: { start?: string } } | undefined): string | null {
   if (!prop || prop.type !== 'date') return null;
   return prop.date?.start || null;
 }

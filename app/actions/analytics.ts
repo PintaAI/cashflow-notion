@@ -1,6 +1,6 @@
 "use server";
 
-import { notion, DATA_SOURCE_ID } from "@/lib/notion";
+import { notion, DATA_SOURCE_ID, extractNumber, extractSelect, extractDate } from "@/lib/notion";
 import type { IOType, CategoryType } from "@/lib/notion";
 import { fetchCategories } from "@/app/actions/categories";
 import type { QueryDataSourceParameters } from "@notionhq/client";
@@ -77,22 +77,6 @@ const ACTIVITY_OVERVIEW_PAGE_SIZE = 50;
 interface PageWithProperties {
   id: string;
   properties: Record<string, unknown>;
-}
-
-// Helper functions to extract values from Notion properties
-function extractNumber(prop: { type: string; number?: number } | undefined): number {
-  if (!prop || prop.type !== "number") return 0;
-  return prop.number || 0;
-}
-
-function extractSelect(prop: { type: string; select?: { name?: string } } | undefined): string | null {
-  if (!prop || prop.type !== "select") return null;
-  return prop.select?.name || null;
-}
-
-function extractDate(prop: { type: string; date?: { start?: string } } | undefined): string | null {
-  if (!prop || prop.type !== "date") return null;
-  return prop.date?.start || null;
 }
 
 /**
