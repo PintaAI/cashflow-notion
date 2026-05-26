@@ -2,9 +2,8 @@ import { google } from '@ai-sdk/google';
 import { generateText, Output, NoObjectGeneratedError } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { fetchCategories } from '@/app/actions/categories';
 
-// Schema matching the expense form fields
-// Using .nullable() for optional fields (best practice for strict schema validation)
 const receiptSchema = z.object({
   name: z
     .string()
@@ -20,22 +19,9 @@ const receiptSchema = z.object({
     .nullable()
     .describe('Date in YYYY-MM-DD format (e.g., "2024-01-15")'),
   category: z
-    .enum([
-      'sosial',
-      'keluarga',
-      'clothing',
-      'skincare',
-      'tidak terduga',
-      'Jajan',
-      'Transportasi',
-      'Belanja',
-      'Tagihan',
-      'Hiburan',
-      'Kesehatan',
-      'Lainnya',
-    ])
+    .string()
     .nullable()
-    .describe('The most appropriate category for this expense. Choose from: sosial (social activities), keluarga (family), clothing (clothes), skincare (beauty products), tidak terduga (unexpected), Jajan (snacks/food), Transportasi (transportation), Belanja (shopping), Tagihan (bills), Hiburan (entertainment), Kesehatan (health), Lainnya (other). Use "Lainnya" if unsure.'),
+    .describe('The most appropriate category for this expense. Choose from the available categories or use "Lainnya" if unsure.'),
   io: z
     .enum(['Income', 'Expenses'])
     .nullable()
@@ -54,13 +40,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert image to base64
+    const categories = await fetchCategories();
+    const categoryDescription = `Available categories: ${categories.join(', ')}. Use "Lainnya" if the expense does not fit any category.`;
+
     const imageBuffer = await image.arrayBuffer();
     const base64Image = Buffer.from(imageBuffer).toString('base64');
 
     const result = await generateText({
       model: google('gemini-2.5-flash-lite'),
-      // Use temperature: 0 for deterministic, consistent results (best practice for structured outputs)
       temperature: 0,
       output: Output.object({
         name: 'ReceiptData',
@@ -73,7 +60,7 @@ export async function POST(request: NextRequest) {
           content: [
             {
               type: 'text',
-              text: 'Extract all relevant information from this receipt/image. Look for: the item/service name or description, the total amount paid or received, the date of transaction, and determine the most appropriate category and whether this is income or an expense.',
+              text: `Extract all relevant information from this receipt/image. Look for: the item/service name or description, the total amount paid or received, the date of transaction, and determine the most appropriate category and whether this is income or an expense.\n\n${categoryDescription}`,
             },
             {
               type: 'image',
@@ -84,6 +71,10 @@ export async function POST(request: NextRequest) {
       ],
     });
 
+    if (result.output.category && !categories.includes(result.output.category)) {
+      result.output.category = 'Lainnya';
+    }
+
     return NextResponse.json({
       success: true,
       data: result.output,
@@ -91,7 +82,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Extract receipt error:', error);
     
-    // Handle structured output specific errors
     if (NoObjectGeneratedError.isInstance(error)) {
       return NextResponse.json(
         {

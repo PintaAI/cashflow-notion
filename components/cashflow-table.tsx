@@ -14,25 +14,13 @@ import {
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  UserGroupIcon,
-  Home01Icon,
-  TShirtIcon,
-  Diamond01Icon,
-  Alert01Icon,
-  CookieIcon,
-  Bus01Icon,
-  ShoppingCart01Icon,
-  Invoice01Icon,
-  GameController01Icon,
-  HealthIcon,
-  More01Icon,
   HeadingIcon,
   Money01Icon,
   Tag01Icon,
   Calendar01Icon,
   ArrowUpDownIcon,
-  AiEditingIcon,
   Delete03Icon,
+  Loading03Icon,
 } from "@hugeicons/core-free-icons";
 
 import {
@@ -44,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CashflowTableSkeleton } from "@/components/loading-skeletons";
 import {
   Popover,
   PopoverContent,
@@ -60,30 +48,18 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CashflowEntry, IOType, CategoryType } from "@/lib/notion";
+import { getCategoryConfig } from "@/lib/categories";
 import { fetchEntriesFiltered, removeEntry } from "@/app/actions/cashflow";
 import { EditEntryDrawer } from "@/components/edit-entry-drawer";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  removeEntriesFromCashflowCache,
+  restoreCashflowEntries,
+  snapshotCashflowEntries,
+} from "@/lib/cashflow-query-cache";
+import { beginCashflowPending, useCashflowPending } from "@/lib/cashflow-pending";
+import { cashflowQueryKeys, useCategories } from "@/hooks/use-cashflow-data";
 
-// Category configuration with colors and icons
-const categoryConfig: Record<CategoryType, { color: string; bgColor: string; icon: typeof UserGroupIcon }> = {
-  sosial: { color: "text-pink-700 dark:text-pink-300", bgColor: "bg-pink-100 dark:bg-pink-900/30", icon: UserGroupIcon },
-  keluarga: { color: "text-amber-700 dark:text-amber-300", bgColor: "bg-amber-100 dark:bg-amber-900/30", icon: Home01Icon },
-  clothing: { color: "text-violet-700 dark:text-violet-300", bgColor: "bg-violet-100 dark:bg-violet-900/30", icon: TShirtIcon },
-  skincare: { color: "text-rose-700 dark:text-rose-300", bgColor: "bg-rose-100 dark:bg-rose-900/30", icon: Diamond01Icon },
-  "tidak terduga": { color: "text-orange-700 dark:text-orange-300", bgColor: "bg-orange-100 dark:bg-orange-900/30", icon: Alert01Icon },
-  Jajan: { color: "text-yellow-700 dark:text-yellow-300", bgColor: "bg-yellow-100 dark:bg-yellow-900/30", icon: CookieIcon },
-  Transportasi: { color: "text-blue-700 dark:text-blue-300", bgColor: "bg-blue-100 dark:bg-blue-900/30", icon: Bus01Icon },
-  Belanja: { color: "text-emerald-700 dark:text-emerald-300", bgColor: "bg-emerald-100 dark:bg-emerald-900/30", icon: ShoppingCart01Icon },
-  Tagihan: { color: "text-red-700 dark:text-red-300", bgColor: "bg-red-100 dark:bg-red-900/30", icon: Invoice01Icon },
-  Hiburan: { color: "text-purple-700 dark:text-purple-300", bgColor: "bg-purple-100 dark:bg-purple-900/30", icon: GameController01Icon },
-  Kesehatan: { color: "text-teal-700 dark:text-teal-300", bgColor: "bg-teal-100 dark:bg-teal-900/30", icon: HealthIcon },
-  Lainnya: { color: "text-slate-700 dark:text-slate-300", bgColor: "bg-slate-100 dark:bg-slate-900/30", icon: More01Icon },
-};
-
-// Module-level ref to let the component expose the edit handler to the inline column cell
-const columnActionsRef: { current: { onEdit: (e: CashflowEntry) => void } | null } = { current: null };
-
-// Column definitions
 const columns: ColumnDef<CashflowEntry>[] = [
   {
     id: "select",
@@ -95,30 +71,54 @@ const columns: ColumnDef<CashflowEntry>[] = [
       />
     ),
     cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
+      <div onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      </div>
     ),
   },
   {
     accessorKey: "name",
-    header: () => (
-      <div className="flex items-center gap-1.5">
-        <HugeiconsIcon icon={HeadingIcon} size={16} className="text-muted-foreground" />
-        <span>Judul</span>
-      </div>
+    header: ({ column }) => (
+      <button
+        className="flex w-full items-center gap-1.5 text-left hover:text-foreground transition-colors cursor-pointer select-none max-w-[200px]"
+        onClick={column.getToggleSortingHandler()}
+        title={
+          column.getIsSorted() === "asc"
+            ? "Sorted ascending"
+            : column.getIsSorted() === "desc"
+              ? "Sorted descending"
+              : "Click to sort"
+        }
+      >
+        <HugeiconsIcon icon={HeadingIcon} size={16} className="text-muted-foreground shrink-0" />
+        <span className="truncate">Judul</span>
+        {column.getIsSorted() === "asc" ? " ↑" : column.getIsSorted() === "desc" ? " ↓" : null}
+      </button>
     ),
-    cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+    cell: ({ row }) => <div className="font-medium truncate max-w-[200px]">{row.getValue("name")}</div>,
   },
   {
     accessorKey: "nominal",
-    header: () => (
-      <div className="flex items-center justify-end gap-1.5">
-        <HugeiconsIcon icon={Money01Icon} size={16} className="text-muted-foreground" />
+    header: ({ column }) => (
+      <button
+        className="flex w-full items-center justify-end gap-1.5 hover:text-foreground transition-colors cursor-pointer select-none"
+        onClick={column.getToggleSortingHandler()}
+        title={
+          column.getIsSorted() === "asc"
+            ? "Sorted ascending"
+            : column.getIsSorted() === "desc"
+              ? "Sorted descending"
+              : "Click to sort"
+        }
+      >
+        <HugeiconsIcon icon={Money01Icon} size={16} className="text-muted-foreground shrink-0" />
         <span>Nominal</span>
-      </div>
+        {column.getIsSorted() === "asc" ? " ↑" : column.getIsSorted() === "desc" ? " ↓" : null}
+      </button>
     ),
     cell: ({ row }) => {
       const amount = row.getValue("nominal") as number;
@@ -146,17 +146,28 @@ const columns: ColumnDef<CashflowEntry>[] = [
   },
   {
     accessorKey: "category",
-    header: () => (
-      <div className="flex items-center gap-1.5">
-        <HugeiconsIcon icon={Tag01Icon} size={16} className="text-muted-foreground" />
+    header: ({ column }) => (
+      <button
+        className="flex w-full items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer select-none"
+        onClick={column.getToggleSortingHandler()}
+        title={
+          column.getIsSorted() === "asc"
+            ? "Sorted ascending"
+            : column.getIsSorted() === "desc"
+              ? "Sorted descending"
+              : "Click to sort"
+        }
+      >
+        <HugeiconsIcon icon={Tag01Icon} size={16} className="text-muted-foreground shrink-0" />
         <span>Category</span>
-      </div>
+        {column.getIsSorted() === "asc" ? " ↑" : column.getIsSorted() === "desc" ? " ↓" : null}
+      </button>
     ),
     cell: ({ row }) => {
       const category = row.getValue("category") as CategoryType | null;
       if (!category) return <span className="text-muted-foreground">-</span>;
       
-      const config = categoryConfig[category];
+      const config = getCategoryConfig(category);
       return (
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.bgColor} ${config.color}`}>
           <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3" />
@@ -170,11 +181,22 @@ const columns: ColumnDef<CashflowEntry>[] = [
   },
   {
     accessorKey: "date",
-    header: () => (
-      <div className="flex items-center gap-1.5">
-        <HugeiconsIcon icon={Calendar01Icon} size={16} className="text-muted-foreground" />
+    header: ({ column }) => (
+      <button
+        className="flex w-full items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer select-none"
+        onClick={column.getToggleSortingHandler()}
+        title={
+          column.getIsSorted() === "asc"
+            ? "Sorted ascending"
+            : column.getIsSorted() === "desc"
+              ? "Sorted descending"
+              : "Click to sort"
+        }
+      >
+        <HugeiconsIcon icon={Calendar01Icon} size={16} className="text-muted-foreground shrink-0" />
         <span>Tanggal</span>
-      </div>
+        {column.getIsSorted() === "asc" ? " ↑" : column.getIsSorted() === "desc" ? " ↓" : null}
+      </button>
     ),
     cell: ({ row }) => {
       const date = row.getValue("date") as string | null;
@@ -189,11 +211,22 @@ const columns: ColumnDef<CashflowEntry>[] = [
   },
   {
     accessorKey: "io",
-    header: () => (
-      <div className="flex items-center gap-1.5">
-        <HugeiconsIcon icon={ArrowUpDownIcon} size={16} className="text-muted-foreground" />
+    header: ({ column }) => (
+      <button
+        className="flex w-full items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer select-none"
+        onClick={column.getToggleSortingHandler()}
+        title={
+          column.getIsSorted() === "asc"
+            ? "Sorted ascending"
+            : column.getIsSorted() === "desc"
+              ? "Sorted descending"
+              : "Click to sort"
+        }
+      >
+        <HugeiconsIcon icon={ArrowUpDownIcon} size={16} className="text-muted-foreground shrink-0" />
         <span>I/O</span>
-      </div>
+        {column.getIsSorted() === "asc" ? " ↑" : column.getIsSorted() === "desc" ? " ↓" : null}
+      </button>
     ),
     cell: ({ row }) => {
       const io = row.getValue("io") as IOType | null;
@@ -214,45 +247,6 @@ const columns: ColumnDef<CashflowEntry>[] = [
       return value === "all" || row.getValue(id) === value;
     },
   },
-  {
-    id: "actions",
-    header: () => <span className="sr-only">Actions</span>,
-    cell: ({ row }) => {
-      const entry = row.original;
-      return (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={(e) => {
-              e.stopPropagation();
-              columnActionsRef.current?.onEdit(entry);
-            }}
-          >
-            <HugeiconsIcon icon={AiEditingIcon} size={16} />
-            <span className="sr-only">Edit</span>
-          </Button>
-        </div>
-      );
-    },
-  },
-];
-
-// Category options from the database
-const categoryOptions: CategoryType[] = [
-  "sosial",
-  "keluarga",
-  "clothing",
-  "skincare",
-  "tidak terduga",
-  "Jajan",
-  "Transportasi",
-  "Belanja",
-  "Tagihan",
-  "Hiburan",
-  "Kesehatan",
-  "Lainnya",
 ];
 
 const ioOptions: IOType[] = ["Income", "Expenses"];
@@ -260,7 +254,7 @@ const ioOptions: IOType[] = ["Income", "Expenses"];
 const PAGE_SIZE = 20;
 
 export function CashflowTable() {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>([{ id: "date", desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   
@@ -272,30 +266,36 @@ export function CashflowTable() {
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
 
   const queryClient = useQueryClient();
+  const pendingCashflow = useCashflowPending();
+  const categoriesQuery = useCategories();
+  const categoryOptions = categoriesQuery.data ?? [];
 
   // Bulk delete handler
   const handleBulkDelete = React.useCallback(async () => {
     const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
     if (selectedIds.length === 0) return;
     if (!window.confirm(`Hapus ${selectedIds.length} entri terpilih?`)) return;
+
+    await queryClient.cancelQueries({ queryKey: cashflowQueryKeys.entries });
+    const previousEntries = snapshotCashflowEntries(queryClient);
+    removeEntriesFromCashflowCache(queryClient, selectedIds);
+    setRowSelection({});
+
+    const endPending = beginCashflowPending("Deleting from database...");
+
     try {
       await Promise.all(selectedIds.map((id) => removeEntry(id)));
-      setRowSelection({});
-      queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot });
     } catch (error) {
+      restoreCashflowEntries(queryClient, previousEntries);
       console.error("Failed to delete entries:", error);
+    } finally {
+      endPending();
     }
   }, [rowSelection, queryClient]);
-
-  // Sync handlers into module-level ref so columns can access them
-  React.useEffect(() => {
-    columnActionsRef.current = {
-      onEdit: setEditingEntry,
-    };
-    return () => {
-      columnActionsRef.current = null;
-    };
-  }, []);
 
   // Ref for the sentinel element at the bottom
   const loadMoreRef = React.useRef<HTMLDivElement>(null);
@@ -382,41 +382,7 @@ export function CashflowTable() {
   }, [table]);
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {/* Filters Skeleton */}
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-10 flex-1" />
-          <Skeleton className="h-10 w-10 shrink-0" />
-        </div>
-
-        {/* Table Skeleton */}
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead><Skeleton className="h-5 w-16" /></TableHead>
-                <TableHead><Skeleton className="h-5 w-20" /></TableHead>
-                <TableHead><Skeleton className="h-5 w-20" /></TableHead>
-                <TableHead><Skeleton className="h-5 w-16" /></TableHead>
-                <TableHead><Skeleton className="h-5 w-12" /></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    );
+    return <CashflowTableSkeleton />;
   }
 
   if (isError) {
@@ -429,92 +395,104 @@ export function CashflowTable() {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex items-center gap-2">
-        {/* Global Search */}
-        <Input
-          placeholder="Search by name..."
-          value={globalFilter}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGlobalFilter(e.target.value)}
-          className="flex-1 min-w-0"
-        />
-
-        {/* Filter Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" />
-                <path d="M7 12h10" />
-                <path d="M11 18h2" />
-              </svg>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-56 p-3 space-y-3">
-            {/* I/O Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Type</label>
-              <Select
-                value={ioQueryFilter}
-                onValueChange={handleIoFilterChange}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="I/O" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  {ioOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Category Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Category</label>
-              <Select
-                value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
-                onValueChange={(value: string) =>
-                  table.getColumn("category")?.setFilterValue(value)
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  {categoryOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </PopoverContent>
-        </Popover>
+      <div className="flex min-h-6 items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-foreground">Entries</h2>
+        {pendingCashflow.count > 0 && (
+          <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin text-primary" />
+            <span>{pendingCashflow.label}</span>
+          </div>
+        )}
       </div>
 
-      {/* Bulk Actions Bar */}
-      {Object.values(rowSelection).filter(Boolean).length > 0 && (
-        <div className="flex items-center justify-between rounded-md border bg-muted/50 px-4 py-2">
-          <span className="text-sm text-muted-foreground">
-            {Object.values(rowSelection).filter(Boolean).length} selected
-          </span>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="gap-1.5"
-            onClick={handleBulkDelete}
-          >
-            <HugeiconsIcon icon={Delete03Icon} strokeWidth={2} className="size-4" />
-            Delete Selected
-          </Button>
+      <div className="relative">
+        {/* Filters */}
+        <div className="flex items-center gap-2">
+          {/* Global Search */}
+          <Input
+            placeholder="Search by name..."
+            value={globalFilter}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGlobalFilter(e.target.value)}
+            className="flex-1 min-w-0"
+          />
+
+          {/* Filter Popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" className="shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M7 12h10" />
+                  <path d="M11 18h2" />
+                </svg>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-3 space-y-3">
+              {/* I/O Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Type</label>
+                <Select
+                  value={ioQueryFilter}
+                  onValueChange={handleIoFilterChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="I/O" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {ioOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Category Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Category</label>
+                <Select
+                  value={(table.getColumn("category")?.getFilterValue() as string) ?? "all"}
+                  onValueChange={(value: string) =>
+                    table.getColumn("category")?.setFilterValue(value)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {categoryOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-      )}
+
+        {/* Bulk Actions Bar */}
+        {Object.values(rowSelection).filter(Boolean).length > 0 && (
+          <div className="absolute inset-0 z-10 flex items-center justify-between rounded-md border bg-background px-4 py-2 pr-0 shadow-sm">
+            <span className="text-sm text-muted-foreground">
+              {Object.values(rowSelection).filter(Boolean).length} selected
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleBulkDelete}
+            >
+              <HugeiconsIcon icon={Delete03Icon} strokeWidth={2} className="size-4" />
+              Delete Selected
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Table */}
       <div className="rounded-md border">
@@ -543,6 +521,8 @@ export function CashflowTable() {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="cursor-pointer"
+                  onClick={() => setEditingEntry(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

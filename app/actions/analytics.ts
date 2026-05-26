@@ -2,6 +2,7 @@
 
 import { notion, DATA_SOURCE_ID } from "@/lib/notion";
 import type { IOType, CategoryType } from "@/lib/notion";
+import { fetchCategories } from "@/app/actions/categories";
 import type { QueryDataSourceParameters } from "@notionhq/client";
 
 // Filter options for analytics
@@ -48,8 +49,6 @@ export interface DailyAnalytics {
 export interface ActivityDay {
   date: string;
   count: number;
-  income: number;
-  expenses: number;
 }
 
 export interface ActivityOverview {
@@ -71,6 +70,8 @@ export interface AnalyticsData {
   byDay: DailyAnalytics[];
   filteredBy: AnalyticsFilter;
 }
+
+const ACTIVITY_OVERVIEW_PAGE_SIZE = 50;
 
 // Type for page with properties
 interface PageWithProperties {
@@ -363,12 +364,6 @@ function getMondayOfWeek(date: Date): Date {
   return startOfDay(d);
 }
 
-interface PageWithCreatedTime {
-  id: string;
-  created_time: string;
-  properties: Record<string, unknown>;
-}
-
 function extractCreatedTime(page: { created_time?: string }): string | null {
   if (!page.created_time) return null;
   return page.created_time.split("T")[0];
@@ -385,42 +380,24 @@ export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOve
   do {
     const response = await notion.dataSources.query({
       data_source_id: DATA_SOURCE_ID,
+      filter_properties: [],
       filter: {
         timestamp: "created_time",
         created_time: {
           on_or_after: startDateKey,
         },
       },
-      page_size: 100,
+      page_size: ACTIVITY_OVERVIEW_PAGE_SIZE,
       start_cursor: nextCursor || undefined,
     });
 
     for (const page of response.results) {
-      if ("properties" in page && "created_time" in page) {
-        const props = (page as PageWithProperties).properties as Record<
-          string,
-          { type: string; [key: string]: unknown }
-        >;
-
-        const createdDate = extractCreatedTime(page as PageWithCreatedTime);
+      if ("created_time" in page) {
+        const createdDate = extractCreatedTime(page);
         if (!createdDate) continue;
 
-        const nominal = extractNumber(props["Nominal"]);
-        const io = extractSelect(props["I/O"]);
-        const existing = dayMap.get(createdDate) || {
-          date: createdDate,
-          count: 0,
-          income: 0,
-          expenses: 0,
-        };
-
+        const existing = dayMap.get(createdDate) || { date: createdDate, count: 0 };
         existing.count += 1;
-        if (io === "Income") {
-          existing.income += nominal;
-        } else if (io === "Expenses") {
-          existing.expenses += nominal;
-        }
-
         dayMap.set(createdDate, existing);
       }
     }
@@ -428,12 +405,12 @@ export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOve
     nextCursor = response.next_cursor;
   } while (nextCursor);
 
-  const totalDays = daysBack + (alignedStartDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
+  const totalDays = daysBack + (startDate.getTime() - alignedStartDate.getTime()) / (24 * 60 * 60 * 1000);
   const days: ActivityDay[] = [];
   for (let i = 0; i < Math.ceil(totalDays); i += 1) {
     const date = subtractDays(alignedStartDate, -i);
     const dateKey = formatDateKey(date);
-    days.push(dayMap.get(dateKey) || { date: dateKey, count: 0, income: 0, expenses: 0 });
+    days.push(dayMap.get(dateKey) || { date: dateKey, count: 0 });
   }
 
   const activeDateKeys = new Set(days.filter((day) => day.count > 0).map((day) => day.date));
@@ -501,22 +478,4 @@ export async function fetchFilteredSummary(filter: AnalyticsFilter = {}): Promis
   };
 }
 
-/**
- * Get available categories for filtering
- */
-export async function fetchCategories(): Promise<CategoryType[]> {
-  return [
-    "sosial",
-    "keluarga",
-    "clothing",
-    "skincare",
-    "tidak terduga",
-    "Jajan",
-    "Transportasi",
-    "Belanja",
-    "Tagihan",
-    "Hiburan",
-    "Kesehatan",
-    "Lainnya",
-  ];
-}
+export { fetchCategories };

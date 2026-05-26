@@ -1,4 +1,5 @@
 import { Client } from '@notionhq/client';
+import type { SelectColor } from '@notionhq/client/build/src/api-endpoints/common';
 
 // Initialize Notion client
 const notion = new Client({
@@ -13,19 +14,7 @@ const VIEW_ID = '1e86571b-acea-4b6f-b55d-42f0a34d1017';
 // Type definitions for Cashflow properties
 export type IOType = 'Income' | 'Expenses';
 
-export type CategoryType =
-  | 'sosial'
-  | 'keluarga'
-  | 'clothing'
-  | 'skincare'
-  | 'tidak terduga'
-  | 'Jajan'
-  | 'Transportasi'
-  | 'Belanja'
-  | 'Tagihan'
-  | 'Hiburan'
-  | 'Kesehatan'
-  | 'Lainnya';
+export type CategoryType = string;
 
 export interface CashflowProperty {
   id: string;
@@ -474,6 +463,9 @@ export async function createEntry(data: {
   date?: string;
   io?: IOType;
 }): Promise<CashflowEntry> {
+  if (data.io === "Expenses" && !data.category) {
+    throw new Error("Category is required for expenses")
+  }
   // Build properties object
   const properties = {
     Name: {
@@ -633,6 +625,105 @@ function extractSelect(prop: { type: string; select?: { name?: string } } | unde
 function extractDate(prop: { type: string; date?: { start?: string } } | undefined): string | null {
   if (!prop || prop.type !== 'date') return null;
   return prop.date?.start || null;
+}
+
+export interface CategoryOptionWithColor {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export async function getCategoryOptions(): Promise<CategoryOptionWithColor[]> {
+  const dataSource = await notion.dataSources.retrieve({
+    data_source_id: DATA_SOURCE_ID,
+  });
+
+  const properties = dataSource.properties as Record<string, { type: string; select?: { options: Array<{ id: string; name: string; color: string }> } }>;
+  const categoryProperty = properties['Category'];
+
+  if (!categoryProperty || categoryProperty.type !== 'select' || !categoryProperty.select) {
+    return [];
+  }
+
+  return categoryProperty.select.options.map((opt) => ({
+    id: opt.id,
+    name: opt.name,
+    color: opt.color,
+  }));
+}
+
+export async function addCategoryOption(name: string, color?: string): Promise<CategoryOptionWithColor[]> {
+  const currentOptions = await getCategoryOptions();
+  
+  const exists = currentOptions.some((opt) => opt.name === name);
+  if (exists) {
+    throw new Error(`Category "${name}" already exists`);
+  }
+
+  const newColor = color || 'default';
+
+  await notion.dataSources.update({
+    data_source_id: DATA_SOURCE_ID,
+    properties: {
+      Category: {
+        type: 'select',
+        select: {
+          options: [
+            ...currentOptions.map((opt) => ({ id: opt.id, name: opt.name, color: opt.color as SelectColor })),
+            { name, color: newColor as SelectColor },
+          ],
+        },
+      },
+    },
+  });
+
+  return getCategoryOptions();
+}
+
+export async function removeCategoryOption(categoryId: string): Promise<CategoryOptionWithColor[]> {
+  const currentOptions = await getCategoryOptions();
+  
+  const filteredOptions = currentOptions.filter((opt) => opt.id !== categoryId);
+  
+  if (filteredOptions.length === currentOptions.length) {
+    throw new Error(`Category with ID "${categoryId}" not found`);
+  }
+
+  await notion.dataSources.update({
+    data_source_id: DATA_SOURCE_ID,
+    properties: {
+      Category: {
+        type: 'select',
+        select: {
+          options: filteredOptions.map((opt) => ({ id: opt.id, name: opt.name, color: opt.color as SelectColor })),
+        },
+      },
+    },
+  });
+
+  return getCategoryOptions();
+}
+
+export async function getCategoryUsageCount(categoryName: string): Promise<number> {
+  let count = 0;
+  let nextCursor: string | null = null;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: DATA_SOURCE_ID,
+      page_size: 100,
+      start_cursor: nextCursor || undefined,
+      filter: {
+        property: 'Category',
+        select: { equals: categoryName },
+      },
+    });
+
+    count += response.results.length;
+    nextCursor = response.next_cursor;
+  } while (nextCursor);
+
+  return count;
 }
 
 // Export the notion client for advanced usage

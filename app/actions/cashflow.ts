@@ -97,6 +97,9 @@ export async function addEntry(data: {
   date?: string;
   io?: IOType;
 }): Promise<CashflowEntry> {
+  if (data.io === "Expenses" && !data.category) {
+    throw new Error("Category is required for expenses")
+  }
   return createEntry(data);
 }
 

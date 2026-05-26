@@ -2,79 +2,112 @@
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { ExpenseFormDrawer } from "@/components/expense-form-drawer"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { motion, useReducedMotion } from "framer-motion"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Analytics01Icon, Add01Icon, Home02Icon } from "@hugeicons/core-free-icons"
+import { Analytics01Icon, Add01Icon, Home02Icon, UserCircleIcon } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
+
+export type AppTab = "home" | "analytics" | "profile"
 
 const navItems = [
   {
-    href: "/",
+    value: "home" as const,
     label: "Home",
     icon: Home02Icon,
   },
   {
-    href: "/analytics",
+    value: "analytics" as const,
     label: "Analytics",
     icon: Analytics01Icon,
   },
+  {
+    value: "profile" as const,
+    label: "Profile",
+    icon: UserCircleIcon,
+  },
 ]
 
-export function MobileBottomNav() {
+interface MobileBottomNavProps {
+  activeTab: AppTab
+  onTabChange: (tab: AppTab) => void
+}
+
+export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps) {
   const isMobile = useIsMobile()
-  const pathname = usePathname()
+  const shouldReduceMotion = useReducedMotion()
 
   if (!isMobile) return null
 
+  const transition = shouldReduceMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 420, damping: 32, mass: 0.7 }
+
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div className="mx-auto grid h-16 max-w-sm grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-[2rem] border bg-background/90 px-3 shadow-[0_18px_45px_-28px_hsl(var(--foreground))] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
-        {navItems.map((item, index) => {
-          const isActive = pathname === item.href
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "group relative flex h-11 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium transition-all duration-200 active:scale-95",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
-                index === 1 && "col-start-3"
-              )}
-            >
-              <HugeiconsIcon
-                icon={item.icon}
-                strokeWidth={isActive ? 2.4 : 2}
-                className="size-5 transition-transform duration-200 group-hover:-translate-y-0.5"
-              />
-              <span className="sr-only">{item.label}</span>
-              <span
-                className={cn(
-                  "hidden text-xs tracking-tight min-[380px]:inline",
-                  isActive ? "opacity-100" : "opacity-80"
-                )}
-              >
-                {item.label}
-              </span>
-            </Link>
-          )
-        })}
-
+      <div className="relative mx-auto max-w-sm">
         <ExpenseFormDrawer
           trigger={
-            <button
+            <motion.button
               type="button"
               aria-label="Add entry"
-              className="relative col-start-2 row-start-1 flex size-14 -translate-y-3 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_16px_35px_-18px_hsl(var(--primary))] ring-8 ring-background transition-all duration-200 hover:-translate-y-4 hover:shadow-[0_20px_45px_-18px_hsl(var(--primary))] active:-translate-y-2 active:scale-95"
+              initial={shouldReduceMotion ? false : { y: 12, opacity: 0, scale: 0.9 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.05 }}
+              whileTap={shouldReduceMotion ? undefined : { y: 1, scale: 0.94 }}
+              transition={transition}
+              className="absolute right-4 -top-12 flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_32px_-18px_hsl(var(--primary))] ring-5 ring-background/90 transition-shadow duration-200 hover:shadow-[0_18px_40px_-18px_hsl(var(--primary))]"
             >
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2.6} className="size-7" />
-            </button>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2.6} className="size-5.5" />
+            </motion.button>
           }
         />
+
+        <motion.div
+          initial={shouldReduceMotion ? false : { y: 28, opacity: 0, scale: 0.96 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          transition={transition}
+          className="mx-auto grid h-[4.5rem] max-w-sm grid-cols-3 items-center gap-2 rounded-[2rem] border bg-background/90 px-2 shadow-[0_18px_55px_-24px_hsl(var(--foreground)),0_8px_24px_-18px_hsl(var(--primary))] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75"
+        >
+          {navItems.map((item) => {
+            const isActive = activeTab === item.value
+
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => onTabChange(item.value)}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "group relative flex h-14 min-w-0 flex-col items-center justify-center gap-px overflow-hidden rounded-full px-2 py-1 text-xs font-medium transition-colors duration-200 active:scale-95",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                )}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="mobile-bottom-nav-active"
+                    className="absolute inset-0 rounded-full bg-primary/10"
+                    transition={transition}
+                  />
+                )}
+                <HugeiconsIcon
+                  icon={item.icon}
+                  strokeWidth={isActive ? 2.4 : 2}
+                  className="relative z-10 size-5 shrink-0 transition-transform duration-200 group-hover:scale-110"
+                />
+                <span
+                  className={cn(
+                    "relative z-10 text-[10px] leading-none",
+                    isActive ? "opacity-100" : "opacity-80"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </button>
+            )
+          })}
+        </motion.div>
       </div>
     </nav>
   )

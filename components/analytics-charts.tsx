@@ -24,6 +24,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { AnalyticsFilter } from "@/components/analytics-filter";
+import { AnalyticsContentSkeleton } from "@/components/loading-skeletons";
+import { useAnalytics, useCategories } from "@/hooks/use-cashflow-data";
 import type { AnalyticsData } from "@/app/actions/analytics";
 import type { IOType, CategoryType } from "@/lib/notion";
 
@@ -70,7 +72,43 @@ interface AnalyticsChartsProps {
   categories: string[];
 }
 
-export function AnalyticsCharts({ analytics, filters, categories }: AnalyticsChartsProps) {
+const defaultFilters: AnalyticsChartsProps["filters"] = {};
+
+export function AnalyticsCharts() {
+  const [filters, setFilters] = React.useState<AnalyticsChartsProps["filters"]>(defaultFilters);
+  const analyticsQuery = useAnalytics(filters);
+  const categoriesQuery = useCategories();
+
+  if (analyticsQuery.isLoading || categoriesQuery.isLoading) {
+    return <AnalyticsContentSkeleton />;
+  }
+
+  if (analyticsQuery.isError || !analyticsQuery.data) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+        Analytics data is temporarily unavailable. Please try again shortly.
+      </div>
+    );
+  }
+
+  return (
+    <AnalyticsChartsContent
+      analytics={analyticsQuery.data}
+      filters={filters}
+      categories={categoriesQuery.data ?? []}
+      onFiltersChange={setFilters}
+    />
+  );
+}
+
+function AnalyticsChartsContent({
+  analytics,
+  filters,
+  categories,
+  onFiltersChange,
+}: AnalyticsChartsProps & {
+  onFiltersChange: (filters: AnalyticsChartsProps["filters"]) => void;
+}) {
   // Prepare category data for pie chart
   const categoryChartData = React.useMemo(() => {
     return analytics.byCategory.map((item, index) => ({
@@ -107,7 +145,7 @@ export function AnalyticsCharts({ analytics, filters, categories }: AnalyticsCha
       <div className="rounded-lg border mt-4 p-3 sm:p-4 mb-4 sm:mb-6">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h2 className="text-base sm:text-lg font-semibold">Filters</h2>
-          <AnalyticsFilter filters={filters} categories={categories} />
+          <AnalyticsFilter filters={filters} categories={categories} onFiltersChange={onFiltersChange} />
         </div>
       </div>
 
@@ -182,7 +220,7 @@ export function AnalyticsCharts({ analytics, filters, categories }: AnalyticsCha
                   cy="50%"
                   outerRadius={70}
                   className="sm:outerRadius-100"
-                  label={({ payload, ...props }) => {
+                  label={({ payload }) => {
                     if (payload && 'category' in payload && 'percentage' in payload) {
                       return `${payload.category} (${payload.percentage.toFixed(1)}%)`;
                     }

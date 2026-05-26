@@ -26,24 +26,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { addEntry } from "@/app/actions/cashflow"
 import type { CategoryType, IOType } from "@/lib/notion"
+import { getCategoryConfig } from "@/lib/categories"
+import { useCategories } from "@/hooks/use-cashflow-data"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   Calendar03Icon,
-  Delete02Icon,
+  CleanIcon,
   Tick02Icon,
-  UserGroupIcon,
-  Home01Icon,
-  TShirtIcon,
-  Diamond01Icon,
-  Alert01Icon,
-  CookieIcon,
-  Bus01Icon,
-  ShoppingCart01Icon,
-  Invoice01Icon,
-  GameController01Icon,
-  HealthIcon,
-  More01Icon,
   MoneyReceiveIcon,
   MoneySendIcon,
   Camera01Icon,
@@ -53,42 +43,10 @@ import {
 import { cn } from "@/lib/utils"
 import { CameraCapture } from "@/components/camera-capture"
 
-// Category configuration with colors and icons (same as cashflow-table)
-const categoryConfig: Record<CategoryType, { color: string; bgColor: string; icon: typeof UserGroupIcon }> = {
-  sosial: { color: "text-pink-700 dark:text-pink-300", bgColor: "bg-pink-100 dark:bg-pink-900/30", icon: UserGroupIcon },
-  keluarga: { color: "text-amber-700 dark:text-amber-300", bgColor: "bg-amber-100 dark:bg-amber-900/30", icon: Home01Icon },
-  clothing: { color: "text-violet-700 dark:text-violet-300", bgColor: "bg-violet-100 dark:bg-violet-900/30", icon: TShirtIcon },
-  skincare: { color: "text-rose-700 dark:text-rose-300", bgColor: "bg-rose-100 dark:bg-rose-900/30", icon: Diamond01Icon },
-  "tidak terduga": { color: "text-orange-700 dark:text-orange-300", bgColor: "bg-orange-100 dark:bg-orange-900/30", icon: Alert01Icon },
-  Jajan: { color: "text-yellow-700 dark:text-yellow-300", bgColor: "bg-yellow-100 dark:bg-yellow-900/30", icon: CookieIcon },
-  Transportasi: { color: "text-blue-700 dark:text-blue-300", bgColor: "bg-blue-100 dark:bg-blue-900/30", icon: Bus01Icon },
-  Belanja: { color: "text-emerald-700 dark:text-emerald-300", bgColor: "bg-emerald-100 dark:bg-emerald-900/30", icon: ShoppingCart01Icon },
-  Tagihan: { color: "text-red-700 dark:text-red-300", bgColor: "bg-red-100 dark:bg-red-900/30", icon: Invoice01Icon },
-  Hiburan: { color: "text-purple-700 dark:text-purple-300", bgColor: "bg-purple-100 dark:bg-purple-900/30", icon: GameController01Icon },
-  Kesehatan: { color: "text-teal-700 dark:text-teal-300", bgColor: "bg-teal-100 dark:bg-teal-900/30", icon: HealthIcon },
-  Lainnya: { color: "text-slate-700 dark:text-slate-300", bgColor: "bg-slate-100 dark:bg-slate-900/30", icon: More01Icon },
-};
-
-const EXPENSE_CATEGORIES: CategoryType[] = [
-  "sosial",
-  "keluarga",
-  "clothing",
-  "skincare",
-  "tidak terduga",
-  "Jajan",
-  "Transportasi",
-  "Belanja",
-  "Tagihan",
-  "Hiburan",
-  "Kesehatan",
-  "Lainnya"
-]
-
 interface ExpenseFormDrawerProps {
   trigger?: React.ReactNode
   onSuccess?: () => void
 }
-
 export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -99,9 +57,11 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
   const [showCamera, setShowCamera] = useState(false)
   const [name, setName] = useState("")
   const [nominal, setNominal] = useState("")
-  const [category, setCategory] = useState<CategoryType | "">("")
+  const [category, setCategory] = useState<CategoryType>("Lainnya")
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [io, setIo] = useState<IOType>("Expenses")
+  const categoriesQuery = useCategories()
+  const expenseCategories = categoriesQuery.data ?? []
 
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -226,8 +186,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Category is required only for Expenses
-    if (!name.trim() || !nominal || (io === "Expenses" && !category)) return
+    if (!name.trim() || !nominal) return
 
     setIsSubmitting(true)
     
@@ -244,7 +203,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
       // Reset form
       setName("")
       setNominal("")
-      setCategory("")
+      setCategory("Lainnya")
       setDate(new Date())
       setIo("Expenses")
       
@@ -267,7 +226,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
   const handleClear = () => {
     setName("")
     setNominal("")
-    setCategory("")
+    setCategory("Lainnya")
     setDate(new Date())
     setIo("Expenses")
   }
@@ -282,11 +241,21 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
           </Button>
         )}
       </DrawerTrigger>
-      <DrawerContent className="max-h-[96vh]">
-        <DrawerHeader className="pb-2">
-          <DrawerTitle className="text-lg font-semibold text-center">
-            Add New Entry
+      <DrawerContent className="max-h-[90vh]">
+        <DrawerHeader className="flex flex-row items-center justify-between pb-2">
+          <div className="w-8" />
+          <DrawerTitle className="text-lg font-semibold">
+            Catat Cashflow
           </DrawerTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleClear}
+            className="h-8 w-8"
+          >
+            <HugeiconsIcon icon={CleanIcon} strokeWidth={2} className="size-4" />
+          </Button>
         </DrawerHeader>
         
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto">
@@ -320,49 +289,6 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </button>
           </div>
 
-          {/* Scan Receipt Buttons */}
-          <div className="space-y-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-              disabled={isExtracting}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 gap-2"
-                onClick={() => setShowCamera(true)}
-                disabled={isExtracting}
-              >
-                {isExtracting ? (
-                  <>
-                    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
-                    Extracting...
-                  </>
-                ) : (
-                  <>
-                    <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-5" />
-                    Camera
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 gap-2"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isExtracting}
-              >
-                <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-5" />
-                Upload
-              </Button>
-            </div>
-          </div>
-
           {/* Camera Capture Modal */}
           {showCamera && (
             <CameraCapture
@@ -385,6 +311,18 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
               className="h-12 text-base"
               required
             />
+            <div className="flex flex-wrap gap-1.5">
+              {["jajan", "parkir", "belanja pasar", "makan siang"].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setName(s)}
+                  className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Amount Input */}
@@ -434,23 +372,23 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
               <label className="text-sm font-medium text-foreground">
                 Category
               </label>
-              <Select value={category} onValueChange={(v) => setCategory(v as CategoryType)}>
+              <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger className="h-12 text-base w-full">
                   <SelectValue placeholder="Select category">
-                    {category && categoryConfig[category] && (
+                    {category && (
                       <span className="inline-flex items-center gap-1.5">
-                        <HugeiconsIcon icon={categoryConfig[category].icon} strokeWidth={2} className="size-4" />
+                        <HugeiconsIcon icon={getCategoryConfig(category).icon} strokeWidth={2} className="size-4" />
                         {category}
                       </span>
                     )}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" align="start">
                   <ScrollArea className="h-[200px]">
-                    {EXPENSE_CATEGORIES.map((cat) => {
-                      const config = categoryConfig[cat];
+                    {expenseCategories.map((cat) => {
+                      const config = getCategoryConfig(cat);
                       return (
-                        <SelectItem key={cat} value={cat} className="py-3 text-base">
+                        <SelectItem key={cat} value={cat} className="p-1 text-base">
                           <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
                             <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
                             {cat}
@@ -497,22 +435,49 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </Popover>
           </div>
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-3 pt-4">
+          {/* Bottom Actions: Camera, Upload, Save */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+            disabled={isExtracting}
+          />
+          <div className="grid grid-cols-3 gap-2 pt-4">
             <Button
               type="button"
               variant="outline"
-              onClick={handleClear}
-              className="h-12"
-              disabled={isSubmitting}
+              className="h-12 gap-2"
+              onClick={() => setShowCamera(true)}
+              disabled={isExtracting}
             >
-              <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-5 mr-2" />
-              Clear
+              {isExtracting ? (
+                <>
+                  <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
+                  Extracting...
+                </>
+              ) : (
+                <>
+                  <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-5" />
+                  Camera
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 gap-2"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isExtracting}
+            >
+              <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-5" />
+              Upload
             </Button>
             <Button
               type="submit"
               className="h-12"
-              disabled={isSubmitting || !name.trim() || !nominal || (io === "Expenses" && !category)}
+              disabled={isSubmitting || !name.trim() || !nominal}
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">
@@ -521,7 +486,7 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
                 </span>
               ) : (
                 <>
-                  <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-5 mr-2" />
+                  <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-5" />
                   Save
                 </>
               )}

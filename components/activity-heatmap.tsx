@@ -59,7 +59,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
   }, []);
 
   return (
-    <section className="mb-4 rounded-lg border bg-card p-3 shadow-sm sm:mb-6 sm:p-4">
+    <section className="mb-4 sm:mb-6">
       <div className="hidden sm:block">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
@@ -93,7 +93,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
               title={formatDayTitle(day)}
               aria-label={formatDayTitle(day)}
               className={cn(
-                "size-3 rounded-[3px] ring-1 ring-border/60 transition-transform hover:scale-125 sm:size-3.5",
+                "size-3 rounded-[3px] ring-1 ring-border/30 transition-transform hover:scale-125 sm:size-3.5",
                 getCellClass(day.count)
               )}
             />
@@ -104,7 +104,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
       <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
         <span>Less</span>
         {[0, 1, 2, 4, 6].map((count) => (
-          <span key={count} className={cn("size-2.5 rounded-[2px] ring-1 ring-border/60", getCellClass(count))} />
+          <span key={count} className={cn("size-2.5 rounded-[2px] ring-1 ring-border/30", getCellClass(count))} />
         ))}
         <span>More</span>
       </div>

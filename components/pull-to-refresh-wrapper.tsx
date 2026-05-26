@@ -3,6 +3,8 @@
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { PullToRefreshIndicator } from "@/components/pull-to-refresh-indicator"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { cashflowQueryKeys } from "@/hooks/use-cashflow-data"
 
 interface PullToRefreshWrapperProps {
   children: React.ReactNode
@@ -10,8 +12,17 @@ interface PullToRefreshWrapperProps {
 
 export function PullToRefreshWrapper({ children }: PullToRefreshWrapperProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { containerRef, isRefreshing, pullDistance, handlers } = usePullToRefresh({
-    onRefresh: () => router.refresh(),
+    onRefresh: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries }),
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary }),
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity }),
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot }),
+      ])
+      router.refresh()
+    },
     threshold: 80,
   })
 

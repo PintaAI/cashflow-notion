@@ -1,8 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FilterIcon, Calendar01Icon } from "@hugeicons/core-free-icons";
 
@@ -59,6 +57,7 @@ interface AnalyticsFilterProps {
     category?: CategoryType;
   };
   categories: string[];
+  onFiltersChange: (filters: AnalyticsFilterProps["filters"]) => void;
 }
 
 // Helpers
@@ -186,14 +185,9 @@ function getActivePreset(draft: FilterDraft): string | null {
   );
 }
 
-export function AnalyticsFilter({ filters, categories }: AnalyticsFilterProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+export function AnalyticsFilter({ filters, categories, onFiltersChange }: AnalyticsFilterProps) {
   const [open, setOpen] = React.useState(false);
-  const [isPending, startTransition] = useTransition();
 
-  // Initialize draft from the server-passed filters (which came from URL)
   const initialDraft = React.useMemo(() => getDraftFromFilters(filters), [filters]);
   const [draft, setDraft] = React.useState<FilterDraft>(initialDraft);
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(
@@ -245,30 +239,29 @@ export function AnalyticsFilter({ filters, categories }: AnalyticsFilterProps) {
 
   const applyFilters = () => {
     if (!canApply) return;
-    const params = new URLSearchParams(searchParams.toString());
+    const nextFilters: AnalyticsFilterProps["filters"] = {};
+
     if (draft.allTime) {
-      params.delete("from");
-      params.delete("to");
-      params.set("allTime", "true");
+      nextFilters.allTime = true;
     } else if (draft.range.from && draft.range.to) {
-      params.delete("allTime");
-      params.set("from", toDateKey(draft.range.from));
-      params.set("to", toDateKey(draft.range.to));
+      nextFilters.from = toDateKey(draft.range.from);
+      nextFilters.to = toDateKey(draft.range.to);
     }
+
     if (draft.io === "all") {
-      params.delete("io");
+      delete nextFilters.io;
     } else {
-      params.set("io", draft.io);
+      nextFilters.io = draft.io;
     }
+
     if (draft.category === "all") {
-      params.delete("category");
+      delete nextFilters.category;
     } else {
-      params.set("category", draft.category);
+      nextFilters.category = draft.category;
     }
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`);
-      setOpen(false);
-    });
+
+    onFiltersChange(nextFilters);
+    setOpen(false);
   };
 
   // Reset draft
@@ -407,14 +400,14 @@ export function AnalyticsFilter({ filters, categories }: AnalyticsFilterProps) {
 
         {/* Footer Actions */}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          <Button variant="ghost" size="sm" onClick={resetDraft} disabled={isPending}>
+          <Button variant="ghost" size="sm" onClick={resetDraft}>
             Reset
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isPending}>
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={applyFilters} disabled={isPending || !canApply}>
+            <Button size="sm" onClick={applyFilters} disabled={!canApply}>
               Apply
             </Button>
           </div>
