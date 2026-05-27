@@ -64,11 +64,17 @@ function getRedisClient() {
 
 function getBlobOptions() {
   const token = process.env.NOTIF_READ_WRITE_TOKEN;
+  const storeId = process.env.NOTIF_STORE_ID;
+  const oidcToken = process.env.VERCEL_OIDC_TOKEN;
+
   if (token) {
     return { token };
   }
 
-  const storeId = process.env.NOTIF_STORE_ID;
+  if (storeId && oidcToken) {
+    return { storeId, oidcToken };
+  }
+
   if (storeId) {
     return { storeId };
   }
