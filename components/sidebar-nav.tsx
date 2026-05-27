@@ -1,13 +1,14 @@
 "use client";
 
-import { Analytics01Icon, Home02Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { Analytics01Icon, File01Icon, Home02Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const navItems = [
   { value: "home", label: "Home", icon: Home02Icon },
-  { value: "analytics", label: "Analytics", icon: Analytics01Icon },
+  { value: "catatan", label: "Catatan", icon: File01Icon },
+  { value: "summary", label: "Summary", icon: Analytics01Icon },
   { value: "profile", label: "Profile", icon: UserCircleIcon },
 ];
 

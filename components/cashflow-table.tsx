@@ -14,6 +14,7 @@ import {
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  File01Icon,
   HeadingIcon,
   Money01Icon,
   Tag01Icon,
@@ -253,7 +254,11 @@ const ioOptions: IOType[] = ["Income", "Expenses"];
 
 const PAGE_SIZE = 20;
 
-export function CashflowTable() {
+interface CashflowTableProps {
+  dateFilter?: string;
+}
+
+export function CashflowTable({ dateFilter }: CashflowTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "date", desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
@@ -310,12 +315,13 @@ export function CashflowTable() {
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ["cashflow-entries", ioQueryFilter],
+    queryKey: ["cashflow-entries", ioQueryFilter, dateFilter],
     queryFn: async ({ pageParam }) => {
       const result = await fetchEntriesFiltered({
         pageSize: PAGE_SIZE,
         cursor: pageParam as string | null,
         io: ioQueryFilter === "all" ? undefined : (ioQueryFilter as IOType),
+        date: dateFilter,
       });
       return result;
     },
@@ -494,30 +500,42 @@ export function CashflowTable() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+      {/* Empty State */}
+      {entries.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+          <HugeiconsIcon icon={File01Icon} strokeWidth={1.5} className="size-10" />
+          <p className="text-sm font-medium">
+            {dateFilter ? "Hayo hari ini belum nyatet keuangan yaa? 😜" : "No entries yet"}
+          </p>
+          <p className="text-xs">
+            {dateFilter
+              ? "Catat pengeluaran atau pemasukan hari ini biar keuanganmu terkontrol."
+              : "Add your first entry to get started."}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
@@ -533,20 +551,11 @@ export function CashflowTable() {
                     </TableCell>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {/* Infinite scroll trigger and status */}
       <div className="flex items-center justify-center py-4">

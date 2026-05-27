@@ -419,16 +419,22 @@ export async function getEntriesFiltered(options?: {
   pageSize?: number;
   startCursor?: string;
   io?: IOType;
+  date?: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
   const pageSize = options?.pageSize || 20;
   
-  // Build filter if I/O is specified - use native Notion filter
-  const filter = options?.io ? {
-    property: 'I/O',
-    select: {
-      equals: options.io,
-    },
-  } : undefined;
+  const filter = options?.io && options?.date
+    ? {
+        and: [
+          { property: 'I/O', select: { equals: options.io } },
+          { property: 'Date', date: { equals: options.date } },
+        ],
+      }
+    : options?.io
+      ? { property: 'I/O', select: { equals: options.io } }
+      : options?.date
+        ? { property: 'Date', date: { equals: options.date } }
+        : undefined;
 
   // Query the data source directly with native filter and pagination
   const response = await notion.dataSources.query({

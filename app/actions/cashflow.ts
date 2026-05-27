@@ -37,11 +37,12 @@ export async function fetchEntriesPage(options?: {
   });
 }
 
-// Paginated fetch with I/O filter for infinite loading
+// Paginated fetch with I/O and date filter for infinite loading
 export async function fetchEntriesFiltered(options?: {
   pageSize?: number;
   cursor?: string | null;
   io?: IOType;
+  date?: string;
 }): Promise<{
   entries: CashflowEntry[];
   nextCursor: string | null;
@@ -51,6 +52,7 @@ export async function fetchEntriesFiltered(options?: {
     pageSize: options?.pageSize ?? 20,
     startCursor: options?.cursor ?? undefined,
     io: options?.io,
+    date: options?.date,
   });
 }
 

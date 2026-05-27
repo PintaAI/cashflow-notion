@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Analytics01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { Analytics01Icon, File01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
@@ -250,12 +250,11 @@ function HomeTab() {
   const isDataUnavailable = summaryQuery.isError || activityQuery.isError;
   const summary = summaryQuery.data ?? getEmptySummary();
   const activity = activityQuery.data ?? getEmptyActivityOverview();
+  const today = formatDateKey(new Date());
 
   return (
     <>
-      <PageHeader icon={Wallet01Icon} title="Cashflow Tracker">
-        <ThemeToggle />
-      </PageHeader>
+      <PageHeader icon={Wallet01Icon} title="Cashflow Tracker" />
 
       {isDataUnavailable && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
@@ -265,6 +264,15 @@ function HomeTab() {
 
       {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
       {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} />}
+      <CashflowTable dateFilter={today} />
+    </>
+  );
+}
+
+function CatatanTab() {
+  return (
+    <>
+      <PageHeader icon={File01Icon} title="Catatan" />
       <CashflowTable />
     </>
   );
@@ -305,8 +313,12 @@ export default function HomePage() {
             <HomeTab />
           </TabsContent>
 
-          <TabsContent value="analytics" className="mt-0">
-            <PageHeader icon={Analytics01Icon} title="Analytics" />
+          <TabsContent value="catatan" className="mt-0">
+            <CatatanTab />
+          </TabsContent>
+
+          <TabsContent value="summary" className="mt-0">
+            <PageHeader icon={Analytics01Icon} title="Summary" />
             <AnalyticsCharts />
           </TabsContent>
 
