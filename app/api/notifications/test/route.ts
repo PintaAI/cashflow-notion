@@ -1,56 +1,39 @@
 import { NextResponse } from "next/server";
-import { get, put, del, list } from "@vercel/blob";
+import { get, put } from "@vercel/blob";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const storeId = process.env.NOTIF_STORE_ID;
   const token = process.env.NOTIF_READ_WRITE_TOKEN;
-  const vercelOidc = process.env.VERCEL_OIDC_TOKEN;
-  const hasOidcHeader = "x-vercel-oidc-token" in (Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => k.startsWith("VERCEL"))
-  ));
+  const storeId = process.env.NOTIF_STORE_ID;
 
-  const results: Record<string, unknown> = {
-    storeId,
-    hasToken: !!token,
-    hasVercelOidc: !!vercelOidc,
-  };
+  const results: Record<string, unknown> = {};
 
   if (token) {
+    // Try reading the actual subscription blob
     try {
-      results.putWithToken = await put("test-key.json", JSON.stringify({ test: true }), {
+      const blob = await get("notifications/push-subscriptions.json", {
         token,
         access: "public",
-        allowOverwrite: true,
+        useCache: false,
       });
+      if (blob) {
+        const reader = blob.stream.getReader();
+        const decoder = new TextDecoder();
+        let text = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
+        }
+        text += decoder.decode();
+        results.getSubscriptions = JSON.parse(text);
+        results.getStatusCode = blob.statusCode;
+      } else {
+        results.getSubscriptions = null;
+      }
     } catch (e: unknown) {
-      results.putWithTokenError = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  if (storeId) {
-    try {
-      results.putWithStoreId = await put("test-key.json", JSON.stringify({ test: true }), {
-        storeId,
-        access: "public",
-        allowOverwrite: true,
-      });
-    } catch (e: unknown) {
-      results.putWithStoreIdError = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  if (storeId && vercelOidc) {
-    try {
-      results.putWithOidc = await put("test-key.json", JSON.stringify({ test: true }), {
-        storeId,
-        oidcToken: vercelOidc,
-        access: "public",
-        allowOverwrite: true,
-      });
-    } catch (e: unknown) {
-      results.putWithOidcError = e instanceof Error ? e.message : String(e);
+      results.getSubscriptionsError = e instanceof Error ? e.message : String(e);
     }
   }
 
