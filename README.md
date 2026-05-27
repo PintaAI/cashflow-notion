@@ -34,3 +34,37 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Daily Push Reminder
+
+Push subscriptions are stored in this order:
+
+1. Vercel KV/Upstash Redis, when these env vars are available:
+
+```env
+KV_REST_API_URL=...
+KV_REST_API_TOKEN=...
+```
+
+The Upstash names are also supported:
+
+```env
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+2. Vercel Blob, when these env vars are available:
+
+```env
+NOTIF_STORE_ID=...
+NOTIF_READ_WRITE_TOKEN=...
+```
+
+3. Local development falls back to `data/push-subscriptions.json`.
+
+The VPS cron should call the deployed app at 8 PM Jakarta time:
+
+```cron
+TZ=Asia/Jakarta
+0 20 * * * curl -fsS -X POST https://your-domain.com/api/notifications/daily -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
