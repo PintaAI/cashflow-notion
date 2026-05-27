@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Analytics01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
@@ -13,6 +13,7 @@ import { SidebarNav } from "@/components/sidebar-nav";
 import { Stats, type StatsData } from "@/components/stats";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/app/actions/analytics";
@@ -104,6 +105,146 @@ function toStatsData(summary: CashflowSummary): StatsData {
   };
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index);
+  }
+
+  return outputArray;
+}
+
+function DailyReminderPreference() {
+  const [isSupported, setIsSupported] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+  useEffect(() => {
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+    if (!supported) {
+      Promise.resolve().then(() => {
+        setIsSupported(false);
+        setMessage("Push notifications are not supported in this browser.");
+      });
+      return;
+    }
+
+    Promise.resolve().then(() => setIsSupported(true));
+
+    navigator.serviceWorker.getRegistration().then((registration) => {
+      registration?.pushManager.getSubscription().then((subscription) => {
+        setIsEnabled(Boolean(subscription));
+      });
+    });
+  }, []);
+
+  async function enableReminder() {
+    if (!vapidPublicKey) {
+      setMessage("Push notifications are not configured yet.");
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage(null);
+
+    try {
+      const permission = await Notification.requestPermission();
+
+      if (permission !== "granted") {
+        setMessage("Notification permission was not granted.");
+        return;
+      }
+
+      const existingRegistration = await navigator.serviceWorker.getRegistration();
+
+      if (!existingRegistration) {
+        setMessage("Service worker is not registered yet. Use the production app over HTTPS.");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription = existingSubscription ?? await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+
+      const response = await fetch("/api/notifications/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save notification subscription");
+      }
+
+      setIsEnabled(true);
+      setMessage("Daily reminder enabled for 8 PM Jakarta time.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to enable daily reminder.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function disableReminder() {
+    setIsBusy(true);
+    setMessage(null);
+
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+
+      if (subscription) {
+        await fetch("/api/notifications/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+
+        await subscription.unsubscribe();
+      }
+
+      setIsEnabled(false);
+      setMessage("Daily reminder disabled.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to disable daily reminder.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border bg-background p-4 space-y-3">
+      <div className="space-y-1">
+        <h4 className="text-sm font-semibold text-foreground">Daily reminder</h4>
+        <p className="text-xs text-muted-foreground">
+          Send a push notification at 8 PM Jakarta time only if today has no cashflow entries.
+        </p>
+      </div>
+
+      <Button
+        type="button"
+        variant={isEnabled ? "outline" : "default"}
+        disabled={!isSupported || isBusy}
+        onClick={isEnabled ? disableReminder : enableReminder}
+      >
+        {isBusy ? "Saving..." : isEnabled ? "Disable reminder" : "Enable reminder"}
+      </Button>
+
+      {message && <p className="text-xs text-muted-foreground">{message}</p>}
+    </div>
+  );
+}
+
 function HomeTab() {
   const summaryQuery = useSummary();
   const activityQuery = useActivityOverview();
@@ -145,9 +286,7 @@ function ProfileTab() {
 
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground">Preferences</h3>
-          <p className="text-sm text-muted-foreground">
-            Profile settings and preferences can live here.
-          </p>
+          <DailyReminderPreference />
         </div>
       </section>
     </>

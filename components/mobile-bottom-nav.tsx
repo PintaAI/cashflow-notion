@@ -1,7 +1,7 @@
 "use client"
 
 import { useIsMobile } from "@/hooks/use-mobile"
-import { ExpenseFormDrawer } from "@/components/expense-form-drawer"
+import { CashflowFormDrawer } from "@/components/cashflow-form-drawer"
 import { motion, useReducedMotion } from "framer-motion"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Analytics01Icon, Add01Icon, Home02Icon, UserCircleIcon } from "@hugeicons/core-free-icons"
@@ -45,7 +45,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="relative mx-auto max-w-sm">
-        <ExpenseFormDrawer
+        <CashflowFormDrawer mode="create"
           trigger={
             <motion.button
               type="button"

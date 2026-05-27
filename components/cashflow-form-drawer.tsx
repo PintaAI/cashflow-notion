@@ -24,8 +24,8 @@ import {
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { addEntry } from "@/app/actions/cashflow"
-import type { CategoryType, IOType } from "@/lib/notion"
+import { addEntry, editEntry } from "@/app/actions/cashflow"
+import type { CashflowEntry, CategoryType, IOType } from "@/lib/notion"
 import { getCategoryConfig } from "@/lib/categories"
 import { useCategories } from "@/hooks/use-cashflow-data"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -38,20 +38,36 @@ import {
   MoneySendIcon,
   Camera01Icon,
   Loading03Icon,
-  Image01Icon
+  Image01Icon,
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 import { CameraCapture } from "@/components/camera-capture"
 
-interface ExpenseFormDrawerProps {
-  trigger?: React.ReactNode
+type CashflowFormDrawerProps = {
+  mode: "create" | "edit"
   onSuccess?: () => void
+  trigger?: React.ReactNode
+  entry?: CashflowEntry
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
-export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps) {
+
+export function CashflowFormDrawer({
+  mode,
+  trigger,
+  entry,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
+  onSuccess,
+}: CashflowFormDrawerProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [open, setOpen] = useState(false)
+
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = mode === "edit" ? (externalOpen ?? false) : internalOpen
+  const setOpen = mode === "edit" ? (externalOnOpenChange ?? (() => {})) : setInternalOpen
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
@@ -60,8 +76,21 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
   const [category, setCategory] = useState<CategoryType>("Lainnya")
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [io, setIo] = useState<IOType>("Expenses")
+
   const categoriesQuery = useCategories()
   const expenseCategories = categoriesQuery.data ?? []
+
+  const isEdit = mode === "edit"
+
+  React.useEffect(() => {
+    if (isEdit && open && entry) {
+      setName(entry.name)
+      setNominal(String(entry.nominal))
+      setCategory(entry.category ?? "Lainnya")
+      setDate(entry.date ? new Date(entry.date) : new Date())
+      setIo(entry.io ?? "Expenses")
+    }
+  }, [isEdit, open, entry])
 
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -79,7 +108,6 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
   const extractFromImage = async (imageData: string) => {
     setIsExtracting(true)
     try {
-      // Convert base64 data URL to blob for FormData
       const response = await fetch(imageData)
       const blob = await response.blob()
       const file = new File([blob], 'receipt.jpg', { type: 'image/jpeg' })
@@ -95,29 +123,16 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
       const result = await apiResponse.json()
 
       if (result.success && result.data) {
-        // Fill in the name/description
-        if (result.data.name) {
-          setName(result.data.name)
-        }
-        // Fill in the amount
-        if (result.data.amount) {
-          setNominal(String(result.data.amount))
-        }
-        // Fill in the date
+        if (result.data.name) setName(result.data.name)
+        if (result.data.amount) setNominal(String(result.data.amount))
         if (result.data.date) {
           const parsedDate = new Date(result.data.date)
-          if (!isNaN(parsedDate.getTime())) {
-            setDate(parsedDate)
-          }
+          if (!isNaN(parsedDate.getTime())) setDate(parsedDate)
         }
-        // Fill in the category (only for expenses)
         if (result.data.category && result.data.io !== 'Income') {
           setCategory(result.data.category as CategoryType)
         }
-        // Set the I/O type
-        if (result.data.io) {
-          setIo(result.data.io as IOType)
-        }
+        if (result.data.io) setIo(result.data.io as IOType)
       }
     } catch (error) {
       console.error('Failed to extract receipt data:', error)
@@ -148,76 +163,61 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
       const result = await response.json()
 
       if (result.success && result.data) {
-        // Fill in the name/description
-        if (result.data.name) {
-          setName(result.data.name)
-        }
-        // Fill in the amount
-        if (result.data.amount) {
-          setNominal(String(result.data.amount))
-        }
-        // Fill in the date
+        if (result.data.name) setName(result.data.name)
+        if (result.data.amount) setNominal(String(result.data.amount))
         if (result.data.date) {
           const parsedDate = new Date(result.data.date)
-          if (!isNaN(parsedDate.getTime())) {
-            setDate(parsedDate)
-          }
+          if (!isNaN(parsedDate.getTime())) setDate(parsedDate)
         }
-        // Fill in the category (only for expenses)
         if (result.data.category && result.data.io !== 'Income') {
           setCategory(result.data.category as CategoryType)
         }
-        // Set the I/O type
-        if (result.data.io) {
-          setIo(result.data.io as IOType)
-        }
+        if (result.data.io) setIo(result.data.io as IOType)
       }
     } catch (error) {
       console.error('Failed to extract receipt data:', error)
     } finally {
       setIsExtracting(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (!name.trim() || !nominal) return
 
     setIsSubmitting(true)
-    
     try {
-      await addEntry({
-        name: name.trim(),
-        nominal: Number(nominal),
-        category: io === "Expenses" ? (category as CategoryType) : undefined,
-        date: date?.toISOString().split('T')[0],
-        io,
-      })
+      if (isEdit && entry) {
+        await editEntry(entry.id, {
+          name: name.trim(),
+          nominal: Number(nominal),
+          category: io === "Expenses" ? (category as CategoryType) : undefined,
+          date: date?.toISOString().split('T')[0],
+          io,
+        })
+      } else {
+        await addEntry({
+          name: name.trim(),
+          nominal: Number(nominal),
+          category: io === "Expenses" ? (category as CategoryType) : undefined,
+          date: date?.toISOString().split('T')[0],
+          io,
+        })
+      }
+
       celebrateSave()
-       
-      // Reset form
       setName("")
       setNominal("")
       setCategory("Lainnya")
       setDate(new Date())
       setIo("Expenses")
-      
-      // Close drawer
       setOpen(false)
-      
-      // Invalidate React Query cache to refetch data
       queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] })
-      
-      // Refresh server-side data
       router.refresh()
       onSuccess?.()
     } catch (error) {
-      console.error("Failed to add entry:", error)
+      console.error(`Failed to ${isEdit ? "edit" : "add"} entry:`, error)
     } finally {
       setIsSubmitting(false)
     }
@@ -233,19 +233,21 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>
-      <DrawerTrigger asChild>
-        {trigger || (
-          <Button size="lg" className="gap-2 w-full sm:w-auto">
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-5" />
-            Add Expense
-          </Button>
-        )}
-      </DrawerTrigger>
+      {!isEdit && (
+        <DrawerTrigger asChild>
+          {trigger || (
+            <Button size="lg" className="gap-2 w-full sm:w-auto">
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-5" />
+              Add Expense
+            </Button>
+          )}
+        </DrawerTrigger>
+      )}
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader className="flex flex-row items-center justify-between pb-2">
           <div className="w-8" />
           <DrawerTitle className="text-lg font-semibold">
-            Catat Cashflow
+            {isEdit ? "Edit Entry" : "Catat Cashflow"}
           </DrawerTitle>
           <Button
             type="button"
@@ -257,9 +259,9 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             <HugeiconsIcon icon={CleanIcon} strokeWidth={2} className="size-4" />
           </Button>
         </DrawerHeader>
-        
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto">
-          {/* I/O Type Toggle - Large touch targets */}
+          {/* I/O Type Toggle */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -289,8 +291,8 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </button>
           </div>
 
-          {/* Camera Capture Modal */}
-          {showCamera && (
+          {/* Camera Capture Modal - create mode only */}
+          {showCamera && !isEdit && (
             <CameraCapture
               onCapture={handleCameraCapture}
               onClose={() => setShowCamera(false)}
@@ -340,7 +342,6 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
               min="0"
               required
             />
-            {/* Quick Amount Buttons - IDR currency note colors */}
             <div className="flex flex-wrap gap-1.5">
               {[
                 { value: 1000, label: "1k", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" },
@@ -435,63 +436,87 @@ export function ExpenseFormDrawer({ trigger, onSuccess }: ExpenseFormDrawerProps
             </Popover>
           </div>
 
-          {/* Bottom Actions: Camera, Upload, Save */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-            disabled={isExtracting}
-          />
-          <div className="grid grid-cols-3 gap-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 gap-2"
-              onClick={() => setShowCamera(true)}
-              disabled={isExtracting}
-            >
-              {isExtracting ? (
-                <>
-                  <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                <>
-                  <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-5" />
-                  Camera
-                </>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 gap-2"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isExtracting}
-            >
-              <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-5" />
-              Upload
-            </Button>
-            <Button
-              type="submit"
-              className="h-12"
-              disabled={isSubmitting || !name.trim() || !nominal}
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <span className="animate-spin">⏳</span>
-                  Saving...
-                </span>
-              ) : (
-                <>
-                  <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-5" />
-                  Save
-                </>
-              )}
-            </Button>
-          </div>
+          {/* Bottom Actions */}
+          {isEdit ? (
+            <div className="pt-4">
+              <Button
+                type="submit"
+                className="h-12 w-full"
+                disabled={isSubmitting || !name.trim() || !nominal}
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin">⏳</span>
+                    Saving...
+                  </span>
+                ) : (
+                  <>
+                    <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-5" />
+                    Save
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+                disabled={isExtracting}
+              />
+              <div className="grid grid-cols-3 gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 gap-2"
+                  onClick={() => setShowCamera(true)}
+                  disabled={isExtracting}
+                >
+                  {isExtracting ? (
+                    <>
+                      <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-5" />
+                      Camera
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isExtracting}
+                >
+                  <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-5" />
+                  Upload
+                </Button>
+                <Button
+                  type="submit"
+                  className="h-12"
+                  disabled={isSubmitting || !name.trim() || !nominal}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin">⏳</span>
+                      Saving...
+                    </span>
+                  ) : (
+                    <>
+                      <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-5" />
+                      Save
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
         </form>
       </DrawerContent>
     </Drawer>

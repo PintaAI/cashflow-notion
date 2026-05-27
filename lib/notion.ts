@@ -387,6 +387,31 @@ export async function countEntries(): Promise<number> {
 }
 
 /**
+ * Count entries for an exact Notion Date value, formatted as YYYY-MM-DD.
+ */
+export async function countEntriesForDate(date: string): Promise<number> {
+  let total = 0;
+  let nextCursor: string | null = null;
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: DATA_SOURCE_ID,
+      page_size: 100,
+      start_cursor: nextCursor || undefined,
+      filter: {
+        property: 'Date',
+        date: { equals: date },
+      },
+    });
+
+    total += response.results.length;
+    nextCursor = response.next_cursor;
+  } while (nextCursor);
+
+  return total;
+}
+
+/**
  * Get entries with pagination and optional I/O filter
  * Uses native Notion data source query with filter support
  */

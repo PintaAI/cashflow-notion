@@ -50,7 +50,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CashflowEntry, IOType, CategoryType } from "@/lib/notion";
 import { getCategoryConfig } from "@/lib/categories";
 import { fetchEntriesFiltered, removeEntry } from "@/app/actions/cashflow";
-import { EditEntryDrawer } from "@/components/edit-entry-drawer";
+import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   removeEntriesFromCashflowCache,
@@ -579,7 +579,8 @@ export function CashflowTable() {
         </div>
       </div>
       {editingEntry && (
-        <EditEntryDrawer
+        <CashflowFormDrawer
+          mode="edit"
           entry={editingEntry}
           open={!!editingEntry}
           onOpenChange={(open) => { if (!open) setEditingEntry(null); }}
