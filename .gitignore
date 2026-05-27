@@ -17,6 +17,10 @@
 /.next/
 /out/
 
+# generated PWA files (built at deploy time)
+/public/sw.js
+/public/worker-*.js
+
 # production
 /build
 

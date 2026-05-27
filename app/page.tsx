@@ -162,14 +162,13 @@ function DailyReminderPreference() {
         return;
       }
 
-      const existingRegistration = await navigator.serviceWorker.getRegistration();
+      let registration = await navigator.serviceWorker.getRegistration();
 
-      if (!existingRegistration) {
-        setMessage("Service worker is not registered yet. Use the production app over HTTPS.");
-        return;
+      if (!registration) {
+        registration = await navigator.serviceWorker.register("/sw.js");
       }
 
-      const registration = await navigator.serviceWorker.ready;
+      await navigator.serviceWorker.ready;
       const existingSubscription = await registration.pushManager.getSubscription();
       const subscription = existingSubscription ?? await registration.pushManager.subscribe({
         userVisibleOnly: true,

@@ -32,30 +32,37 @@ function isAuthorized(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    if (!isAuthorized(request)) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const today = getDateInTimezone(new Date(), TIMEZONE);
-  const entryCount = await countEntriesForDate(today);
+    const today = getDateInTimezone(new Date(), TIMEZONE);
+    const entryCount = await countEntriesForDate(today);
 
-  if (entryCount > 0) {
+    if (entryCount > 0) {
+      return Response.json({
+        sent: false,
+        reason: "entries-exist",
+        date: today,
+        timezone: TIMEZONE,
+        entryCount,
+      });
+    }
+
+    const result = await sendDailyReminder();
+
     return Response.json({
-      sent: false,
-      reason: "entries-exist",
+      notificationTriggered: true,
       date: today,
       timezone: TIMEZONE,
       entryCount,
+      ...result,
     });
+  } catch (error) {
+    return Response.json({
+      error: true,
+      message: error instanceof Error ? error.message : "Unknown error",
+    }, { status: 500 });
   }
-
-  const result = await sendDailyReminder();
-
-  return Response.json({
-    notificationTriggered: true,
-    date: today,
-    timezone: TIMEZONE,
-    entryCount,
-    ...result,
-  });
 }

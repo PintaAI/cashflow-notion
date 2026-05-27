@@ -60,16 +60,16 @@ function getRedisClient() {
 
 function getBlobOptions() {
   const token = process.env.NOTIF_READ_WRITE_TOKEN;
-  const storeId = process.env.NOTIF_STORE_ID;
-
-  if (!token && !storeId) {
-    return null;
+  if (token) {
+    return { token };
   }
 
-  return {
-    ...(token ? { token } : {}),
-    ...(storeId ? { storeId } : {}),
-  };
+  const storeId = process.env.NOTIF_STORE_ID;
+  if (storeId) {
+    return { storeId };
+  }
+
+  return null;
 }
 
 async function readTextStream(stream: ReadableStream<Uint8Array>) {
