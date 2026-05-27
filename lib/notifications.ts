@@ -62,8 +62,36 @@ function getRedisClient() {
   return new Redis({ url, token });
 }
 
-function getBlobOptions() {
+function getBlobToken() {
+  return process.env.NOTIF_READ_WRITE_TOKEN || null;
+}
+
+function getStoreId() {
+  const storeId = process.env.NOTIF_STORE_ID;
+  if (storeId) {
+    return storeId.replace(/^store_/, "");
+  }
+
   const token = process.env.NOTIF_READ_WRITE_TOKEN;
+  if (token) {
+    const parts = token.split("_");
+    if (parts.length >= 3 && parts[0] === "rwt") {
+      return parts[1];
+    }
+  }
+
+  return null;
+}
+
+function getBlobUrl(pathname: string) {
+  const storeId = getStoreId();
+  if (!storeId) return null;
+  const normalizedPath = pathname.replace(/^\//, "");
+  return `https://${storeId}.public.blob.vercel-storage.com/${normalizedPath}`;
+}
+
+function getBlobOptions() {
+  const token = getBlobToken();
   const storeId = process.env.NOTIF_STORE_ID;
   const oidcToken = process.env.VERCEL_OIDC_TOKEN;
 
@@ -122,6 +150,24 @@ export async function readSubscriptions(): Promise<StoredPushSubscription[]> {
   if (redis) {
     const subscriptions = await redis.get<StoredPushSubscription[]>(SUBSCRIPTIONS_KV_KEY);
     return normalizeSubscriptions(subscriptions);
+  }
+
+  const blobUrl = getBlobUrl(SUBSCRIPTIONS_BLOB_PATH);
+
+  if (blobUrl) {
+    try {
+      const response = await fetch(blobUrl);
+
+      if (response.ok) {
+        return normalizeSubscriptions(await response.json());
+      }
+
+      if (response.status === 404) {
+        return [];
+      }
+    } catch {
+      return [];
+    }
   }
 
   const blobOptions = getBlobOptions();
