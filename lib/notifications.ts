@@ -34,13 +34,17 @@ async function writeSubscriptions(subscriptions: StoredPushSubscription[]) {
   const blobOptions = getBlobOptions();
 
   if (blobOptions) {
-    await put(SUBSCRIPTIONS_BLOB_PATH, JSON.stringify(subscriptions), {
-      ...blobOptions,
-      access: "private",
-      allowOverwrite: true,
-      contentType: "application/json",
-    });
-    return;
+    try {
+      await put(SUBSCRIPTIONS_BLOB_PATH, JSON.stringify(subscriptions), {
+        ...blobOptions,
+        access: "public",
+        allowOverwrite: true,
+        contentType: "application/json",
+      });
+      return;
+    } catch {
+      // Blob write failed, fall through to JSON
+    }
   }
 
   await ensureDataDir();
@@ -117,17 +121,19 @@ export async function readSubscriptions(): Promise<StoredPushSubscription[]> {
   const blobOptions = getBlobOptions();
 
   if (blobOptions) {
-    const blob = await get(SUBSCRIPTIONS_BLOB_PATH, {
-      ...blobOptions,
-      access: "private",
-      useCache: false,
-    });
+    try {
+      const blob = await get(SUBSCRIPTIONS_BLOB_PATH, {
+        ...blobOptions,
+        access: "public",
+        useCache: false,
+      });
 
-    if (!blob || blob.statusCode !== 200) {
+      if (blob && blob.statusCode === 200) {
+        return normalizeSubscriptions(JSON.parse(await readTextStream(blob.stream)));
+      }
+    } catch {
       return [];
     }
-
-    return normalizeSubscriptions(JSON.parse(await readTextStream(blob.stream)));
   }
 
   try {
