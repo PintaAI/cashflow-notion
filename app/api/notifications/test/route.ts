@@ -17,7 +17,7 @@ export async function POST() {
         access: "public",
         useCache: false,
       });
-      if (blob) {
+      if (blob?.stream) {
         const reader = blob.stream.getReader();
         const decoder = new TextDecoder();
         let text = "";
