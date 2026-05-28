@@ -77,6 +77,11 @@ export function CashflowFormDrawer({
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [io, setIo] = useState<IOType>("Expenses")
 
+  const formatNominal = (value: string) => {
+    if (!value) return ""
+    return `Rp,${Number(value).toLocaleString("id-ID")}`
+  }
+
   const categoriesQuery = useCategories()
   const expenseCategories = categoriesQuery.data ?? []
 
@@ -334,12 +339,12 @@ export function CashflowFormDrawer({
             </label>
             <Input
               id="nominal"
-              type="number"
-              placeholder="0"
-              value={nominal}
-              onChange={(e) => setNominal(e.target.value)}
+              type="text"
+              inputMode="numeric"
+              placeholder="Rp,- 0"
+              value={formatNominal(nominal)}
+              onChange={(e) => setNominal(e.target.value.replace(/\D/g, ""))}
               className="h-12 text-base"
-              min="0"
               required
             />
             <div className="flex flex-wrap gap-1.5">

@@ -514,7 +514,7 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
           </p>
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-hidden">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (

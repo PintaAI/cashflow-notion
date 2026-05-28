@@ -119,7 +119,7 @@ export function CashflowTableSkeleton() {
         <Skeleton className="h-10 w-10 shrink-0" />
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-hidden">
         <div className="grid grid-cols-[1fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-4 border-b p-2">
           <Skeleton className="h-5 w-16" />
           <Skeleton className="h-5 w-20 justify-self-end" />
