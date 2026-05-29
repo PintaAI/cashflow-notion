@@ -6,6 +6,7 @@ import { Analytics01Icon, File01Icon, UserCircleIcon, Wallet01Icon } from "@huge
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { CashflowTable } from "@/components/cashflow-table";
+import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
 import { MobileBottomNav, type AppTab } from "@/components/mobile-bottom-nav";
 import { PageHeader } from "@/components/page-header";
@@ -302,9 +303,16 @@ function ProfileTab() {
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<AppTab>("home");
+  const [addDrawerOpen, setAddDrawerOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("action") === "add";
+  });
 
   return (
-    <Tabs orientation="vertical" value={activeTab} onValueChange={(value) => setActiveTab(value as AppTab)}>
+    <>
+      <CashflowFormDrawer mode="create" open={addDrawerOpen} onOpenChange={setAddDrawerOpen} />
+      <Tabs orientation="vertical" value={activeTab} onValueChange={(value) => setActiveTab(value as AppTab)}>
       <div className="flex min-h-dvh w-full">
         <SidebarNav />
 
@@ -330,5 +338,6 @@ export default function HomePage() {
 
       <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </Tabs>
+    </>
   );
 }
