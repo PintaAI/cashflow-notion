@@ -71,7 +71,7 @@
       "name": "Analytics",
       "short_name": "Analytics",
       "description": "View your financial analytics",
-      "url": "/analytics",
+      "url": "/?tab=summary",
       "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
     }
   ]

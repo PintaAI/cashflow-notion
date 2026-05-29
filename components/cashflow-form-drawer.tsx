@@ -30,7 +30,6 @@ import { getCategoryConfig } from "@/lib/categories"
 import { useCategories } from "@/hooks/use-cashflow-data"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Add01Icon,
   Calendar03Icon,
   CleanIcon,
   Tick02Icon,
@@ -63,19 +62,20 @@ export function CashflowFormDrawer({
   const router = useRouter()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const isEdit = mode === "edit"
 
   const [internalOpen, setInternalOpen] = useState(false)
-  const open = mode === "edit" ? (externalOpen ?? false) : internalOpen
-  const setOpen = mode === "edit" ? (externalOnOpenChange ?? (() => {})) : setInternalOpen
+  const open = externalOpen ?? internalOpen
+  const setOpen = externalOnOpenChange ?? setInternalOpen
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
-  const [name, setName] = useState("")
-  const [nominal, setNominal] = useState("")
-  const [category, setCategory] = useState<CategoryType>("Lainnya")
-  const [date, setDate] = useState<Date | undefined>(new Date())
-  const [io, setIo] = useState<IOType>("Expenses")
+  const [name, setName] = useState(() => isEdit ? (entry?.name ?? "") : "")
+  const [nominal, setNominal] = useState(() => isEdit && entry ? String(entry.nominal) : "")
+  const [category, setCategory] = useState<CategoryType>(() => isEdit ? (entry?.category ?? "Lainnya") : "Lainnya")
+  const [date, setDate] = useState<Date | undefined>(() => isEdit && entry?.date ? new Date(entry.date) : new Date())
+  const [io, setIo] = useState<IOType>(() => isEdit ? (entry?.io ?? "Expenses") : "Expenses")
 
   const formatNominal = (value: string) => {
     if (!value) return ""
@@ -84,18 +84,6 @@ export function CashflowFormDrawer({
 
   const categoriesQuery = useCategories()
   const expenseCategories = categoriesQuery.data ?? []
-
-  const isEdit = mode === "edit"
-
-  React.useEffect(() => {
-    if (isEdit && open && entry) {
-      setName(entry.name)
-      setNominal(String(entry.nominal))
-      setCategory(entry.category ?? "Lainnya")
-      setDate(entry.date ? new Date(entry.date) : new Date())
-      setIo(entry.io ?? "Expenses")
-    }
-  }, [isEdit, open, entry])
 
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -238,14 +226,9 @@ export function CashflowFormDrawer({
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>
-      {!isEdit && (
+      {!isEdit && trigger && (
         <DrawerTrigger asChild>
-          {trigger || (
-            <Button size="lg" className="gap-2 w-full sm:w-auto">
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-5" />
-              Add Expense
-            </Button>
-          )}
+          {trigger}
         </DrawerTrigger>
       )}
       <DrawerContent className="max-h-[90vh]">

@@ -302,7 +302,12 @@ function ProfileTab() {
 }
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<AppTab>("home");
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    if (typeof window === "undefined") return "home";
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    return tab === "summary" || tab === "catatan" || tab === "profile" ? tab : "home";
+  });
   const [addDrawerOpen, setAddDrawerOpen] = useState(() => {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
