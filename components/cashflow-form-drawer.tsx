@@ -198,7 +198,7 @@ export function CashflowFormDrawer({
           name: name.trim(),
           nominal: Number(nominal),
           category: io === "Expenses" ? (category as CategoryType) : undefined,
-          date: date?.toISOString().split('T')[0],
+          date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
         })
       } else {
@@ -206,7 +206,7 @@ export function CashflowFormDrawer({
           name: name.trim(),
           nominal: Number(nominal),
           category: io === "Expenses" ? (category as CategoryType) : undefined,
-          date: date?.toISOString().split('T')[0],
+          date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
         })
       }
