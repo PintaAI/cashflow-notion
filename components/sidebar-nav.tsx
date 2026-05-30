@@ -23,7 +23,7 @@ export function SidebarNav() {
         </span>
         <div>
           <p className="text-sm font-semibold leading-none">Cashflow</p>
-          <p className="mt-1 text-xs text-muted-foreground">Notion tracker</p>
+          <p className="mt-1 text-xs text-muted-foreground">Cashflow tracker</p>
         </div>
       </div>
 

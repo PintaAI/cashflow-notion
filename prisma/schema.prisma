@@ -35,7 +35,6 @@ model QuickFill {
 
 model Entry {
   id         String    @id @default(uuid())
-  notionId   String?   @unique
   name       String
   nominal    Float
   categoryId String?

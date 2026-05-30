@@ -4,7 +4,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer"
 import { motion, useReducedMotion } from "framer-motion"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Analytics01Icon, Add01Icon, File01Icon, Home02Icon, UserCircleIcon } from "@hugeicons/core-free-icons"
+import { Analytics01Icon, Add01Icon, CogIcon, File01Icon, Home02Icon } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 
 export type AppTab = "home" | "summary" | "setting" | "catatan"
@@ -28,7 +28,7 @@ const navItems = [
   {
     value: "setting" as const,
     label: "Setting",
-    icon: UserCircleIcon,
+    icon: CogIcon,
   },
 ]
 

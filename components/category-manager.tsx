@@ -21,7 +21,6 @@ import {
   useUpdateCategory,
 } from "@/hooks/use-cashflow-data"
 import { getCategoryConfig, CATEGORY_ICON_NAMES, CATEGORY_COLORS, categoryIconRegistry } from "@/lib/categories"
-import type { SelectColor } from "@notionhq/client/build/src/api-endpoints/common"
 import { cn } from "@/lib/utils"
 
 const colorHexMap: Record<string, string> = {
@@ -65,7 +64,7 @@ export function CategoryManager() {
       setSelectedIcon("More01Icon")
       setSelectedColor("default")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create category")
+      setError(err instanceof Error ? err.message : "Gagal membuat kategori")
     }
   }
 
@@ -91,13 +90,13 @@ export function CategoryManager() {
       await updateCategory.mutateAsync({ id: editingId, name: trimmedName, color: editColor, icon: editIcon })
       setEditingId(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update category")
+      setError(err instanceof Error ? err.message : "Gagal memperbarui kategori")
     }
   }
 
   const handleDelete = async (categoryId: string, categoryName: string, usageCount: number) => {
     if (usageCount > 0) {
-      setError(`Cannot delete "${categoryName}" - it has ${usageCount} entries`)
+      setError(`Tidak dapat menghapus "${categoryName}" - memiliki ${usageCount} entri`)
       return
     }
 
@@ -106,10 +105,10 @@ export function CategoryManager() {
     try {
       const result = await deleteCategory.mutateAsync(categoryId)
       if (!result.success && result.usageCount) {
-        setError(`Cannot delete "${categoryName}" - it has ${result.usageCount} entries`)
+        setError(`Tidak dapat menghapus "${categoryName}" - memiliki ${result.usageCount} entri`)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete category")
+      setError(err instanceof Error ? err.message : "Gagal menghapus kategori")
     } finally {
       setDeletingId(null)
     }
@@ -126,7 +125,7 @@ export function CategoryManager() {
   if (categoriesQuery.isError) {
     return (
       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-        Failed to load categories. Please try again.
+        Gagal memuat kategori. Silakan coba lagi.
       </div>
     )
   }
@@ -137,7 +136,7 @@ export function CategoryManager() {
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="text-sm text-muted-foreground">
-        Manage expense categories. Categories with entries cannot be deleted.
+        Kelola kategori pengeluaran. Kategori yang memiliki entri tidak dapat dihapus.
       </div>
 
       {error && (
@@ -149,7 +148,7 @@ export function CategoryManager() {
       <div className="space-y-2">
         <div className="flex gap-2">
           <Input
-            placeholder="New category name"
+            placeholder="Nama kategori baru"
             value={newCategoryName}
             onChange={(e) => {
               setNewCategoryName(e.target.value)
@@ -167,7 +166,7 @@ export function CategoryManager() {
                 variant="outline"
                 size="sm"
           
-                title="Pick icon"
+                title="Pilih ikon"
               >
                 <HugeiconsIcon icon={SelectedIconComp} strokeWidth={2} className="size-4" />
               </Button>
@@ -206,7 +205,7 @@ export function CategoryManager() {
             ) : (
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
             )}
-            Add
+            Tambah
           </Button>
         </div>
 
@@ -233,12 +232,12 @@ export function CategoryManager() {
         <div className="space-y-1">
           {categories.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
-              No categories found
+              Tidak ada kategori
             </div>
           ) : (
             categories.map((category) => {
               const isEditing = editingId === category.id
-              const config = getCategoryConfig(category.name, category.color as SelectColor, category.icon)
+              const config = getCategoryConfig(category.name, category.color as string, category.icon)
               const EditIconComp = categoryIconRegistry[editIcon] ?? categoryIconRegistry["More01Icon"]
 
               if (isEditing) {
@@ -262,7 +261,7 @@ export function CategoryManager() {
                             variant="outline"
                             size="icon"
                             className="size-9 shrink-0"
-                            title="Pick icon"
+                            title="Pilih ikon"
                           >
                             <HugeiconsIcon icon={EditIconComp} strokeWidth={2} className="size-4" />
                           </Button>
@@ -341,7 +340,7 @@ export function CategoryManager() {
                     </span>
                     {category.usageCount > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        {category.usageCount} entries
+                        {category.usageCount} entri
                       </span>
                     )}
                   </button>

@@ -12,7 +12,7 @@ const handler = createMcpHandler(
   },
   {
     serverInfo: {
-      name: "cashflow-notion",
+      name: "cashflow",
       version: "0.1.0",
     },
   },

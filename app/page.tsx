@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Analytics01Icon, File01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
@@ -15,7 +16,8 @@ import { Stats, type StatsData } from "@/components/stats";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
 import { QuickFillManager } from "@/components/quick-fill-manager";
-import { Button } from "@/components/ui/button";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/lib/analytics";
@@ -133,7 +135,7 @@ function DailyReminderPreference() {
     if (!supported) {
       Promise.resolve().then(() => {
         setIsSupported(false);
-        setMessage("Push notifications are not supported in this browser.");
+        setMessage("Notifikasi push tidak didukung di browser ini.");
       });
       return;
     }
@@ -149,7 +151,7 @@ function DailyReminderPreference() {
 
   async function enableReminder() {
     if (!vapidPublicKey) {
-      setMessage("Push notifications are not configured yet.");
+      setMessage("Notifikasi push belum dikonfigurasi.");
       return;
     }
 
@@ -160,7 +162,7 @@ function DailyReminderPreference() {
       const permission = await Notification.requestPermission();
 
       if (permission !== "granted") {
-        setMessage("Notification permission was not granted.");
+        setMessage("Izin notifikasi tidak diberikan.");
         return;
       }
 
@@ -188,9 +190,9 @@ function DailyReminderPreference() {
       }
 
       setIsEnabled(true);
-      setMessage("Daily reminder enabled for 8 PM Jakarta time.");
+      setMessage("Aktif jam 20:00 WIB");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to enable daily reminder.");
+      setMessage(error instanceof Error ? error.message : "Gagal mengaktifkan pengingat.");
     } finally {
       setIsBusy(false);
     }
@@ -215,33 +217,40 @@ function DailyReminderPreference() {
       }
 
       setIsEnabled(false);
-      setMessage("Daily reminder disabled.");
+      setMessage("Pengingat dimatikan");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to disable daily reminder.");
+      setMessage(error instanceof Error ? error.message : "Gagal mematikan pengingat.");
     } finally {
       setIsBusy(false);
     }
   }
 
+  useEffect(() => {
+    if (message && !isBusy) {
+      const timer = setTimeout(() => setMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [message, isBusy])
+
   return (
-    <div className="rounded-2xl border bg-background p-3 sm:p-4 space-y-2 sm:space-y-3">
-      <div className="space-y-1">
-        <h4 className="text-sm font-semibold text-foreground">Daily reminder</h4>
-        <p className="text-xs text-muted-foreground">
-          Send a push notification at 8 PM Jakarta time only if today has no cashflow entries.
-        </p>
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-foreground">Pengingat harian</span>
+        {message && !isBusy && (
+          <span className="text-xs text-muted-foreground">{message}</span>
+        )}
       </div>
-
-      <Button
-        type="button"
-        variant={isEnabled ? "outline" : "default"}
+      <Switch
+        checked={isEnabled}
         disabled={!isSupported || isBusy}
-        onClick={isEnabled ? disableReminder : enableReminder}
-      >
-        {isBusy ? "Saving..." : isEnabled ? "Disable reminder" : "Enable reminder"}
-      </Button>
-
-      {message && <p className="text-xs text-muted-foreground">{message}</p>}
+        onCheckedChange={(checked) => {
+          if (checked) {
+            enableReminder()
+          } else {
+            disableReminder()
+          }
+        }}
+      />
     </div>
   );
 }
@@ -249,7 +258,6 @@ function DailyReminderPreference() {
 function HomeTab() {
   const summaryQuery = useSummary();
   const activityQuery = useActivityOverview();
-  const isDataUnavailable = summaryQuery.isError || activityQuery.isError;
   const summary = summaryQuery.data ?? getEmptySummary();
   const activity = activityQuery.data ?? getEmptyActivityOverview();
   const today = formatDateKey(new Date());
@@ -257,12 +265,6 @@ function HomeTab() {
   return (
     <>
       <PageHeader icon={Wallet01Icon} title="Cashflow Tracker" />
-
-      {isDataUnavailable && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-          Notion is temporarily unavailable. Showing an empty overview while live data reconnects.
-        </div>
-      )}
 
       {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
       {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} />}
@@ -287,22 +289,43 @@ function ProfileTab() {
         <ThemeToggle />
       </PageHeader>
 
-      <div className="space-y-4 sm:space-y-6">
-        <section>
-          <h3 className="text-sm font-semibold text-foreground mb-2 sm:mb-3">Quick Fill</h3>
-          <QuickFillManager />
-        </section>
+      <Accordion type="single" collapsible className="space-y-2 sm:space-y-3">
+        <AccordionItem value="quick-fill">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={FlashIcon} strokeWidth={2} className="size-4" />
+              Quick fill
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <QuickFillManager />
+          </AccordionContent>
+        </AccordionItem>
 
-        <section>
-          <h3 className="text-sm font-semibold text-foreground mb-2 sm:mb-3">Categories</h3>
-          <CategoryManager />
-        </section>
+        <AccordionItem value="categories">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} className="size-4" />
+              Kategori
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <CategoryManager />
+          </AccordionContent>
+        </AccordionItem>
 
-        <section>
-          <h3 className="text-sm font-semibold text-foreground mb-2 sm:mb-3">Preferences</h3>
-          <DailyReminderPreference />
-        </section>
-      </div>
+        <AccordionItem value="reminder">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={BellDotIcon} strokeWidth={2} className="size-4" />
+              Pengingat
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <DailyReminderPreference />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </>
   );
 }

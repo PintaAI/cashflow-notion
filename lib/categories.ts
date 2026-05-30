@@ -1,4 +1,3 @@
-import type { SelectColor } from "@notionhq/client/build/src/api-endpoints/common";
 import {
   Alert01Icon,
   Briefcase01Icon,
@@ -25,20 +24,13 @@ import {
   Water,
 } from "@hugeicons/core-free-icons";
 
-export interface CategoryOption {
-  id: string;
-  name: string;
-  color: SelectColor;
-  icon: string | null;
-}
-
 export interface CategoryConfig {
   color: string;
   bgColor: string;
   icon: typeof More01Icon;
 }
 
-const notionColorToTailwind: Record<SelectColor, { color: string; bgColor: string }> = {
+const colorToTailwind: Record<string, { color: string; bgColor: string }> = {
   default: { color: "text-slate-700 dark:text-slate-300", bgColor: "bg-slate-100 dark:bg-slate-900/30" },
   gray: { color: "text-gray-700 dark:text-gray-300", bgColor: "bg-gray-100 dark:bg-gray-900/30" },
   brown: { color: "text-amber-800 dark:text-amber-300", bgColor: "bg-amber-100 dark:bg-amber-900/30" },
@@ -135,29 +127,25 @@ function hashString(str: string): number {
 
 export function getCategoryConfig(
   category: string,
-  notionColor?: SelectColor,
+  color?: string,
   iconName?: string | null,
 ): CategoryConfig {
   const icon = iconName
     ? (categoryIconRegistry[iconName] ?? knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length])
     : (knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length]);
 
-  if (notionColor && notionColorToTailwind[notionColor]) {
+  if (color && colorToTailwind[color]) {
     return {
-      ...notionColorToTailwind[notionColor],
+      ...colorToTailwind[color],
       icon,
     };
   }
 
-  const fallbackColorIndex = hashString(category) % Object.keys(notionColorToTailwind).length;
-  const fallbackColorKey = Object.keys(notionColorToTailwind)[fallbackColorIndex] as SelectColor;
+  const fallbackColorIndex = hashString(category) % Object.keys(colorToTailwind).length;
+  const fallbackColorKey = Object.keys(colorToTailwind)[fallbackColorIndex];
 
   return {
-    ...notionColorToTailwind[fallbackColorKey],
+    ...colorToTailwind[fallbackColorKey],
     icon,
   };
-}
-
-export function getNotionColorToTailwind(color: SelectColor): { color: string; bgColor: string } {
-  return notionColorToTailwind[color] ?? notionColorToTailwind.default;
 }

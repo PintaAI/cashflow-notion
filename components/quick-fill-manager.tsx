@@ -62,7 +62,7 @@ export function QuickFillManager() {
       setNominal("")
       setCategoryId("none")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create quick fill")
+      setError(err instanceof Error ? err.message : "Gagal membuat isian cepat")
     }
   }
 
@@ -93,7 +93,7 @@ export function QuickFillManager() {
       })
       setEditingId(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update quick fill")
+      setError(err instanceof Error ? err.message : "Gagal memperbarui isian cepat")
     }
   }
 
@@ -103,7 +103,7 @@ export function QuickFillManager() {
     try {
       await deleteQuickFill.mutateAsync(id)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete quick fill")
+      setError(err instanceof Error ? err.message : "Gagal menghapus isian cepat")
     } finally {
       setDeletingId(null)
     }
@@ -120,7 +120,7 @@ export function QuickFillManager() {
   if (quickFillsQuery.isError) {
     return (
       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-        Failed to load quick fills. Please try again.
+        Gagal memuat isian cepat. Silakan coba lagi.
       </div>
     )
   }
@@ -131,7 +131,7 @@ export function QuickFillManager() {
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="text-sm text-muted-foreground">
-        One-tap buttons that fill the name, amount, and category when creating an entry.
+        Tombol sekali tekan untuk mengisi nama, nominal, dan kategori saat membuat entri.
       </div>
 
       {error && (
@@ -143,14 +143,14 @@ export function QuickFillManager() {
       <div className="space-y-2">
         <div className="flex gap-2">
           <Input
-            placeholder="Name (e.g. jajan)"
+            placeholder="Nama (mis. jajan)"
             value={name}
             onChange={(e) => { setName(e.target.value); setError(null) }}
             className="flex-1"
             disabled={createQuickFill.isPending}
           />
           <Input
-            placeholder="Amount"
+            placeholder="Nominal"
             type="text"
             inputMode="numeric"
             value={nominal}
@@ -162,11 +162,11 @@ export function QuickFillManager() {
         <div className="flex gap-2">
           <Select value={categoryId} onValueChange={setCategoryId}>
             <SelectTrigger className="flex-1 h-10 text-sm">
-              <SelectValue placeholder="Category (optional)" />
+              <SelectValue placeholder="Kategori (opsional)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No category</SelectItem>
-              {categories.map((cat) => {
+                  <SelectItem value="none">Tanpa kategori</SelectItem>
+                  {categories.map((cat) => {
                 const config = getCategoryConfig(cat.name, cat.color as any, cat.icon)
                 return (
                   <SelectItem key={cat.id} value={cat.id}>
@@ -189,7 +189,7 @@ export function QuickFillManager() {
             ) : (
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
             )}
-            Add
+            Tambah
           </Button>
         </div>
       </div>
@@ -198,7 +198,7 @@ export function QuickFillManager() {
         <div className="space-y-1">
           {presets.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
-              No quick fills yet
+              Belum ada isian cepat
             </div>
           ) : (
             presets.map((preset) => {
@@ -214,7 +214,7 @@ export function QuickFillManager() {
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         className="flex-1 h-9 text-sm"
-                        placeholder="Name"
+                        placeholder="Nama"
                       />
                       <Input
                         value={editNominal}
@@ -222,16 +222,16 @@ export function QuickFillManager() {
                         inputMode="numeric"
                         onChange={(e) => setEditNominal(e.target.value.replace(/\D/g, ""))}
                         className="w-24 h-9 text-sm"
-                        placeholder="Amount"
+                        placeholder="Nominal"
                       />
                     </div>
                     <div className="flex gap-2">
                       <Select value={editCategoryId} onValueChange={setEditCategoryId}>
                         <SelectTrigger className="flex-1 h-9 text-sm">
-                          <SelectValue placeholder="Category" />
+                          <SelectValue placeholder="Kategori" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">No category</SelectItem>
+                          <SelectItem value="none">Tanpa kategori</SelectItem>
                           {categories.map((cat) => (
                             <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                           ))}

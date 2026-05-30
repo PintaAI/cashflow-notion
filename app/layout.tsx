@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Cashflow Tracker",
-  description: "Track your income and expenses with Notion",
+  description: "Track your income and expenses",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
