@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { CashflowTable } from "@/components/cashflow-table";
+import { McpConnectionGuide } from "@/components/mcp-connection-guide";
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
 import { MobileBottomNav, type AppTab } from "@/components/mobile-bottom-nav";
@@ -323,6 +324,18 @@ function ProfileTab() {
           </AccordionTrigger>
           <AccordionContent>
             <DailyReminderPreference />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="connect-ai">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={AiChat01Icon} strokeWidth={2} className="size-4" />
+              Hubungkan AI
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <McpConnectionGuide />
           </AccordionContent>
         </AccordionItem>
       </Accordion>
