@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import type { ActivityOverview } from "@/app/actions/analytics";
+import type { ActivityOverview } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 interface ActivityHeatmapProps {

@@ -18,7 +18,7 @@ import { QuickFillManager } from "@/components/quick-fill-manager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
-import type { ActivityOverview } from "@/app/actions/analytics";
+import type { ActivityOverview } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
 
 function formatDateKey(date: Date): string {
@@ -224,7 +224,7 @@ function DailyReminderPreference() {
   }
 
   return (
-    <div className="rounded-2xl border bg-background p-4 space-y-3">
+    <div className="rounded-2xl border bg-background p-3 sm:p-4 space-y-2 sm:space-y-3">
       <div className="space-y-1">
         <h4 className="text-sm font-semibold text-foreground">Daily reminder</h4>
         <p className="text-xs text-muted-foreground">
@@ -287,22 +287,22 @@ function ProfileTab() {
         <ThemeToggle />
       </PageHeader>
 
-      <section className="rounded-3xl border bg-card p-5 text-card-foreground shadow-sm space-y-6">
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Quick Fill</h3>
+      <div className="space-y-4 sm:space-y-6">
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-2 sm:mb-3">Quick Fill</h3>
           <QuickFillManager />
-        </div>
+        </section>
 
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Categories</h3>
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-2 sm:mb-3">Categories</h3>
           <CategoryManager />
-        </div>
+        </section>
 
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Preferences</h3>
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-2 sm:mb-3">Preferences</h3>
           <DailyReminderPreference />
-        </div>
-      </section>
+        </section>
+      </div>
     </>
   );
 }

@@ -561,6 +561,25 @@ export async function createQuickFill(data: {
   };
 }
 
+export async function updateQuickFill(id: string, data: { name?: string; nominal?: number; categoryId?: string | null }): Promise<QuickFillPreset> {
+  const preset = await prisma.quickFill.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.nominal !== undefined && { nominal: data.nominal }),
+      ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+    },
+    include: { category: true },
+  });
+  return {
+    id: preset.id,
+    name: preset.name,
+    nominal: preset.nominal,
+    category: preset.category?.name ?? null,
+    categoryId: preset.categoryId,
+  };
+}
+
 export async function deleteQuickFill(id: string): Promise<void> {
   await prisma.quickFill.delete({ where: { id } });
 }

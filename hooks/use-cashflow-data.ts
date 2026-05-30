@@ -3,11 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { fetchSummary } from "@/app/actions/cashflow";
-import {
-  fetchActivityOverview,
-  fetchAnalyticsFromURL,
-  type URLAnalyticsFilter,
-} from "@/app/actions/analytics";
+import { fetchActivityOverview, fetchAnalyticsFromURL } from "@/app/actions/analytics";
+import type { URLAnalyticsFilter } from "@/lib/analytics";
 import {
   fetchCategories,
   fetchCategoriesWithDetails,
@@ -18,6 +15,7 @@ import {
 import {
   fetchQuickFills,
   addQuickFill,
+  editQuickFill,
   removeQuickFill,
 } from "@/app/actions/quick-fill";
 
@@ -125,6 +123,18 @@ export function useCreateQuickFill() {
 
   return useMutation({
     mutationFn: (data: { name: string; nominal: number; categoryId?: string | null }) => addQuickFill(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
+    },
+  });
+}
+
+export function useUpdateQuickFill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; name?: string; nominal?: number; categoryId?: string | null }) =>
+      editQuickFill(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
     },

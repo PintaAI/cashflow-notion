@@ -26,7 +26,7 @@ import {
 import { AnalyticsFilter } from "@/components/analytics-filter";
 import { AnalyticsContentSkeleton } from "@/components/loading-skeletons";
 import { useAnalytics, useCategories } from "@/hooks/use-cashflow-data";
-import type { AnalyticsData } from "@/app/actions/analytics";
+import type { AnalyticsData } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 
 // Color palette for charts - using oklch values directly for better color support

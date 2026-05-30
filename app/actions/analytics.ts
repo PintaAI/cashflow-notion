@@ -12,8 +12,6 @@ import {
   type URLAnalyticsFilter,
 } from "@/lib/analytics";
 
-export type { ActivityOverview, AnalyticsData, AnalyticsFilter, URLAnalyticsFilter };
-
 export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}): Promise<AnalyticsData> {
   return getAnalyticsFromURL(urlFilter);
 }

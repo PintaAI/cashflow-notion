@@ -24,6 +24,19 @@ import { getCategoryConfig, CATEGORY_ICON_NAMES, CATEGORY_COLORS, categoryIconRe
 import type { SelectColor } from "@notionhq/client/build/src/api-endpoints/common"
 import { cn } from "@/lib/utils"
 
+const colorHexMap: Record<string, string> = {
+  default: "#64748b",
+  gray: "#6b7280",
+  brown: "#d97706",
+  orange: "#f97316",
+  yellow: "#eab308",
+  green: "#22c55e",
+  blue: "#3b82f6",
+  purple: "#a855f7",
+  pink: "#ec4899",
+  red: "#ef4444",
+}
+
 export function CategoryManager() {
   const categoriesQuery = useCategoriesWithDetails()
   const createCategory = useCreateCategory()
@@ -38,6 +51,8 @@ export function CategoryManager() {
   const [editName, setEditName] = useState("")
   const [editIcon, setEditIcon] = useState("")
   const [editColor, setEditColor] = useState("default")
+  const [isNameFocused, setIsNameFocused] = useState(false)
+  const [isEditFocused, setIsEditFocused] = useState(false)
 
   const handleCreate = async () => {
     const trimmedName = newCategoryName.trim()
@@ -120,7 +135,7 @@ export function CategoryManager() {
   const SelectedIconComp = categoryIconRegistry[selectedIcon] ?? categoryIconRegistry["More01Icon"]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="text-sm text-muted-foreground">
         Manage expense categories. Categories with entries cannot be deleted.
       </div>
@@ -131,7 +146,7 @@ export function CategoryManager() {
         </div>
       )}
 
-      <div className="space-y-2 rounded-lg border p-3">
+      <div className="space-y-2">
         <div className="flex gap-2">
           <Input
             placeholder="New category name"
@@ -142,13 +157,16 @@ export function CategoryManager() {
             }}
             className="flex-1"
             disabled={createCategory.isPending}
+            onFocus={() => setIsNameFocused(true)}
+            onBlur={() => setIsNameFocused(false)}
+            style={{ "--ring": colorHexMap[selectedColor] ?? colorHexMap.default } as React.CSSProperties}
           />
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                size="icon"
-                className="size-10 shrink-0"
+                size="sm"
+          
                 title="Pick icon"
               >
                 <HugeiconsIcon icon={SelectedIconComp} strokeWidth={2} className="size-4" />
@@ -192,7 +210,8 @@ export function CategoryManager() {
           </Button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {isNameFocused && (
+        <div className="flex flex-wrap gap-2 justify-center" onMouseDown={(e) => e.preventDefault()}>
           {CATEGORY_COLORS.map((c) => (
             <button
               key={c.name}
@@ -207,12 +226,13 @@ export function CategoryManager() {
             />
           ))}
         </div>
-      </div>
+      )}
+    </div>
 
-      <ScrollArea className="h-[300px] rounded-md border">
-        <div className="p-3 space-y-2">
+      <ScrollArea className="h-[200px] sm:h-[300px]">
+        <div className="space-y-1">
           {categories.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-sm text-muted-foreground">
               No categories found
             </div>
           ) : (
@@ -225,13 +245,16 @@ export function CategoryManager() {
                 return (
                   <div
                     key={category.id}
-                    className="rounded-lg border bg-card p-3 space-y-2"
+                    className="rounded-lg border bg-card p-2 space-y-2"
                   >
                     <div className="flex gap-2">
                       <Input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         className="flex-1 h-9 text-sm"
+                        onFocus={() => setIsEditFocused(true)}
+                        onBlur={() => setIsEditFocused(false)}
+                        style={{ "--ring": colorHexMap[editColor] ?? colorHexMap.default } as React.CSSProperties}
                       />
                       <Popover>
                         <PopoverTrigger asChild>
@@ -281,7 +304,8 @@ export function CategoryManager() {
                         )}
                       </Button>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    {isEditFocused && (
+                    <div className="flex flex-wrap gap-2 justify-center" onMouseDown={(e) => e.preventDefault()}>
                       {CATEGORY_COLORS.map((c) => (
                         <button
                           key={c.name}
@@ -296,6 +320,7 @@ export function CategoryManager() {
                         />
                       ))}
                     </div>
+                    )}
                   </div>
                 )
               }
@@ -303,7 +328,7 @@ export function CategoryManager() {
               return (
                 <div
                   key={category.id}
-                  className="flex items-center justify-between rounded-lg border bg-card p-3"
+                  className="flex items-center justify-between py-1.5"
                 >
                   <button
                     type="button"
@@ -324,22 +349,22 @@ export function CategoryManager() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-8 text-muted-foreground hover:text-foreground"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
                       onClick={() => startEditing(category)}
                     >
-                      <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-4" />
+                      <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-3.5" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
                       onClick={() => handleDelete(category.id, category.name, category.usageCount)}
                       disabled={deletingId === category.id || category.usageCount > 0}
                     >
                       {deletingId === category.id ? (
-                        <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-4 animate-spin" />
+                        <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin" />
                       ) : (
-                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-4" />
+                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
                       )}
                     </Button>
                   </div>

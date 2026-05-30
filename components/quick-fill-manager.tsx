@@ -6,7 +6,9 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   Delete02Icon,
+  Edit02Icon,
   Loading03Icon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   useQuickFills,
   useCreateQuickFill,
+  useUpdateQuickFill,
   useDeleteQuickFill,
   useCategoriesWithDetails,
 } from "@/hooks/use-cashflow-data"
@@ -31,12 +34,17 @@ export function QuickFillManager() {
   const quickFillsQuery = useQuickFills()
   const categoriesQuery = useCategoriesWithDetails()
   const createQuickFill = useCreateQuickFill()
+  const updateQuickFill = useUpdateQuickFill()
   const deleteQuickFill = useDeleteQuickFill()
 
   const [name, setName] = useState("")
   const [nominal, setNominal] = useState("")
   const [categoryId, setCategoryId] = useState<string>("none")
   const [error, setError] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editNominal, setEditNominal] = useState("")
+  const [editCategoryId, setEditCategoryId] = useState<string>("none")
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const handleCreate = async () => {
@@ -55,6 +63,37 @@ export function QuickFillManager() {
       setCategoryId("none")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create quick fill")
+    }
+  }
+
+  const startEditing = (preset: typeof presets[number]) => {
+    if (editingId === preset.id) {
+      setEditingId(null)
+      return
+    }
+    setEditingId(preset.id)
+    setEditName(preset.name)
+    setEditNominal(String(preset.nominal))
+    setEditCategoryId(preset.categoryId ?? "none")
+    setError(null)
+  }
+
+  const handleUpdate = async () => {
+    if (!editingId) return
+    const trimmedName = editName.trim()
+    if (!trimmedName || !editNominal) return
+
+    setError(null)
+    try {
+      await updateQuickFill.mutateAsync({
+        id: editingId,
+        name: trimmedName,
+        nominal: Number(editNominal),
+        categoryId: editCategoryId === "none" ? null : editCategoryId,
+      })
+      setEditingId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update quick fill")
     }
   }
 
@@ -90,7 +129,7 @@ export function QuickFillManager() {
   const categories = categoriesQuery.data ?? []
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="text-sm text-muted-foreground">
         One-tap buttons that fill the name, amount, and category when creating an entry.
       </div>
@@ -101,7 +140,7 @@ export function QuickFillManager() {
         </div>
       )}
 
-      <div className="space-y-2 rounded-lg border p-3">
+      <div className="space-y-2">
         <div className="flex gap-2">
           <Input
             placeholder="Name (e.g. jajan)"
@@ -155,22 +194,76 @@ export function QuickFillManager() {
         </div>
       </div>
 
-      <ScrollArea className="h-[250px] rounded-md border">
-        <div className="p-3 space-y-2">
+      <ScrollArea className="h-[180px] sm:h-[250px]">
+        <div className="space-y-1">
           {presets.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-sm text-muted-foreground">
               No quick fills yet
             </div>
           ) : (
             presets.map((preset) => {
               const catData = preset.categoryId ? categories.find((c) => c.id === preset.categoryId) : null
               const config = preset.category ? getCategoryConfig(preset.category, catData?.color as any, catData?.icon) : null
+              const isEditing = editingId === preset.id
+
+              if (isEditing) {
+                return (
+                  <div key={preset.id} className="rounded-lg border bg-card p-2 space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="flex-1 h-9 text-sm"
+                        placeholder="Name"
+                      />
+                      <Input
+                        value={editNominal}
+                        type="text"
+                        inputMode="numeric"
+                        onChange={(e) => setEditNominal(e.target.value.replace(/\D/g, ""))}
+                        className="w-24 h-9 text-sm"
+                        placeholder="Amount"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Select value={editCategoryId} onValueChange={setEditCategoryId}>
+                        <SelectTrigger className="flex-1 h-9 text-sm">
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No category</SelectItem>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="icon"
+                        className="size-9 shrink-0"
+                        onClick={handleUpdate}
+                        disabled={!editName.trim() || !editNominal || updateQuickFill.isPending}
+                      >
+                        {updateQuickFill.isPending ? (
+                          <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-4 animate-spin" />
+                        ) : (
+                          <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div
                   key={preset.id}
-                  className="flex items-center justify-between rounded-lg border bg-card p-3"
+                  className="flex items-center justify-between py-1.5"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    type="button"
+                    className="flex items-center gap-3 min-w-0 text-left"
+                    onClick={() => startEditing(preset)}
+                  >
                     <span className="text-sm font-medium truncate">{preset.name}</span>
                     <span className="text-sm text-muted-foreground shrink-0">
                       Rp {preset.nominal.toLocaleString("id-ID")}
@@ -181,20 +274,30 @@ export function QuickFillManager() {
                         <span className="text-xs">{preset.category}</span>
                       </span>
                     )}
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => startEditing(preset)}
+                    >
+                      <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(preset.id)}
+                      disabled={deletingId === preset.id}
+                    >
+                      {deletingId === preset.id ? (
+                        <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin" />
+                      ) : (
+                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDelete(preset.id)}
-                    disabled={deletingId === preset.id}
-                  >
-                    {deletingId === preset.id ? (
-                      <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-4 animate-spin" />
-                    ) : (
-                      <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-4" />
-                    )}
-                  </Button>
                 </div>
               )
             })
