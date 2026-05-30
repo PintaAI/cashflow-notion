@@ -23,18 +23,30 @@ const handler = createMcpHandler(
   },
 );
 
-async function verifyToken(_request: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
+async function verifyToken(request: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
   const expectedToken = process.env.MCP_API_KEY;
-
-  if (!expectedToken || !bearerToken || bearerToken !== expectedToken) {
-    return undefined;
+  
+  // Check bearer token from Authorization header
+  if (expectedToken && bearerToken && bearerToken === expectedToken) {
+    return {
+      token: bearerToken,
+      clientId: "cashflow-mcp-client",
+      scopes: ["cashflow:read", "cashflow:write"],
+    };
+  }
+  
+  // Fallback: check query parameter (for ChatGPT connector workaround)
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get("api_key");
+  if (expectedToken && queryToken && queryToken === expectedToken) {
+    return {
+      token: queryToken,
+      clientId: "cashflow-mcp-client",
+      scopes: ["cashflow:read", "cashflow:write"],
+    };
   }
 
-  return {
-    token: bearerToken,
-    clientId: "cashflow-mcp-client",
-    scopes: ["cashflow:read", "cashflow:write"],
-  };
+  return undefined;
 }
 
 const authHandler = withMcpAuth(handler, verifyToken, {
