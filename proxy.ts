@@ -10,7 +10,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/.well-known") ||
     pathname.startsWith("/oauth") ||
-    pathname === "/favicon.ico";
+    pathname === "/favicon.ico" ||
+    pathname === "/manifest.json" ||
+    pathname === "/sw.js" ||
+    pathname.startsWith("/workbox-") ||
+    pathname.startsWith("/worker-");
 
   if (isSkippedPath) {
     return NextResponse.next();
@@ -35,5 +39,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw\\.js|workbox-.*\\.js|worker-.*\\.js|.*\\.(?:png|json|js|ico|svg)$).*)"],
 };

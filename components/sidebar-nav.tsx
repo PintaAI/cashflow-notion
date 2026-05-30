@@ -1,11 +1,14 @@
 "use client";
 
-import { Add01Icon, Analytics01Icon, File01Icon, Home02Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Add01Icon, Analytics01Icon, File01Icon, Home02Icon, Shield01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { Button } from "@/components/ui/button";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
+import { checkAdminStatus } from "@/app/actions/admin";
 
 const navItems = [
   { value: "home", label: "Home", icon: Home02Icon },
@@ -15,6 +18,12 @@ const navItems = [
 ];
 
 export function SidebarNav() {
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    checkAdminStatus().then(setIsAdmin);
+  }, []);
+
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r bg-background/95 px-4 py-5 md:flex md:flex-col">
       <div className="mb-6 flex items-center gap-2.5 px-2">
@@ -52,6 +61,16 @@ export function SidebarNav() {
           </TabsTrigger>
         ))}
       </TabsList>
+
+      {isAdmin && (
+        <Link
+          href="/admin"
+          className="mt-1 flex h-11 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm text-amber-600 hover:bg-muted/70 dark:text-amber-500"
+        >
+          <HugeiconsIcon icon={Shield01Icon} strokeWidth={2.1} className="size-4.5" />
+          Admin
+        </Link>
+      )}
     </aside>
   );
 }
