@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum IOType {
+  Income
+  Expenses
+}
+
+model Category {
+  id         String      @id @default(uuid())
+  name       String      @unique
+  color      String      @default("default")
+  icon       String?
+  createdAt  DateTime    @default(now())
+  entries    Entry[]
+  quickFills QuickFill[]
+}
+
+model QuickFill {
+  id         String    @id @default(uuid())
+  name       String
+  nominal    Float
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  order      Int       @default(0)
+}
+
+model Entry {
+  id         String    @id @default(uuid())
+  notionId   String?   @unique
+  name       String
+  nominal    Float
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  date       String?
+  io         IOType?
+  createdAt  DateTime  @default(now())
+
+  @@index([date, createdAt, id])
+  @@index([io, date])
+  @@index([categoryId])
+  @@index([createdAt])
+}
