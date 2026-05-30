@@ -2,12 +2,14 @@
 
 import {
   getCategoryOptions,
+  getCategoryOptionsWithUsage,
   addCategoryOption,
+  updateCategoryOption,
   removeCategoryOption,
   getCategoryUsageCount,
   type CategoryOptionWithColor,
-} from "@/lib/notion";
-import type { CategoryType } from "@/lib/notion";
+} from "@/lib/db";
+import type { CategoryType } from "@/lib/db";
 
 export type CategoryWithUsage = CategoryOptionWithColor & {
   usageCount: number;
@@ -19,25 +21,30 @@ export async function fetchCategories(): Promise<CategoryType[]> {
 }
 
 export async function fetchCategoriesWithDetails(): Promise<CategoryWithUsage[]> {
-  const options = await getCategoryOptions();
-  
-  const usageCounts = await Promise.all(
-    options.map((opt) => getCategoryUsageCount(opt.name))
-  );
-  
-  return options.map((opt, index) => ({
-    ...opt,
-    usageCount: usageCounts[index],
-  }));
+  return getCategoryOptionsWithUsage();
 }
 
-export async function createCategory(name: string): Promise<CategoryOptionWithColor[]> {
+export async function createCategory(name: string, color?: string, icon?: string): Promise<CategoryOptionWithColor[]> {
   const trimmedName = name.trim();
   if (!trimmedName) {
     throw new Error("Category name cannot be empty");
   }
   
-  return addCategoryOption(trimmedName);
+  return addCategoryOption(trimmedName, color ?? "default", icon);
+}
+
+export async function updateCategory(
+  categoryId: string,
+  data: { name?: string; color?: string; icon?: string | null },
+): Promise<CategoryOptionWithColor[]> {
+  if (data.name !== undefined) {
+    const trimmedName = data.name.trim();
+    if (!trimmedName) {
+      throw new Error("Category name cannot be empty");
+    }
+    data.name = trimmedName;
+  }
+  return updateCategoryOption(categoryId, data);
 }
 
 export async function deleteCategory(categoryId: string): Promise<{ success: boolean; usageCount?: number }> {

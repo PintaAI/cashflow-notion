@@ -29,7 +29,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import type { IOType, CategoryType } from "@/lib/notion";
+import type { IOType, CategoryType } from "@/lib/db";
 
 // Types
 import type { DateRange } from "react-day-picker";

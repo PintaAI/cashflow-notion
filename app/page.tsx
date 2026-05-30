@@ -14,11 +14,12 @@ import { SidebarNav } from "@/components/sidebar-nav";
 import { Stats, type StatsData } from "@/components/stats";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
+import { QuickFillManager } from "@/components/quick-fill-manager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/app/actions/analytics";
-import type { CashflowSummary } from "@/lib/notion";
+import type { CashflowSummary } from "@/lib/db";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -282,11 +283,16 @@ function CatatanTab() {
 function ProfileTab() {
   return (
     <>
-      <PageHeader icon={UserCircleIcon} title="Profile">
+      <PageHeader icon={UserCircleIcon} title="Setting">
         <ThemeToggle />
       </PageHeader>
 
       <section className="rounded-3xl border bg-card p-5 text-card-foreground shadow-sm space-y-6">
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">Quick Fill</h3>
+          <QuickFillManager />
+        </div>
+
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground">Categories</h3>
           <CategoryManager />
@@ -306,7 +312,7 @@ export default function HomePage() {
     if (typeof window === "undefined") return "home";
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    return tab === "summary" || tab === "catatan" || tab === "profile" ? tab : "home";
+    return tab === "summary" || tab === "catatan" || tab === "setting" ? tab : "home";
   });
   const [addDrawerOpen, setAddDrawerOpen] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -335,7 +341,7 @@ export default function HomePage() {
             <AnalyticsCharts />
           </TabsContent>
 
-          <TabsContent value="profile" className="mt-0">
+          <TabsContent value="setting" className="mt-0">
             <ProfileTab />
           </TabsContent>
         </main>

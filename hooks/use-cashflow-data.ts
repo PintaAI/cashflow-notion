@@ -12,8 +12,14 @@ import {
   fetchCategories,
   fetchCategoriesWithDetails,
   createCategory,
+  updateCategory as updateCategoryAction,
   deleteCategory,
 } from "@/app/actions/categories";
+import {
+  fetchQuickFills,
+  addQuickFill,
+  removeQuickFill,
+} from "@/app/actions/quick-fill";
 
 export const cashflowQueryKeys = {
   entries: ["cashflow-entries"] as const,
@@ -23,6 +29,7 @@ export const cashflowQueryKeys = {
   analyticsRoot: ["cashflow-analytics"] as const,
   categories: ["cashflow-categories"] as const,
   categoriesWithDetails: ["cashflow-categories-details"] as const,
+  quickFills: ["cashflow-quick-fills"] as const,
 };
 
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
@@ -68,7 +75,7 @@ export function useCreateCategory() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (name: string) => createCategory(name),
+    mutationFn: ({ name, color, icon }: { name: string; color?: string; icon?: string }) => createCategory(name, color ?? "default", icon),
     onSuccess: (newCategories) => {
       queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
@@ -89,6 +96,48 @@ export function useDeleteCategory() {
         queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot });
       }
       return result;
+    },
+  });
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, name, color, icon }: { id: string; name?: string; color?: string; icon?: string | null }) =>
+      updateCategoryAction(id, { name, color, icon }),
+    onSuccess: (newCategories) => {
+      queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
+    },
+  });
+}
+
+export function useQuickFills() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.quickFills,
+    queryFn: fetchQuickFills,
+  });
+}
+
+export function useCreateQuickFill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { name: string; nominal: number; categoryId?: string | null }) => addQuickFill(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
+    },
+  });
+}
+
+export function useDeleteQuickFill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => removeQuickFill(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
     },
   });
 }

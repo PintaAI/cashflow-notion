@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CashflowEntry, IOType, CategoryType } from "@/lib/notion";
+import type { CashflowEntry, IOType, CategoryType } from "@/lib/db";
 import { getCategoryConfig } from "@/lib/categories";
 import { fetchEntriesFiltered, removeEntry } from "@/app/actions/cashflow";
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
@@ -316,18 +316,19 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
     error,
   } = useInfiniteQuery({
     queryKey: ["cashflow-entries", ioQueryFilter, dateFilter],
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam = 0 }) => {
       const result = await fetchEntriesFiltered({
         pageSize: PAGE_SIZE,
-        cursor: pageParam as string | null,
+        skip: pageParam as number,
         io: ioQueryFilter === "all" ? undefined : (ioQueryFilter as IOType),
         date: dateFilter,
       });
       return result;
     },
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => {
-      return lastPage.hasMore ? lastPage.nextCursor : undefined;
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((sum, page) => sum + page.entries.length, 0);
+      return lastPage.hasMore ? loadedCount : undefined;
     },
   });
 

@@ -1,15 +1,17 @@
 "use client";
 
-import { Analytics01Icon, File01Icon, Home02Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Analytics01Icon, File01Icon, Home02Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
+import { Button } from "@/components/ui/button";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 
 const navItems = [
   { value: "home", label: "Home", icon: Home02Icon },
   { value: "catatan", label: "Catatan", icon: File01Icon },
   { value: "summary", label: "Summary", icon: Analytics01Icon },
-  { value: "profile", label: "Profile", icon: UserCircleIcon },
+  { value: "setting", label: "Setting", icon: UserCircleIcon },
 ];
 
 export function SidebarNav() {
@@ -24,6 +26,16 @@ export function SidebarNav() {
           <p className="mt-1 text-xs text-muted-foreground">Notion tracker</p>
         </div>
       </div>
+
+      <CashflowFormDrawer
+        mode="create"
+        trigger={
+          <Button className="mb-4 w-full gap-2 rounded-xl">
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2.5} className="size-4" />
+            New Entry
+          </Button>
+        }
+      />
 
       <TabsList
         variant="line"

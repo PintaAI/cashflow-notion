@@ -7,7 +7,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { Analytics01Icon, Add01Icon, File01Icon, Home02Icon, UserCircleIcon } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 
-export type AppTab = "home" | "summary" | "profile" | "catatan"
+export type AppTab = "home" | "summary" | "setting" | "catatan"
 
 const navItems = [
   {
@@ -26,8 +26,8 @@ const navItems = [
     icon: Analytics01Icon,
   },
   {
-    value: "profile" as const,
-    label: "Profile",
+    value: "setting" as const,
+    label: "Setting",
     icon: UserCircleIcon,
   },
 ]

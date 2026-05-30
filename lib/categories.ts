@@ -1,27 +1,35 @@
 import type { SelectColor } from "@notionhq/client/build/src/api-endpoints/common";
 import {
-  UserGroupIcon,
-  Home01Icon,
-  TShirtIcon,
-  Diamond01Icon,
   Alert01Icon,
-  CookieIcon,
-  Bus01Icon,
-  ShoppingCart01Icon,
-  Invoice01Icon,
-  GameController01Icon,
-  HealthIcon,
-  More01Icon,
-  GiftIcon,
   Briefcase01Icon,
+  Bus01Icon,
+  Coffee01Icon,
+  CookieIcon,
   CreditCardIcon,
+  Diamond01Icon,
+  Dumbbell01Icon,
   FavouriteIcon,
+  GameController01Icon,
+  GiftIcon,
+  HealthIcon,
+  Home01Icon,
+  Invoice01Icon,
+  Laundry,
+  More01Icon,
+  SchoolIcon,
+  ShoppingCart01Icon,
+  SmartPhone01Icon,
+  TShirtIcon,
+  UserGroupIcon,
+  Wallet01Icon,
+  Water,
 } from "@hugeicons/core-free-icons";
 
 export interface CategoryOption {
   id: string;
   name: string;
   color: SelectColor;
+  icon: string | null;
 }
 
 export interface CategoryConfig {
@@ -42,6 +50,47 @@ const notionColorToTailwind: Record<SelectColor, { color: string; bgColor: strin
   pink: { color: "text-pink-700 dark:text-pink-300", bgColor: "bg-pink-100 dark:bg-pink-900/30" },
   red: { color: "text-red-700 dark:text-red-300", bgColor: "bg-red-100 dark:bg-red-900/30" },
 };
+
+export const categoryIconRegistry: Record<string, typeof More01Icon> = {
+  Alert01Icon,
+  Briefcase01Icon,
+  Bus01Icon,
+  Coffee01Icon,
+  CookieIcon,
+  CreditCardIcon,
+  Diamond01Icon,
+  Dumbbell01Icon,
+  FavouriteIcon,
+  GameController01Icon,
+  GiftIcon,
+  HealthIcon,
+  Home01Icon,
+  Invoice01Icon,
+  Laundry,
+  More01Icon,
+  SchoolIcon,
+  ShoppingCart01Icon,
+  SmartPhone01Icon,
+  TShirtIcon,
+  UserGroupIcon,
+  Wallet01Icon,
+  Water,
+};
+
+export const CATEGORY_ICON_NAMES = Object.keys(categoryIconRegistry).sort();
+
+export const CATEGORY_COLORS: { name: string; swatch: string; ring: string }[] = [
+  { name: "default", swatch: "bg-slate-500", ring: "ring-slate-500" },
+  { name: "gray", swatch: "bg-gray-500", ring: "ring-gray-500" },
+  { name: "brown", swatch: "bg-amber-600", ring: "ring-amber-600" },
+  { name: "orange", swatch: "bg-orange-500", ring: "ring-orange-500" },
+  { name: "yellow", swatch: "bg-yellow-500", ring: "ring-yellow-500" },
+  { name: "green", swatch: "bg-green-500", ring: "ring-green-500" },
+  { name: "blue", swatch: "bg-blue-500", ring: "ring-blue-500" },
+  { name: "purple", swatch: "bg-purple-500", ring: "ring-purple-500" },
+  { name: "pink", swatch: "bg-pink-500", ring: "ring-pink-500" },
+  { name: "red", swatch: "bg-red-500", ring: "ring-red-500" },
+];
 
 const knownCategoryIcons: Record<string, typeof More01Icon> = {
   sosial: UserGroupIcon,
@@ -84,19 +133,25 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-export function getCategoryConfig(category: string, notionColor?: SelectColor): CategoryConfig {
-  const icon = knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length];
-  
+export function getCategoryConfig(
+  category: string,
+  notionColor?: SelectColor,
+  iconName?: string | null,
+): CategoryConfig {
+  const icon = iconName
+    ? (categoryIconRegistry[iconName] ?? knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length])
+    : (knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length]);
+
   if (notionColor && notionColorToTailwind[notionColor]) {
     return {
       ...notionColorToTailwind[notionColor],
       icon,
     };
   }
-  
+
   const fallbackColorIndex = hashString(category) % Object.keys(notionColorToTailwind).length;
   const fallbackColorKey = Object.keys(notionColorToTailwind)[fallbackColorIndex] as SelectColor;
-  
+
   return {
     ...notionColorToTailwind[fallbackColorKey],
     icon,

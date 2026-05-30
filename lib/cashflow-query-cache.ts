@@ -1,5 +1,5 @@
 import type { InfiniteData, QueryClient, QueryKey } from "@tanstack/react-query"
-import type { CashflowEntry } from "@/lib/notion"
+import type { CashflowEntry } from "@/lib/db"
 
 type EntriesPage = {
   entries: CashflowEntry[]
@@ -7,7 +7,7 @@ type EntriesPage = {
   hasMore: boolean
 }
 
-type EntriesData = InfiniteData<EntriesPage, string | null>
+type EntriesData = InfiniteData<EntriesPage, number>
 
 type EntriesSnapshot = Array<{
   queryKey: QueryKey

@@ -10,8 +10,8 @@ import {
   countEntries,
   getEntriesFiltered,
   getEntriesByIOPaginated,
-} from "@/lib/notion";
-import type { CashflowEntry, CashflowSummary, IOType, CategoryType } from "@/lib/notion";
+} from "@/lib/db";
+import type { CashflowEntry, CashflowSummary, IOType, CategoryType } from "@/lib/db";
 
 // Server actions for data fetching
 export async function fetchAllEntries(): Promise<CashflowEntry[]> {
@@ -25,7 +25,7 @@ export async function fetchSummary(): Promise<CashflowSummary> {
 // Paginated fetch for infinite loading
 export async function fetchEntriesPage(options?: {
   pageSize?: number;
-  cursor?: string | null;
+  skip?: number;
 }): Promise<{
   entries: CashflowEntry[];
   nextCursor: string | null;
@@ -33,14 +33,14 @@ export async function fetchEntriesPage(options?: {
 }> {
   return getEntries({
     pageSize: options?.pageSize ?? 20,
-    startCursor: options?.cursor ?? undefined,
+    skip: options?.skip ?? 0,
   });
 }
 
 // Paginated fetch with I/O and date filter for infinite loading
 export async function fetchEntriesFiltered(options?: {
   pageSize?: number;
-  cursor?: string | null;
+  skip?: number;
   io?: IOType;
   date?: string;
 }): Promise<{
@@ -50,7 +50,7 @@ export async function fetchEntriesFiltered(options?: {
 }> {
   return getEntriesFiltered({
     pageSize: options?.pageSize ?? 20,
-    startCursor: options?.cursor ?? undefined,
+    skip: options?.skip ?? 0,
     io: options?.io,
     date: options?.date,
   });
@@ -59,7 +59,7 @@ export async function fetchEntriesFiltered(options?: {
 // Paginated fetch for Income entries only
 export async function fetchIncomeEntries(options?: {
   pageSize?: number;
-  cursor?: string | null;
+  skip?: number;
 }): Promise<{
   entries: CashflowEntry[];
   nextCursor: string | null;
@@ -67,14 +67,14 @@ export async function fetchIncomeEntries(options?: {
 }> {
   return getEntriesByIOPaginated("Income", {
     pageSize: options?.pageSize ?? 20,
-    startCursor: options?.cursor ?? undefined,
+    skip: options?.skip ?? 0,
   });
 }
 
 // Paginated fetch for Expenses entries only
 export async function fetchExpensesEntries(options?: {
   pageSize?: number;
-  cursor?: string | null;
+  skip?: number;
 }): Promise<{
   entries: CashflowEntry[];
   nextCursor: string | null;
@@ -82,7 +82,7 @@ export async function fetchExpensesEntries(options?: {
 }> {
   return getEntriesByIOPaginated("Expenses", {
     pageSize: options?.pageSize ?? 20,
-    startCursor: options?.cursor ?? undefined,
+    skip: options?.skip ?? 0,
   });
 }
 

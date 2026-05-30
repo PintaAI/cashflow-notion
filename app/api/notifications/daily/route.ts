@@ -1,4 +1,4 @@
-import { countEntriesForDate } from "@/lib/notion";
+import { countEntriesForDate } from "@/lib/db";
 import { sendDailyReminder } from "@/lib/notifications";
 
 export const runtime = "nodejs";

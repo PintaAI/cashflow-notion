@@ -13,7 +13,7 @@ import {
   ShoppingBagIcon,
   CalendarAdd01Icon,
 } from "@hugeicons/core-free-icons";
-import type { CashflowSummary } from "@/lib/notion";
+import type { CashflowSummary } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 
 export type StatsData = Pick<

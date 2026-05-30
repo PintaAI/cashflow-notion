@@ -25,9 +25,9 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { addEntry, editEntry } from "@/app/actions/cashflow"
-import type { CashflowEntry, CategoryType, IOType } from "@/lib/notion"
+import type { CashflowEntry, CategoryType, IOType } from "@/lib/db"
 import { getCategoryConfig } from "@/lib/categories"
-import { useCategories } from "@/hooks/use-cashflow-data"
+import { useCategories, useCategoriesWithDetails, useQuickFills } from "@/hooks/use-cashflow-data"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Calendar03Icon,
@@ -82,8 +82,10 @@ export function CashflowFormDrawer({
     return `Rp,${Number(value).toLocaleString("id-ID")}`
   }
 
-  const categoriesQuery = useCategories()
+  const categoriesQuery = useCategoriesWithDetails()
   const expenseCategories = categoriesQuery.data ?? []
+  const quickFillsQuery = useQuickFills()
+  const quickFills = quickFillsQuery.data ?? []
 
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -231,7 +233,7 @@ export function CashflowFormDrawer({
           {trigger}
         </DrawerTrigger>
       )}
-      <DrawerContent className="max-h-[90vh]">
+      <DrawerContent className="mx-auto max-h-[90vh] max-w-md data-[vaul-drawer-direction=bottom]:rounded-t-2xl">
         <DrawerHeader className="flex flex-row items-center justify-between pb-2">
           <div className="w-8" />
           <DrawerTitle className="text-lg font-semibold">
@@ -290,26 +292,30 @@ export function CashflowFormDrawer({
           {/* Name Input */}
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm font-medium text-foreground">
-              Description
+              spending apa hari ini?
             </label>
             <Input
               id="name"
               type="text"
-              placeholder="What did you spend on?"
+              placeholder="jajan, parkir, dll"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="h-12 text-base"
               required
             />
             <div className="flex flex-wrap gap-1.5">
-              {["jajan", "parkir", "belanja pasar", "makan siang"].map((s) => (
+              {quickFills.map((preset) => (
                 <button
-                  key={s}
+                  key={preset.id}
                   type="button"
-                  onClick={() => setName(s)}
+                  onClick={() => {
+                    setName(preset.name)
+                    setNominal(String(preset.nominal))
+                    if (preset.category) setCategory(preset.category)
+                  }}
                   className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
                 >
-                  {s}
+                  {preset.name}
                 </button>
               ))}
             </div>
@@ -318,7 +324,7 @@ export function CashflowFormDrawer({
           {/* Amount Input */}
           <div className="space-y-2">
             <label htmlFor="nominal" className="text-sm font-medium text-foreground">
-              Amount (IDR)
+              Total
             </label>
             <Input
               id="nominal"
@@ -364,23 +370,27 @@ export function CashflowFormDrawer({
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger className="h-12 text-base w-full">
                   <SelectValue placeholder="Select category">
-                    {category && (
-                      <span className="inline-flex items-center gap-1.5">
-                        <HugeiconsIcon icon={getCategoryConfig(category).icon} strokeWidth={2} className="size-4" />
-                        {category}
-                      </span>
-                    )}
+                    {category && (() => {
+                      const catData = expenseCategories.find((c) => c.name === category)
+                      const config = catData ? getCategoryConfig(catData.name, catData.color as any, catData.icon) : getCategoryConfig(category)
+                      return (
+                        <span className="inline-flex items-center gap-1.5">
+                          <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
+                          {category}
+                        </span>
+                      )
+                    })()}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent position="popper" align="start">
                   <ScrollArea className="h-[200px]">
                     {expenseCategories.map((cat) => {
-                      const config = getCategoryConfig(cat);
+                      const config = getCategoryConfig(cat.name, cat.color as any, cat.icon);
                       return (
-                        <SelectItem key={cat} value={cat} className="p-1 text-base">
+                        <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
                           <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
                             <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
-                            {cat}
+                            {cat.name}
                           </span>
                         </SelectItem>
                       );
