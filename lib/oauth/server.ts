@@ -67,20 +67,81 @@ export async function getClient(
   const client = await prisma.oAuthClient.findUnique({
     where: { clientId },
   });
-  if (!client) return null;
+  if (client) {
+    return {
+      clientId: client.clientId,
+      clientSecret: client.clientSecret ?? undefined,
+      clientName: client.clientName,
+      clientUri: client.clientUri ?? undefined,
+      logoUri: client.logoUri ?? undefined,
+      redirectUris: client.redirectUris,
+      grantTypes: client.grantTypes,
+      responseTypes: client.responseTypes,
+      scope: client.scope ?? undefined,
+      isPublic: client.isPublic,
+    };
+  }
 
-  return {
-    clientId: client.clientId,
-    clientSecret: client.clientSecret ?? undefined,
-    clientName: client.clientName,
-    clientUri: client.clientUri ?? undefined,
-    logoUri: client.logoUri ?? undefined,
-    redirectUris: client.redirectUris,
-    grantTypes: client.grantTypes,
-    responseTypes: client.responseTypes,
-    scope: client.scope ?? undefined,
-    isPublic: client.isPublic,
-  };
+  if (clientId.startsWith("https://")) {
+    let clientName = "ChatGPT";
+    let clientUri = clientId;
+    try {
+      const res = await fetch(clientId, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const meta = await res.json();
+        clientName = meta.client_name || meta.name || "ChatGPT";
+        clientUri = meta.client_uri || meta.uri || clientId;
+      }
+    } catch {
+      // fallback to defaults
+    }
+
+    const existing = await prisma.oAuthClient.findUnique({
+      where: { clientId },
+    });
+    if (existing) {
+      return {
+        clientId: existing.clientId,
+        clientSecret: existing.clientSecret ?? undefined,
+        clientName: existing.clientName,
+        clientUri: existing.clientUri ?? undefined,
+        logoUri: existing.logoUri ?? undefined,
+        redirectUris: existing.redirectUris,
+        grantTypes: existing.grantTypes,
+        responseTypes: existing.responseTypes,
+        scope: existing.scope ?? undefined,
+        isPublic: existing.isPublic,
+      };
+    }
+
+    const created = await prisma.oAuthClient.create({
+      data: {
+        clientId,
+        clientName,
+        clientUri,
+        redirectUris: [],
+        grantTypes: ["authorization_code", "refresh_token"],
+        responseTypes: ["code"],
+        scope: SCOPES_SUPPORTED.join(" "),
+        isPublic: true,
+      },
+    });
+
+    return {
+      clientId: created.clientId,
+      clientSecret: undefined,
+      clientName: created.clientName,
+      clientUri: created.clientUri ?? undefined,
+      logoUri: created.logoUri ?? undefined,
+      redirectUris: created.redirectUris,
+      grantTypes: created.grantTypes,
+      responseTypes: created.responseTypes,
+      scope: created.scope ?? undefined,
+      isPublic: created.isPublic,
+    };
+  }
+
+  return null;
 }
 
 export async function getOrCreateDefaultClient(): Promise<OAuthClientInfo> {
@@ -128,8 +189,18 @@ export function validateAuthorizationRequest(
     return "Unsupported response type";
   }
 
-  if (!client.redirectUris.includes(params.redirectUri)) {
-    return "Mismatched redirect URI";
+  if (client.redirectUris.length > 0) {
+    if (!client.redirectUris.includes(params.redirectUri)) {
+      return "Mismatched redirect URI";
+    }
+  } else if (client.clientId.startsWith("https://")) {
+    const clientOrigin = new URL(client.clientId).origin;
+    const redirectOrigin = new URL(params.redirectUri).origin;
+    if (clientOrigin !== redirectOrigin) {
+      return "Mismatched redirect URI";
+    }
+  } else {
+    return "No redirect URIs registered for this client";
   }
 
   if (params.codeChallengeMethod && params.codeChallengeMethod !== "S256") {
@@ -162,6 +233,18 @@ export async function createAuthorizationCode(
 ): Promise<string> {
   const code = generateAuthorizationCode();
   const client = await getClient(clientId);
+
+  if (
+    client &&
+    clientId.startsWith("https://") &&
+    !client.redirectUris.includes(params.redirectUri)
+  ) {
+    await prisma.oAuthClient.update({
+      where: { clientId },
+      data: { redirectUris: [...client.redirectUris, params.redirectUri] },
+    });
+  }
+
   const scopes = getRequestedScopes(
     params.scope,
     client ?? {
