@@ -290,7 +290,11 @@ function CatatanTab() {
 
 function ManagementSettings() {
   const [management, setManagement] = useState<{
-    management: { id: string; name: string };
+    management: {
+      id: string;
+      name: string;
+      members: { id: string; role: string; user: { id: string; name: string | null; email: string; image: string | null } }[];
+    };
     role: string;
   } | null>(null);
   const [inviteCode, setInviteCode] = useState("");
@@ -298,7 +302,7 @@ function ManagementSettings() {
 
   useEffect(() => {
     getCurrentManagement().then((m) => {
-      if (m) setManagement({ management: m.management, role: m.role });
+      if (m) setManagement(m);
     });
   }, []);
 
@@ -320,6 +324,27 @@ function ManagementSettings() {
         <p className="text-sm font-medium">Management</p>
         <p className="text-sm text-muted-foreground">{management.management.name}</p>
         <p className="text-xs text-muted-foreground">Role: {management.role === "owner" ? "Pemilik" : "Anggota"}</p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-sm font-medium">Anggota</p>
+        <div className="space-y-1.5">
+          {management.management.members.map((member) => (
+            <div key={member.id} className="flex items-center gap-2 border border-border rounded p-2">
+              {member.user.image ? (
+                <img src={member.user.image} alt="" className="h-6 w-6 rounded-full" />
+              ) : (
+                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground shrink-0">
+                  {member.user.name?.[0]?.toUpperCase() ?? member.user.email[0].toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium truncate">{member.user.name ?? member.user.email}</p>
+                <p className="text-[10px] text-muted-foreground">{member.role === "owner" ? "Pemilik" : "Anggota"}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {management.role === "owner" && (
@@ -448,11 +473,6 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 function ProfileTab() {
   const { data: session } = useSession();
-  const [baseUrl, setBaseUrl] = useState("");
-
-  useEffect(() => {
-    setBaseUrl(window.location.origin);
-  }, []);
 
   return (
     <>
@@ -549,8 +569,6 @@ function ProfileTab() {
 }
 
 export default function HomePage() {
-  const { data: session } = useSession();
-
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window === "undefined") return "home";
     const params = new URLSearchParams(window.location.search);
