@@ -6,7 +6,7 @@ export async function GET() {
 
   const metadata = {
     issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/api/oauth/authorize`,
+    authorization_endpoint: `${baseUrl}/oauth/authorize`,
     token_endpoint: `${baseUrl}/api/oauth/token`,
     revocation_endpoint: `${baseUrl}/api/oauth/revoke`,
     registration_endpoint: `${baseUrl}/api/oauth/register`,
