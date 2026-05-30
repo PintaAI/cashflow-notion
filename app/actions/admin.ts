@@ -182,7 +182,6 @@ export async function getManagementDetails(managementId: string) {
   ]);
 
   const totalEntries = management._count.entries;
-  });
 
   return {
     id: management.id,

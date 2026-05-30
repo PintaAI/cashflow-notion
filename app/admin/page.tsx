@@ -55,7 +55,7 @@ function StatsCard({
 }: {
   label: string;
   value: string | number;
-  icon: React.ComponentType<{ strokeWidth?: number; className?: string }>;
+  icon: IconSvgElement;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border p-4">
@@ -407,7 +407,6 @@ function ManagementDetailView({
               <TableHead>User</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Joined</TableHead>
-              <TableHead>Entries</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -446,7 +445,6 @@ function ManagementDetailView({
                 <TableCell className="text-xs text-muted-foreground">
                   {new Date(member.joinedAt).toLocaleDateString("id-ID")}
                 </TableCell>
-                <TableCell className="text-xs">{member.entryCount}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     {member.role !== "owner" && (
