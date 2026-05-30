@@ -11,17 +11,21 @@ import {
   type AnalyticsFilter,
   type URLAnalyticsFilter,
 } from "@/lib/analytics";
+import { getCurrentManagementId } from "@/lib/management";
 
 export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}): Promise<AnalyticsData> {
-  return getAnalyticsFromURL(urlFilter);
+  const managementId = await getCurrentManagementId();
+  return getAnalyticsFromURL(urlFilter, managementId);
 }
 
 export async function fetchAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsData> {
-  return getAnalytics(filter);
+  const managementId = await getCurrentManagementId();
+  return getAnalytics(filter, managementId);
 }
 
 export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOverview> {
-  return getActivityOverview(daysBack);
+  const managementId = await getCurrentManagementId();
+  return getActivityOverview(daysBack, managementId);
 }
 
 export async function fetchFilteredSummary(filter: AnalyticsFilter = {}): Promise<{
@@ -30,7 +34,8 @@ export async function fetchFilteredSummary(filter: AnalyticsFilter = {}): Promis
   balance: number;
   entryCount: number;
 }> {
-  return getFilteredSummary(filter);
+  const managementId = await getCurrentManagementId();
+  return getFilteredSummary(filter, managementId);
 }
 
 export { fetchCategories };

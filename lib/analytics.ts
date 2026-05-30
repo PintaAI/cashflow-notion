@@ -108,8 +108,8 @@ function urlFilterToAnalyticsFilter(urlFilter: URLAnalyticsFilter): AnalyticsFil
   };
 }
 
-function buildAnalyticsWhereSql(filter: AnalyticsFilter) {
-  const conditions = [Prisma.sql`1 = 1`];
+function buildAnalyticsWhereSql(filter: AnalyticsFilter, managementId: string) {
+  const conditions = [Prisma.sql`e."managementId" = ${managementId}`];
 
   if (filter.io) {
     conditions.push(Prisma.sql`e."io"::text = ${filter.io}`);
@@ -155,12 +155,12 @@ function toNumber(value: number | string | bigint | null | undefined): number {
   return Number(value);
 }
 
-export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}): Promise<AnalyticsData> {
-  return fetchAnalytics(urlFilterToAnalyticsFilter(urlFilter));
+export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}, managementId: string): Promise<AnalyticsData> {
+  return fetchAnalytics(urlFilterToAnalyticsFilter(urlFilter), managementId);
 }
 
-export async function fetchAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsData> {
-  const whereSql = buildAnalyticsWhereSql(filter);
+export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId: string): Promise<AnalyticsData> {
+  const whereSql = buildAnalyticsWhereSql(filter, managementId);
   const summaryRows = await prisma.$queryRaw<SummaryRow[]>`
     SELECT
       COALESCE(SUM(e."nominal") FILTER (WHERE e."io"::text = 'Income'), 0) AS "totalIncome",
@@ -272,14 +272,14 @@ function getMondayOfWeek(date: Date): Date {
   return startOfDay(d);
 }
 
-export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOverview> {
+export async function fetchActivityOverview(daysBack = 182, managementId: string): Promise<ActivityOverview> {
   const today = startOfDay(new Date());
   const startDate = subtractDays(today, daysBack - 1);
   const alignedStartDate = getMondayOfWeek(startDate);
   const rows = await prisma.$queryRaw<ActivityRow[]>`
     SELECT DATE(e."createdAt") AS "date", COUNT(*) AS "count"
     FROM "Entry" e
-    WHERE e."createdAt" >= ${alignedStartDate}
+    WHERE e."createdAt" >= ${alignedStartDate} AND e."managementId" = ${managementId}
     GROUP BY DATE(e."createdAt")
     ORDER BY "date" ASC
   `;
@@ -310,12 +310,12 @@ export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOve
   };
 }
 
-export async function fetchFilteredSummary(filter: AnalyticsFilter = {}): Promise<{
+export async function fetchFilteredSummary(filter: AnalyticsFilter = {}, managementId: string): Promise<{
   totalIncome: number;
   totalExpenses: number;
   balance: number;
   entryCount: number;
 }> {
-  const analytics = await fetchAnalytics(filter);
+  const analytics = await fetchAnalytics(filter, managementId);
   return analytics.summary;
 }

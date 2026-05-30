@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { useSession, signOut } from "@/lib/auth-client";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { CashflowTable } from "@/components/cashflow-table";
-import { McpConnectionGuide } from "@/components/mcp-connection-guide";
+
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
 import { MobileBottomNav, type AppTab } from "@/components/mobile-bottom-nav";
@@ -18,11 +19,15 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
 import { QuickFillManager } from "@/components/quick-fill-manager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
+import { getCurrentManagement, createInvite } from "@/app/actions/management";
+import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
+import type { UserOAuthConnection } from "@/lib/oauth/server";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -283,14 +288,203 @@ function CatatanTab() {
   );
 }
 
+function ManagementSettings() {
+  const [management, setManagement] = useState<{
+    management: { id: string; name: string };
+    role: string;
+  } | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+
+  useEffect(() => {
+    getCurrentManagement().then((m) => {
+      if (m) setManagement({ management: m.management, role: m.role });
+    });
+  }, []);
+
+  async function handleGenerateInvite() {
+    try {
+      const code = await createInvite();
+      setInviteCode(code);
+      setInviteLink(`${window.location.origin}/invite?code=${code}`);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  if (!management) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">Management</p>
+        <p className="text-sm text-muted-foreground">{management.management.name}</p>
+        <p className="text-xs text-muted-foreground">Role: {management.role === "owner" ? "Pemilik" : "Anggota"}</p>
+      </div>
+
+      {management.role === "owner" && (
+        <div className="space-y-2">
+          <Button size="sm" onClick={handleGenerateInvite}>
+            Buat Undangan
+          </Button>
+          {inviteCode && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Bagikan link ini:</p>
+              <pre className="bg-muted p-2 rounded text-xs break-all">{inviteLink}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function McpKeySettings() {
+  const [connections, setConnections] = useState<UserOAuthConnection[]>([]);
+  const [loadingConnections, setLoadingConnections] = useState(true);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  useEffect(() => {
+    listOAuthConnections().then((conns) => {
+      setConnections(conns);
+      setLoadingConnections(false);
+    });
+  }, []);
+
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+        <p className="text-sm font-medium">OAuth 2.1</p>
+        <p className="text-xs text-muted-foreground">
+          Gunakan OAuth untuk koneksi yang lebih aman. ChatGPT, Cursor, dan client lainnya
+          akan memandu Anda melalui proses login saat menghubungkan.
+        </p>
+        <CopyField
+          label="MCP Server URL"
+          value={`${baseUrl}/api/mcp`}
+        />
+        <p className="text-xs text-muted-foreground">
+          Saat menghubungkan dengan AI client (ChatGPT, Cursor, dll), masukkan URL ini
+          dan pilih "OAuth" sebagai metode autentikasi.
+        </p>
+
+        {loadingConnections ? (
+          <p className="text-xs text-muted-foreground">Memuat koneksi...</p>
+        ) : connections.length > 0 ? (
+          <div className="space-y-2 pt-2 border-t">
+            <p className="text-xs font-medium">Koneksi Aktif</p>
+            {connections.map((c) => (
+              <div key={c.clientId} className="flex items-center justify-between rounded-md border p-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{c.clientName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {c.tokenCount} token{c.tokenCount !== 1 ? "s" : ""} aktif
+                    {c.scopes.length > 0 && ` · ${c.scopes.join(", ")}`}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="ml-2 shrink-0 text-red-500 border-red-200 hover:bg-red-50"
+                  disabled={revoking === c.clientId}
+                  onClick={async () => {
+                    setRevoking(c.clientId);
+                    try {
+                      await revokeOAuthConnection(c.clientId);
+                      setConnections((prev) => prev.filter((x) => x.clientId !== c.clientId));
+                    } finally {
+                      setRevoking(null);
+                    }
+                  }}
+                >
+                  {revoking === c.clientId ? "..." : "Revoke"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+  );
+}
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = value;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <div className="relative">
+        <pre className="bg-muted p-3 pr-20 rounded-lg text-xs font-mono whitespace-pre-wrap break-all">
+          {value}
+        </pre>
+        <Button
+          variant="outline"
+          size="xs"
+          className="absolute top-2 right-2"
+          onClick={handleCopy}
+        >
+          {copied ? "Tersalin" : "Salin"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileTab() {
+  const { data: session } = useSession();
+  const [baseUrl, setBaseUrl] = useState("");
+
+  useEffect(() => {
+    setBaseUrl(window.location.origin);
+  }, []);
+
   return (
     <>
       <PageHeader icon={UserCircleIcon} title="Setting">
         <ThemeToggle />
       </PageHeader>
 
+      {session?.user && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border p-3">
+          <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            {session.user.name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{session.user.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+          </div>
+        </div>
+      )}
+
       <Accordion type="single" collapsible className="space-y-2 sm:space-y-3">
+        <AccordionItem value="management">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={UserCircleIcon} strokeWidth={2} className="size-4" />
+              Management
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <ManagementSettings />
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="quick-fill">
           <AccordionTrigger>
             <span className="flex items-center gap-2">
@@ -335,15 +529,28 @@ function ProfileTab() {
             </span>
           </AccordionTrigger>
           <AccordionContent>
-            <McpConnectionGuide />
+            <McpKeySettings />
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      <Button
+        className="mt-6 w-full bg-red-600 hover:bg-red-700 text-white"
+        onClick={async () => {
+          await signOut();
+          window.location.href = "/auth";
+        }}
+      >
+        <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} className="size-4 mr-2" />
+        Keluar
+      </Button>
     </>
   );
 }
 
 export default function HomePage() {
+  const { data: session } = useSession();
+
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window === "undefined") return "home";
     const params = new URLSearchParams(window.location.search);

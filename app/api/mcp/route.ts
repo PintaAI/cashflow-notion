@@ -1,5 +1,8 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { prisma } from "@/lib/db";
+import { managementContext } from "@/lib/mcp/tools/utils";
+import { verifyAccessToken, isOAuthAccessToken } from "@/lib/oauth/server";
 
 import { registerCashflowTools } from "@/lib/mcp/tools";
 
@@ -23,35 +26,65 @@ const handler = createMcpHandler(
   },
 );
 
-async function verifyToken(request: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
-  const expectedToken = process.env.MCP_API_KEY;
-  
-  // Check bearer token from Authorization header
-  if (expectedToken && bearerToken && bearerToken === expectedToken) {
-    return {
-      token: bearerToken,
-      clientId: "cashflow-mcp-client",
-      scopes: ["cashflow:read", "cashflow:write"],
-    };
-  }
-  
-  // Fallback: check query parameter (for ChatGPT connector workaround)
-  const url = new URL(request.url);
-  const queryToken = url.searchParams.get("api_key");
-  if (expectedToken && queryToken && queryToken === expectedToken) {
-    return {
-      token: queryToken,
-      clientId: "cashflow-mcp-client",
-      scopes: ["cashflow:read", "cashflow:write"],
-    };
+async function verifyToken(
+  request: Request,
+  bearerToken?: string,
+): Promise<AuthInfo | undefined> {
+  let userId: string | undefined;
+  let scopes: string[] = [];
+
+  if (bearerToken) {
+    if (isOAuthAccessToken(bearerToken)) {
+      const tokenInfo = await verifyAccessToken(bearerToken);
+      if (tokenInfo) {
+        userId = tokenInfo.userId;
+        scopes = tokenInfo.scopes;
+      }
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { mcpApiKey: bearerToken },
+      });
+      if (user) {
+        userId = user.id;
+        scopes = ["cashflow:read", "cashflow:write"];
+      }
+    }
   }
 
-  return undefined;
+  if (!userId) {
+    const url = new URL(request.url);
+    const queryToken = url.searchParams.get("api_key");
+    if (queryToken) {
+      const user = await prisma.user.findUnique({
+        where: { mcpApiKey: queryToken },
+      });
+      if (user) {
+        userId = user.id;
+        scopes = ["cashflow:read", "cashflow:write"];
+      }
+    }
+  }
+
+  if (!userId) return undefined;
+
+  const membership = await prisma.managementMember.findFirst({
+    where: { userId },
+  });
+  if (!membership) return undefined;
+
+  managementContext.enterWith(membership.managementId);
+
+  return {
+    token: bearerToken || "",
+    clientId: userId,
+    scopes,
+  };
 }
 
 const authHandler = withMcpAuth(handler, verifyToken, {
   required: true,
   requiredScopes: ["cashflow:read", "cashflow:write"],
+  resourceMetadataPath: "/.well-known/oauth-protected-resource",
 });
 
 export { authHandler as DELETE, authHandler as GET, authHandler as POST };

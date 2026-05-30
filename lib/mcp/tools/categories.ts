@@ -9,7 +9,7 @@ import {
   removeCategoryOption,
   updateCategoryOption,
 } from "@/lib/db";
-import { ok, toolError } from "@/lib/mcp/tools/utils";
+import { ok, toolError, getManagementId } from "@/lib/mcp/tools/utils";
 
 export function registerCategoryTools(server: McpServer) {
   server.registerTool(
@@ -20,7 +20,7 @@ export function registerCategoryTools(server: McpServer) {
     },
     async () => {
       try {
-        const categories = await getCategoryOptions();
+        const categories = await getCategoryOptions(getManagementId());
         return ok(`Found ${categories.length} categor${categories.length === 1 ? "y" : "ies"}.`, { categories });
       } catch (error) {
         return toolError(error);
@@ -36,7 +36,7 @@ export function registerCategoryTools(server: McpServer) {
     },
     async () => {
       try {
-        const categories = await getCategoryOptionsWithUsage();
+        const categories = await getCategoryOptionsWithUsage(getManagementId());
         return ok(`Found ${categories.length} categor${categories.length === 1 ? "y" : "ies"}.`, { categories });
       } catch (error) {
         return toolError(error);
@@ -57,7 +57,7 @@ export function registerCategoryTools(server: McpServer) {
     },
     async ({ name, color, icon }) => {
       try {
-        const categories = await addCategoryOption(name, color ?? "default", icon);
+        const categories = await addCategoryOption(name, color ?? "default", icon, getManagementId());
         return ok("Created category.", { categories });
       } catch (error) {
         return toolError(error);
@@ -79,7 +79,7 @@ export function registerCategoryTools(server: McpServer) {
     },
     async ({ id, name, color, icon }) => {
       try {
-        const categories = await updateCategoryOption(id, { name, color, icon });
+        const categories = await updateCategoryOption(id, { name, color, icon }, getManagementId());
         return ok("Updated category.", { categories });
       } catch (error) {
         return toolError(error);
@@ -96,14 +96,15 @@ export function registerCategoryTools(server: McpServer) {
     },
     async ({ id }) => {
       try {
-        const categories = await getCategoryOptions();
+        const mid = getManagementId();
+        const categories = await getCategoryOptions(mid);
         const category = categories.find((item) => item.id === id);
         if (!category) throw new Error(`Category with ID "${id}" not found`);
 
-        const usageCount = await getCategoryUsageCount(category.name);
+        const usageCount = await getCategoryUsageCount(category.name, mid);
         if (usageCount > 0) throw new Error(`Category "${category.name}" is used by ${usageCount} entr${usageCount === 1 ? "y" : "ies"}`);
 
-        const updatedCategories = await removeCategoryOption(id);
+        const updatedCategories = await removeCategoryOption(id, mid);
         return ok("Deleted category.", { id, categories: updatedCategories });
       } catch (error) {
         return toolError(error);

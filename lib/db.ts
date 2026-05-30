@@ -161,8 +161,9 @@ export function buildEntryWhere(filter: {
   };
 }
 
-export async function getAllEntries(): Promise<CashflowEntry[]> {
+export async function getAllEntries(managementId: string): Promise<CashflowEntry[]> {
   const entries = await prisma.entry.findMany({
+    where: { managementId },
     include: { category: true },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
@@ -170,7 +171,7 @@ export async function getAllEntries(): Promise<CashflowEntry[]> {
   return entries.map(toEntry);
 }
 
-export async function getSummary(): Promise<CashflowSummary> {
+export async function getSummary(managementId: string): Promise<CashflowSummary> {
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
@@ -183,6 +184,7 @@ export async function getSummary(): Promise<CashflowSummary> {
         COALESCE(SUM("nominal") FILTER (WHERE "io"::text = 'Income'), 0) AS "totalIncome",
         COALESCE(SUM("nominal") FILTER (WHERE "io"::text = 'Expenses'), 0) AS "totalExpenses"
       FROM "Entry"
+      WHERE "managementId" = ${managementId}
     `,
     prisma.$queryRaw<SummaryCategoryRow[]>`
       SELECT
@@ -192,12 +194,13 @@ export async function getSummary(): Promise<CashflowSummary> {
         COUNT(*) FILTER (WHERE e."io"::text = 'Expenses') AS "expenseCount"
       FROM "Entry" e
       INNER JOIN "Category" c ON c."id" = e."categoryId"
+      WHERE e."managementId" = ${managementId}
       GROUP BY c."name"
     `,
     prisma.$queryRaw<SummaryDayRow[]>`
       SELECT "date", "io"::text AS "io", COALESCE(SUM("nominal"), 0) AS "total"
       FROM "Entry"
-      WHERE "date" IS NOT NULL
+      WHERE "date" IS NOT NULL AND "managementId" = ${managementId}
       GROUP BY "date", "io"
     `,
   ]);
@@ -310,16 +313,17 @@ export async function getSummary(): Promise<CashflowSummary> {
 export async function getEntries(options?: {
   pageSize?: number;
   skip?: number;
+  managementId: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
-  return getEntriesFiltered({ pageSize: options?.pageSize, skip: options?.skip });
+  return getEntriesFiltered({ pageSize: options?.pageSize, skip: options?.skip, managementId: options!.managementId });
 }
 
-export async function countEntries(): Promise<number> {
-  return prisma.entry.count();
+export async function countEntries(managementId: string): Promise<number> {
+  return prisma.entry.count({ where: { managementId } });
 }
 
-export async function countEntriesForDate(date: string): Promise<number> {
-  return prisma.entry.count({ where: { date } });
+export async function countEntriesForDate(date: string, managementId: string): Promise<number> {
+  return prisma.entry.count({ where: { date, managementId } });
 }
 
 export async function getEntriesFiltered(options?: {
@@ -327,10 +331,14 @@ export async function getEntriesFiltered(options?: {
   skip?: number;
   io?: IOType;
   date?: string;
+  managementId: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
   const pageSize = options?.pageSize || 20;
   const skip = options?.skip || 0;
-  const where = buildEntryWhere({ io: options?.io, date: options?.date });
+  const where = {
+    managementId: options!.managementId,
+    ...buildEntryWhere({ io: options?.io, date: options?.date }),
+  };
 
   const entries = await prisma.entry.findMany({
     where,
@@ -350,17 +358,19 @@ export async function getEntriesFiltered(options?: {
 export async function getEntriesByIOPaginated(ioType: IOType, options?: {
   pageSize?: number;
   skip?: number;
+  managementId: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
   return getEntriesFiltered({
     pageSize: options?.pageSize,
     skip: options?.skip,
     io: ioType,
+    managementId: options!.managementId,
   });
 }
 
-async function findCategory(name: CategoryType | undefined) {
+async function findCategory(name: CategoryType | undefined, managementId: string) {
   if (!name) return null;
-  return prisma.category.findUnique({ where: { name } });
+  return prisma.category.findFirst({ where: { name, managementId } });
 }
 
 export async function createEntry(data: {
@@ -369,12 +379,13 @@ export async function createEntry(data: {
   category?: CategoryType;
   date?: string;
   io?: IOType;
+  managementId: string;
 }): Promise<CashflowEntry> {
   if (data.io === "Expenses" && !data.category) {
     throw new Error("Category is required for expenses");
   }
 
-  const category = await findCategory(data.category);
+  const category = await findCategory(data.category, data.managementId);
   if (data.category && !category) {
     throw new Error(`Category "${data.category}" not found`);
   }
@@ -386,6 +397,7 @@ export async function createEntry(data: {
       categoryId: category?.id ?? null,
       date: data.date ?? null,
       io: data.io ?? null,
+      managementId: data.managementId,
     },
     include: { category: true },
   });
@@ -401,9 +413,10 @@ export async function updateEntry(
     category: CategoryType;
     date: string;
     io: IOType;
+    managementId: string;
   }>
 ): Promise<CashflowEntry> {
-  const category = data.category === undefined ? undefined : await findCategory(data.category);
+  const category = data.category === undefined ? undefined : await findCategory(data.category, data.managementId || "");
   if (data.category && !category) {
     throw new Error(`Category "${data.category}" not found`);
   }
@@ -427,8 +440,11 @@ export async function deleteEntry(entryId: string): Promise<void> {
   await prisma.entry.delete({ where: { id: entryId } });
 }
 
-export async function getCategoryOptions(): Promise<CategoryOptionWithColor[]> {
-  const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
+export async function getCategoryOptions(managementId: string): Promise<CategoryOptionWithColor[]> {
+  const categories = await prisma.category.findMany({
+    where: { managementId },
+    orderBy: { name: "asc" },
+  });
   return categories.map((category) => ({
     id: category.id,
     name: category.name,
@@ -437,12 +453,15 @@ export async function getCategoryOptions(): Promise<CategoryOptionWithColor[]> {
   }));
 }
 
-export async function getCategoryOptionsWithUsage(): Promise<CategoryOptionWithUsage[]> {
+export async function getCategoryOptionsWithUsage(managementId: string): Promise<CategoryOptionWithUsage[]> {
   const [categories, usageCounts] = await Promise.all([
-    prisma.category.findMany({ orderBy: { name: "asc" } }),
+    prisma.category.findMany({
+      where: { managementId },
+      orderBy: { name: "asc" },
+    }),
     prisma.entry.groupBy({
       by: ["categoryId"],
-      where: { categoryId: { not: null } },
+      where: { categoryId: { not: null }, managementId },
       _count: { _all: true },
     }),
   ]);
@@ -459,9 +478,10 @@ export async function getCategoryOptionsWithUsage(): Promise<CategoryOptionWithU
   }));
 }
 
-export async function addCategoryOption(name: string, color?: string, icon?: string): Promise<CategoryOptionWithColor[]> {
+export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string): Promise<CategoryOptionWithColor[]> {
+  if (!managementId) throw new Error("managementId required");
   try {
-    await prisma.category.create({ data: { name, color: color || "default", icon: icon ?? null } });
+    await prisma.category.create({ data: { name, color: color || "default", icon: icon ?? null, managementId } });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new Error(`Category "${name}" already exists`);
@@ -469,12 +489,13 @@ export async function addCategoryOption(name: string, color?: string, icon?: str
     throw error;
   }
 
-  return getCategoryOptions();
+  return getCategoryOptions(managementId);
 }
 
 export async function updateCategoryOption(
   categoryId: string,
   data: { name?: string; color?: string; icon?: string | null },
+  managementId?: string,
 ): Promise<CategoryOptionWithColor[]> {
   const updateData: Record<string, string | null> = {};
   if (data.name !== undefined) updateData.name = data.name;
@@ -493,10 +514,11 @@ export async function updateCategoryOption(
     throw error;
   }
 
-  return getCategoryOptions();
+  if (managementId) return getCategoryOptions(managementId);
+  throw new Error("managementId required");
 }
 
-export async function removeCategoryOption(categoryId: string): Promise<CategoryOptionWithColor[]> {
+export async function removeCategoryOption(categoryId: string, managementId?: string): Promise<CategoryOptionWithColor[]> {
   try {
     await prisma.category.delete({ where: { id: categoryId } });
   } catch (error) {
@@ -506,11 +528,12 @@ export async function removeCategoryOption(categoryId: string): Promise<Category
     throw error;
   }
 
-  return getCategoryOptions();
+  if (managementId) return getCategoryOptions(managementId);
+  throw new Error("managementId required");
 }
 
-export async function getCategoryUsageCount(categoryName: string): Promise<number> {
-  return prisma.entry.count({ where: { category: { is: { name: categoryName } } } });
+export async function getCategoryUsageCount(categoryName: string, managementId: string): Promise<number> {
+  return prisma.entry.count({ where: { category: { is: { name: categoryName } }, managementId } });
 }
 
 export interface QuickFillPreset {
@@ -521,8 +544,9 @@ export interface QuickFillPreset {
   categoryId: string | null;
 }
 
-export async function getQuickFills(): Promise<QuickFillPreset[]> {
+export async function getQuickFills(managementId: string): Promise<QuickFillPreset[]> {
   const presets = await prisma.quickFill.findMany({
+    where: { managementId },
     include: { category: true },
     orderBy: { order: "asc" },
   });
@@ -539,8 +563,12 @@ export async function createQuickFill(data: {
   name: string;
   nominal: number;
   categoryId?: string | null;
+  managementId: string;
 }): Promise<QuickFillPreset> {
-  const maxOrder = await prisma.quickFill.aggregate({ _max: { order: true } });
+  const maxOrder = await prisma.quickFill.aggregate({
+    where: { managementId: data.managementId },
+    _max: { order: true },
+  });
   const nextOrder = (maxOrder._max.order ?? -1) + 1;
 
   const preset = await prisma.quickFill.create({
@@ -548,6 +576,7 @@ export async function createQuickFill(data: {
       name: data.name,
       nominal: data.nominal,
       categoryId: data.categoryId ?? null,
+      managementId: data.managementId,
       order: nextOrder,
     },
     include: { category: true },

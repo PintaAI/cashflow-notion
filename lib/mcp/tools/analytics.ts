@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { fetchActivityOverview, fetchAnalytics } from "@/lib/analytics";
 import { getSummary } from "@/lib/db";
-import { isValidDate, ok, toolError } from "@/lib/mcp/tools/utils";
+import { isValidDate, ok, toolError, getManagementId } from "@/lib/mcp/tools/utils";
 
 export function registerAnalyticsTools(server: McpServer) {
   server.registerTool(
@@ -14,7 +14,7 @@ export function registerAnalyticsTools(server: McpServer) {
     },
     async () => {
       try {
-        const summary = await getSummary();
+        const summary = await getSummary(getManagementId());
         return ok("Fetched cashflow summary.", summary);
       } catch (error) {
         return toolError(error);
@@ -39,7 +39,7 @@ export function registerAnalyticsTools(server: McpServer) {
         if (startDate && !isValidDate(startDate)) throw new Error("startDate must be a valid YYYY-MM-DD value");
         if (endDate && !isValidDate(endDate)) throw new Error("endDate must be a valid YYYY-MM-DD value");
 
-        const analytics = await fetchAnalytics({ io, category, startDate, endDate });
+        const analytics = await fetchAnalytics({ io, category, startDate, endDate }, getManagementId());
         return ok("Fetched cashflow analytics.", analytics);
       } catch (error) {
         return toolError(error);
@@ -56,7 +56,7 @@ export function registerAnalyticsTools(server: McpServer) {
     },
     async ({ daysBack = 182 }) => {
       try {
-        const overview = await fetchActivityOverview(daysBack);
+        const overview = await fetchActivityOverview(daysBack, getManagementId());
         return ok("Fetched cashflow activity overview.", overview);
       } catch (error) {
         return toolError(error);

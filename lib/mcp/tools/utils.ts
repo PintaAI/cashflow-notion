@@ -1,4 +1,7 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
+export const managementContext = new AsyncLocalStorage<string>();
 
 export function ok(message: string, data?: unknown): CallToolResult {
   return {
@@ -22,4 +25,10 @@ export function isValidDate(value: string): boolean {
   const date = new Date(year, month - 1, day);
 
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+export function getManagementId(): string {
+  const id = managementContext.getStore();
+  if (!id) throw new Error("No management context");
+  return id;
 }

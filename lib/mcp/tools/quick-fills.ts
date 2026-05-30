@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { createQuickFill, deleteQuickFill, getQuickFills } from "@/lib/db";
-import { ok, toolError } from "@/lib/mcp/tools/utils";
+import { ok, toolError, getManagementId } from "@/lib/mcp/tools/utils";
 
 export function registerQuickFillTools(server: McpServer) {
   server.registerTool(
@@ -13,7 +13,7 @@ export function registerQuickFillTools(server: McpServer) {
     },
     async () => {
       try {
-        const quickFills = await getQuickFills();
+        const quickFills = await getQuickFills(getManagementId());
         return ok(`Found ${quickFills.length} quick-fill preset${quickFills.length === 1 ? "" : "s"}.`, { quickFills });
       } catch (error) {
         return toolError(error);
@@ -34,7 +34,7 @@ export function registerQuickFillTools(server: McpServer) {
     },
     async ({ name, nominal, categoryId }) => {
       try {
-        const quickFill = await createQuickFill({ name, nominal, categoryId });
+        const quickFill = await createQuickFill({ name, nominal, categoryId, managementId: getManagementId() });
         return ok("Created quick-fill preset.", quickFill);
       } catch (error) {
         return toolError(error);

@@ -9,7 +9,7 @@ import {
   updateEntry,
   type IOType,
 } from "@/lib/db";
-import { isValidDate, ok, toolError } from "@/lib/mcp/tools/utils";
+import { isValidDate, ok, toolError, getManagementId } from "@/lib/mcp/tools/utils";
 
 const entryFields = {
   name: z.string().trim().min(1).describe("Entry name"),
@@ -49,8 +49,9 @@ export function registerEntryTools(server: McpServer) {
       try {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
 
+        const mid = getManagementId();
         const entries = await prisma.entry.findMany({
-          where: buildEntryWhere({ io: io as IOType | undefined, category, date }),
+          where: { managementId: mid, ...buildEntryWhere({ io: io as IOType | undefined, category, date }) },
           include: { category: true },
           orderBy: [{ date: "desc" }, { createdAt: "desc" }],
           skip,
@@ -85,7 +86,10 @@ export function registerEntryTools(server: McpServer) {
     },
     async ({ id }) => {
       try {
-        const entry = await prisma.entry.findUnique({ where: { id }, include: { category: true } });
+        const entry = await prisma.entry.findFirst({
+          where: { id, managementId: getManagementId() },
+          include: { category: true },
+        });
         if (!entry) throw new Error(`Entry with ID "${id}" not found`);
         return ok("Found cashflow entry.", toEntry(entry));
       } catch (error) {
@@ -106,7 +110,7 @@ export function registerEntryTools(server: McpServer) {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
         if (io === "Expenses" && !category) throw new Error("Category is required for expenses");
 
-        const entry = await createEntry({ name, nominal, category, date, io });
+        const entry = await createEntry({ name, nominal, category, date, io, managementId: getManagementId() });
         return ok("Created cashflow entry.", entry);
       } catch (error) {
         return toolError(error);
@@ -131,7 +135,7 @@ export function registerEntryTools(server: McpServer) {
     async ({ id, name, nominal, category, date, io }) => {
       try {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
-        const entry = await updateEntry(id, { name, nominal, category, date, io });
+        const entry = await updateEntry(id, { name, nominal, category, date, io, managementId: getManagementId() });
         return ok("Updated cashflow entry.", entry);
       } catch (error) {
         return toolError(error);

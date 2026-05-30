@@ -21,6 +21,7 @@
     "@upstash/redis": "^1.38.0",
     "@vercel/blob": "^2.4.0",
     "ai": "^6.0.191",
+    "better-auth": "^1.6.12",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

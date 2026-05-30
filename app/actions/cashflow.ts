@@ -12,17 +12,18 @@ import {
   getEntriesByIOPaginated,
 } from "@/lib/db";
 import type { CashflowEntry, CashflowSummary, IOType, CategoryType } from "@/lib/db";
+import { getCurrentManagementId } from "@/lib/management";
 
-// Server actions for data fetching
 export async function fetchAllEntries(): Promise<CashflowEntry[]> {
-  return getAllEntries();
+  const managementId = await getCurrentManagementId();
+  return getAllEntries(managementId);
 }
 
 export async function fetchSummary(): Promise<CashflowSummary> {
-  return getSummary();
+  const managementId = await getCurrentManagementId();
+  return getSummary(managementId);
 }
 
-// Paginated fetch for infinite loading
 export async function fetchEntriesPage(options?: {
   pageSize?: number;
   skip?: number;
@@ -31,13 +32,14 @@ export async function fetchEntriesPage(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
+  const managementId = await getCurrentManagementId();
   return getEntries({
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
+    managementId,
   });
 }
 
-// Paginated fetch with I/O and date filter for infinite loading
 export async function fetchEntriesFiltered(options?: {
   pageSize?: number;
   skip?: number;
@@ -48,15 +50,16 @@ export async function fetchEntriesFiltered(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
+  const managementId = await getCurrentManagementId();
   return getEntriesFiltered({
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
     io: options?.io,
     date: options?.date,
+    managementId,
   });
 }
 
-// Paginated fetch for Income entries only
 export async function fetchIncomeEntries(options?: {
   pageSize?: number;
   skip?: number;
@@ -65,13 +68,14 @@ export async function fetchIncomeEntries(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
+  const managementId = await getCurrentManagementId();
   return getEntriesByIOPaginated("Income", {
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
+    managementId,
   });
 }
 
-// Paginated fetch for Expenses entries only
 export async function fetchExpensesEntries(options?: {
   pageSize?: number;
   skip?: number;
@@ -80,18 +84,19 @@ export async function fetchExpensesEntries(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
+  const managementId = await getCurrentManagementId();
   return getEntriesByIOPaginated("Expenses", {
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
+    managementId,
   });
 }
 
-// Get total count for display
 export async function fetchTotalCount(): Promise<number> {
-  return countEntries();
+  const managementId = await getCurrentManagementId();
+  return countEntries(managementId);
 }
 
-// Server actions for mutations
 export async function addEntry(data: {
   name: string;
   nominal: number;
@@ -99,10 +104,11 @@ export async function addEntry(data: {
   date?: string;
   io?: IOType;
 }): Promise<CashflowEntry> {
+  const managementId = await getCurrentManagementId();
   if (data.io === "Expenses" && !data.category) {
     throw new Error("Category is required for expenses")
   }
-  return createEntry(data);
+  return createEntry({ ...data, managementId });
 }
 
 export async function editEntry(
@@ -115,7 +121,8 @@ export async function editEntry(
     io: IOType;
   }>
 ): Promise<CashflowEntry> {
-  return updateEntry(pageId, data);
+  const managementId = await getCurrentManagementId();
+  return updateEntry(pageId, { ...data, managementId });
 }
 
 export async function removeEntry(pageId: string): Promise<void> {

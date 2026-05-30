@@ -13,38 +13,221 @@ enum IOType {
   Expenses
 }
 
-model Category {
-  id         String      @id @default(uuid())
-  name       String      @unique
-  color      String      @default("default")
-  icon       String?
-  createdAt  DateTime    @default(now())
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  mcpApiKey     String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  memberships ManagementMember[]
+  oauthAuthCodes OAuthAuthorizationCode[]
+  oauthTokens    OAuthToken[]
+  oauthConsents  OAuthConsent[]
+
+  @@map("User")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("Session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("Account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("Verification")
+}
+
+model Management {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members    ManagementMember[]
+  categories Category[]
   entries    Entry[]
   quickFills QuickFill[]
+  invitations Invitation[]
+}
+
+model ManagementMember {
+  id           String     @id @default(uuid())
+  managementId String
+  management   Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         String     @default("member")
+  joinedAt     DateTime   @default(now())
+
+  @@unique([managementId, userId])
+}
+
+model Invitation {
+  id           String     @id @default(uuid())
+  managementId String
+  management   Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  code         String     @unique
+  status       String     @default("pending")
+  createdAt    DateTime   @default(now())
+  expiresAt    DateTime
+}
+
+model Category {
+  id           String      @id @default(uuid())
+  name         String
+  color        String      @default("default")
+  icon         String?
+  managementId String?
+  management   Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  entries      Entry[]
+  quickFills   QuickFill[]
+
+  @@unique([name, managementId])
 }
 
 model QuickFill {
-  id         String    @id @default(uuid())
-  name       String
-  nominal    Float
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  createdAt  DateTime  @default(now())
-  order      Int       @default(0)
+  id           String     @id @default(uuid())
+  name         String
+  nominal      Float
+  categoryId   String?
+  category     Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  managementId String?
+  management   Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  order        Int        @default(0)
 }
 
 model Entry {
-  id         String    @id @default(uuid())
-  name       String
-  nominal    Float
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  date       String?
-  io         IOType?
-  createdAt  DateTime  @default(now())
+  id           String    @id @default(uuid())
+  notionId     String?   @unique
+  name         String
+  nominal      Float
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  date         String?
+  io           IOType?
+  managementId String?
+  management   Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
 
   @@index([date, createdAt, id])
   @@index([io, date])
   @@index([categoryId])
   @@index([createdAt])
+  @@index([managementId])
+}
+
+model OAuthClient {
+  id             String   @id @default(cuid())
+  clientId       String   @unique
+  clientSecret   String?
+  clientName     String
+  clientUri      String?
+  logoUri        String?
+  redirectUris   String[]
+  grantTypes     String[]
+  responseTypes  String[]
+  scope          String?
+  isPublic       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  authCodes OAuthAuthorizationCode[]
+  tokens    OAuthToken[]
+  consents  OAuthConsent[]
+
+  @@map("OAuthClient")
+}
+
+model OAuthAuthorizationCode {
+  id                  String   @id @default(cuid())
+  code                String   @unique
+  clientId            String
+  userId              String
+  redirectUri         String
+  codeChallenge       String?
+  codeChallengeMethod String?
+  scopes              String[]
+  resource            String?
+  expiresAt           DateTime
+  used                Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  client OAuthClient @relation(fields: [clientId], references: [clientId])
+  user   User        @relation(fields: [userId], references: [id])
+
+  @@map("OAuthAuthorizationCode")
+}
+
+model OAuthToken {
+  id           String    @id @default(cuid())
+  accessToken  String    @unique
+  refreshToken String?   @unique
+  clientId     String
+  client       OAuthClient @relation(fields: [clientId], references: [clientId])
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  scopes       String[]
+  resource     String?
+  tokenType    String    @default("Bearer")
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+
+  @@map("OAuthToken")
+}
+
+model OAuthConsent {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    OAuthClient @relation(fields: [clientId], references: [clientId])
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  scopes    String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, userId])
+  @@map("OAuthConsent")
 }

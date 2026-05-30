@@ -11,6 +11,8 @@ const SUBSCRIPTIONS_BLOB_PATH = "notifications/push-subscriptions.json";
 export type StoredPushSubscription = PushSubscription & {
   createdAt: string;
   updatedAt: string;
+  userId?: string;
+  managementId?: string;
 };
 
 export interface DailyNotificationResult {
@@ -23,7 +25,7 @@ async function ensureDataDir() {
   await mkdir(path.dirname(SUBSCRIPTIONS_FILE), { recursive: true });
 }
 
-async function writeSubscriptions(subscriptions: StoredPushSubscription[]) {
+export async function writeSubscriptions(subscriptions: StoredPushSubscription[]) {
   const redis = getRedisClient();
 
   if (redis) {
@@ -227,7 +229,7 @@ export async function removeSubscription(endpoint: string) {
   return subscriptions.length - nextSubscriptions.length;
 }
 
-function configureWebPush() {
+export function configureWebPush() {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT;
