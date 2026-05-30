@@ -72,8 +72,6 @@ async function verifyToken(
   });
   if (!membership) return undefined;
 
-  managementContext.enterWith(membership.managementId);
-
   return {
     token: bearerToken || "",
     clientId: userId,
@@ -87,4 +85,55 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   resourceMetadataPath: "/.well-known/oauth-protected-resource",
 });
 
-export { authHandler as DELETE, authHandler as GET, authHandler as POST };
+async function resolveManagementId(req: Request): Promise<string | undefined> {
+  const authHeader = req.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+
+  if (bearerToken) {
+    if (isOAuthAccessToken(bearerToken)) {
+      const tokenInfo = await verifyAccessToken(bearerToken);
+      if (tokenInfo) {
+        const membership = await prisma.managementMember.findFirst({
+          where: { userId: tokenInfo.userId },
+        });
+        if (membership) return membership.managementId;
+      }
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { mcpApiKey: bearerToken },
+      });
+      if (user) {
+        const membership = await prisma.managementMember.findFirst({
+          where: { userId: user.id },
+        });
+        if (membership) return membership.managementId;
+      }
+    }
+  }
+
+  const url = new URL(req.url);
+  const queryToken = url.searchParams.get("api_key");
+  if (queryToken) {
+    const user = await prisma.user.findUnique({
+      where: { mcpApiKey: queryToken },
+    });
+    if (user) {
+      const membership = await prisma.managementMember.findFirst({
+        where: { userId: user.id },
+      });
+      if (membership) return membership.managementId;
+    }
+  }
+
+  return undefined;
+}
+
+async function scopedHandler(req: Request) {
+  const managementId = await resolveManagementId(req);
+  if (managementId) {
+    return managementContext.run(managementId, () => authHandler(req));
+  }
+  return authHandler(req);
+}
+
+export { scopedHandler as DELETE, scopedHandler as GET, scopedHandler as POST };
