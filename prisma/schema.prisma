@@ -89,6 +89,7 @@ model Management {
   quickFills     QuickFill[]
   invitations    Invitation[]
   overallBudgets OverallBudget[]
+  recurringEntries RecurringEntry[]
 }
 
 model ManagementMember {
@@ -125,6 +126,30 @@ model OverallBudget {
   @@unique([managementId, period])
 }
 
+model RecurringEntry {
+  id             String     @id @default(uuid())
+  managementId   String
+  management     Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  name           String
+  nominal        Float
+  categoryId     String?
+  category       Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  io             IOType
+  frequency      String
+  dayOfWeek      Int?
+  dayOfMonth     Int?
+  monthOfYear    Int?
+  startDate      String
+  endDate        String?
+  lastGenerated  String?
+  active         Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([managementId, active])
+  @@index([managementId, frequency])
+}
+
 model Category {
   id            String      @id @default(uuid())
   name          String
@@ -137,8 +162,9 @@ model Category {
   managementId  String?
   management    Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
   createdAt     DateTime    @default(now())
-  entries       Entry[]
-  quickFills    QuickFill[]
+  entries         Entry[]
+  quickFills      QuickFill[]
+  recurringEntries RecurringEntry[]
 
   @@unique([name, managementId])
 }

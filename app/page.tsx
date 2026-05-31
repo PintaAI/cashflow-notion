@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { useSession, signOut } from "@/lib/auth-client";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
@@ -19,12 +19,14 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
 import { QuickFillManager } from "@/components/quick-fill-manager";
 import { BudgetManager } from "@/components/budget-manager";
+import { RecurringManager } from "@/components/recurring-manager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
 import { useBudgetStatus } from "@/hooks/use-cashflow-data";
+import { useRunRecurringGeneration } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
 import { getCurrentManagement, createInvite } from "@/app/actions/management";
@@ -303,6 +305,15 @@ function HomeTab() {
   const summary = summaryQuery.data ?? getEmptySummary();
   const activity = activityQuery.data ?? getEmptyActivityOverview();
   const today = formatDateKey(new Date());
+  const runGeneration = useRunRecurringGeneration();
+
+  useEffect(() => {
+    const key = `recurring-generated-${today}`;
+    if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      runGeneration.mutate();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -575,6 +586,18 @@ function ProfileTab() {
           </AccordionTrigger>
           <AccordionContent>
             <BudgetManager />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="recurring">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="size-4" />
+              Berulang
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <RecurringManager />
           </AccordionContent>
         </AccordionItem>
 

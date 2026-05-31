@@ -23,7 +23,14 @@ import {
   saveOverallBudget,
   removeOverallBudget,
 } from "@/app/actions/budgets";
-import type { BudgetPeriod } from "@/lib/db";
+import {
+  fetchRecurringEntries,
+  addRecurringEntry,
+  editRecurringEntry,
+  removeRecurringEntry,
+  runRecurringGeneration,
+} from "@/app/actions/recurring";
+import type { BudgetPeriod, RecurringFrequency, IOType } from "@/lib/db";
 
 export const cashflowQueryKeys = {
   entries: ["cashflow-entries"] as const,
@@ -35,6 +42,7 @@ export const cashflowQueryKeys = {
   categoriesWithDetails: ["cashflow-categories-details"] as const,
   quickFills: ["cashflow-quick-fills"] as const,
   budgetStatus: ["cashflow-budget-status"] as const,
+  recurring: ["cashflow-recurring"] as const,
 };
 
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
@@ -187,6 +195,84 @@ export function useRemoveOverallBudget() {
     mutationFn: (period: BudgetPeriod) => removeOverallBudget(period),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+    },
+  });
+}
+
+export function useRecurringEntries() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.recurring,
+    queryFn: fetchRecurringEntries,
+  });
+}
+
+export function useCreateRecurringEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: {
+      name: string;
+      nominal: number;
+      categoryId?: string | null;
+      io: IOType;
+      frequency: RecurringFrequency;
+      dayOfWeek?: number | null;
+      dayOfMonth?: number | null;
+      monthOfYear?: number | null;
+      startDate: string;
+      endDate?: string | null;
+    }) => addRecurringEntry(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+    },
+  });
+}
+
+export function useUpdateRecurringEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, ...data }: {
+      id: string;
+      name?: string;
+      nominal?: number;
+      categoryId?: string | null;
+      io?: IOType;
+      frequency?: RecurringFrequency;
+      dayOfWeek?: number | null;
+      dayOfMonth?: number | null;
+      monthOfYear?: number | null;
+      startDate?: string;
+      endDate?: string | null;
+      active?: boolean;
+    }) => editRecurringEntry(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+    },
+  });
+}
+
+export function useDeleteRecurringEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => removeRecurringEntry(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+    },
+  });
+}
+
+export function useRunRecurringGeneration() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => runRecurringGeneration(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
     },
   });
 }
