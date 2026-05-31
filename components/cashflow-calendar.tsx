@@ -59,7 +59,7 @@ function CalendarDayContent({
     <button
       type="button"
       className={cn(
-        "flex h-full w-full flex-col items-center gap-0.5 rounded-md p-1 text-center transition-colors",
+        "flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-md p-1 text-center transition-colors md:gap-1 md:p-1.5",
         "hover:bg-muted/70",
         isToday && "border border-primary/50",
         isSelected && "bg-primary/15 ring-1 ring-primary",
@@ -70,11 +70,11 @@ function CalendarDayContent({
       data-has-entries={hasEntries ? "true" : undefined}
       {...props}
     >
-      <span className={cn("text-[11px] leading-none", isToday || isSelected ? "font-bold text-primary" : "text-muted-foreground")}>
+      <span className={cn("text-xs md:text-sm leading-none", isToday || isSelected ? "font-bold text-primary" : "text-muted-foreground")}>
         {day.date.toLocaleDateString(locale, { day: "numeric" })}
       </span>
       {hasEntries && (
-        <span className={cn("text-[9px] font-medium leading-none truncate", net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500")}>
+        <span className={cn("text-[10px] md:text-xs font-medium leading-none truncate", net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500")}>
           {net >= 0 ? "+" : "-"}{formatCompactAmount(net)}
         </span>
       )}
@@ -126,12 +126,14 @@ export function CashflowCalendar() {
   const monthlyTotals = React.useMemo(() => {
     let income = 0;
     let expenses = 0;
-    for (const data of Object.values(calendarData)) {
+    const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
+    for (const [dateKey, data] of Object.entries(calendarData)) {
+      if (!dateKey.startsWith(monthStr)) continue;
       income += data.income;
       expenses += data.expenses;
     }
     return { income, expenses, net: income - expenses };
-  }, [calendarData]);
+  }, [calendarData, year, month]);
 
   const handleDayClick = React.useCallback((date: Date) => {
     setSelectedDay(date);
@@ -186,6 +188,27 @@ export function CashflowCalendar() {
             <span>Memuat...</span>
           </div>
         )}
+      </div>
+
+      <div className="flex items-center gap-3 text-xs">
+        <span>
+          <span className="text-muted-foreground">Net: </span>
+          <span className="font-medium">
+            {formatCompactAmount(monthlyTotals.net)}
+          </span>
+        </span>
+        <span>
+          <span className="text-muted-foreground">Income: </span>
+          <span className="font-medium text-green-600 dark:text-green-400">
+            +{formatCompactAmount(monthlyTotals.income)}
+          </span>
+        </span>
+        <span>
+          <span className="text-muted-foreground">Expenses: </span>
+          <span className="font-medium text-red-600 dark:text-red-400">
+            -{formatCompactAmount(monthlyTotals.expenses)}
+          </span>
+        </span>
       </div>
 
       <div className="flex items-center gap-2">
@@ -248,23 +271,6 @@ export function CashflowCalendar() {
             ),
           }}
         />
-      </div>
-
-      <div className="flex justify-end">
-        <div className="inline-flex items-center gap-4 rounded-lg border bg-card px-4 py-2.5 text-xs">
-          <span className="text-muted-foreground">
-            Bulan ini:{" "}
-            <span className="font-medium text-foreground">
-              {formatCompactAmount(monthlyTotals.net)}
-            </span>
-          </span>
-          <span className="text-green-600 dark:text-green-400 font-medium">
-            +{formatCompactAmount(monthlyTotals.income)}
-          </span>
-          <span className="text-red-900 dark:text-red-500 font-medium">
-            -{formatCompactAmount(monthlyTotals.expenses)}
-          </span>
-        </div>
       </div>
 
       {selectedDay && selectedDayData && hasFilteredEntries && (
