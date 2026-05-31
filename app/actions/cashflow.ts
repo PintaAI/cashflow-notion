@@ -10,8 +10,9 @@ import {
   countEntries,
   getEntriesFiltered,
   getEntriesByIOPaginated,
+  getCalendarEntries,
 } from "@/lib/db";
-import type { CashflowEntry, CashflowSummary, IOType, CategoryType } from "@/lib/db";
+import type { CashflowEntry, CashflowSummary, IOType, CategoryType, CalendarDayData } from "@/lib/db";
 import { getCurrentManagementId } from "@/lib/management";
 import { checkBudgetAlerts } from "@/lib/budget-alerts";
 import { prisma } from "@/lib/db";
@@ -144,4 +145,13 @@ export async function editEntry(
 
 export async function removeEntry(pageId: string): Promise<void> {
   return deleteEntry(pageId);
+}
+
+export async function fetchCalendarEntries(
+  year: number,
+  month: number,
+  io?: IOType,
+): Promise<Record<string, CalendarDayData>> {
+  const managementId = await getCurrentManagementId();
+  return getCalendarEntries(managementId, year, month, io);
 }

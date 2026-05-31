@@ -1004,6 +1004,63 @@ function shouldGenerateToday(
   return false;
 }
 
+export interface CalendarDayData {
+  entries: CashflowEntry[];
+  income: number;
+  expenses: number;
+}
+
+export async function getCalendarEntries(
+  managementId: string,
+  year: number,
+  month: number,
+  io?: IOType,
+): Promise<Record<string, CalendarDayData>> {
+  const firstDay = new Date(year, month, 1);
+  const startOfWeek = new Date(firstDay);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  const lastDay = new Date(year, month + 1, 0);
+  const endOfWeek = new Date(lastDay);
+  endOfWeek.setDate(endOfWeek.getDate() + (6 - endOfWeek.getDay()));
+  endOfWeek.setDate(endOfWeek.getDate() + 1);
+
+  const startDate = formatDate(startOfWeek);
+  const endDate = formatDate(endOfWeek);
+
+  const where: EntryWhereInput = {
+    managementId,
+    ...buildEntryWhere({ io, startDate, endDate }),
+  };
+
+  const entries = await prisma.entry.findMany({
+    where,
+    include: { category: true },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+  });
+
+  const result: Record<string, CalendarDayData> = {};
+
+  for (const entry of entries) {
+    const dateKey = entry.date;
+    if (!dateKey) continue;
+
+    if (!result[dateKey]) {
+      result[dateKey] = { entries: [], income: 0, expenses: 0 };
+    }
+
+    const mapped = toEntry(entry);
+    result[dateKey].entries.push(mapped);
+
+    if (entry.io === "Income") {
+      result[dateKey].income += entry.nominal;
+    } else if (entry.io === "Expenses") {
+      result[dateKey].expenses += entry.nominal;
+    }
+  }
+
+  return result;
+}
+
 export async function generateRecurringEntries(managementId: string): Promise<number> {
   const today = formatDate(new Date());
   const entries = await prisma.recurringEntry.findMany({

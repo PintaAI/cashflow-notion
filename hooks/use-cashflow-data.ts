@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { fetchSummary } from "@/app/actions/cashflow";
+import { fetchSummary, fetchCalendarEntries } from "@/app/actions/cashflow";
 import { fetchActivityOverview, fetchAnalyticsFromURL } from "@/app/actions/analytics";
 import type { URLAnalyticsFilter } from "@/lib/analytics";
 import {
@@ -43,6 +43,7 @@ export const cashflowQueryKeys = {
   quickFills: ["cashflow-quick-fills"] as const,
   budgetStatus: ["cashflow-budget-status"] as const,
   recurring: ["cashflow-recurring"] as const,
+  calendarEntries: (year: number, month: number) => ["cashflow-calendar", year, month] as const,
 };
 
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
@@ -58,6 +59,13 @@ export function useActivityOverview() {
   return useQuery({
     queryKey: cashflowQueryKeys.activity,
     queryFn: () => fetchActivityOverview(),
+  });
+}
+
+export function useCalendarEntries(year: number, month: number) {
+  return useQuery({
+    queryKey: cashflowQueryKeys.calendarEntries(year, month),
+    queryFn: () => fetchCalendarEntries(year, month),
   });
 }
 

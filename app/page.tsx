@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, Analytics01Icon, BellDotIcon, Calendar03Icon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon, Table01Icon } from "@hugeicons/core-free-icons";
 import { useSession, signOut } from "@/lib/auth-client";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { CashflowTable } from "@/components/cashflow-table";
+import { CashflowCalendar } from "@/components/cashflow-calendar";
 
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
@@ -328,10 +329,43 @@ function HomeTab() {
 }
 
 function CatatanTab() {
+  const [view, setView] = useState<"list" | "calendar">("list");
+
   return (
     <>
-      <PageHeader icon={File01Icon} title="Catatan" />
-      <CashflowTable />
+      <div className="flex items-center justify-between">
+        <PageHeader icon={File01Icon} title="Catatan" />
+        <div className="flex items-center rounded-lg border p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              view === "list"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <HugeiconsIcon icon={Table01Icon} strokeWidth={2} className="size-3.5" />
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("calendar")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              view === "calendar"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-3.5" />
+            Kalender
+          </button>
+        </div>
+      </div>
+
+      {view === "list" ? <CashflowTable /> : <CashflowCalendar />}
     </>
   );
 }
