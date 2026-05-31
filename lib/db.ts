@@ -72,11 +72,35 @@ export interface CategoryOptionWithColor {
   name: string;
   color: string;
   icon: string | null;
+  budgetDaily: number | null;
+  budgetWeekly: number | null;
+  budgetMonthly: number | null;
 }
 
 export type CategoryOptionWithUsage = CategoryOptionWithColor & {
   usageCount: number;
 };
+
+export type BudgetPeriod = "daily" | "weekly" | "monthly";
+
+export interface OverallBudgetOption {
+  id: string;
+  period: BudgetPeriod;
+  amount: number;
+}
+
+export interface BudgetStatusItem {
+  type: "category" | "overall";
+  id: string;
+  name: string;
+  period: BudgetPeriod;
+  budgetAmount: number;
+  spent: number;
+  remaining: number;
+  percentage: number;
+  isWarning: boolean;
+  isOverBudget: boolean;
+}
 
 type EntryWithCategory = Prisma.EntryGetPayload<{
   include: { category: true };
@@ -381,10 +405,6 @@ export async function createEntry(data: {
   io?: IOType;
   managementId: string;
 }): Promise<CashflowEntry> {
-  if (data.io === "Expenses" && !data.category) {
-    throw new Error("Category is required for expenses");
-  }
-
   const category = await findCategory(data.category, data.managementId);
   if (data.category && !category) {
     throw new Error(`Category "${data.category}" not found`);
@@ -475,6 +495,9 @@ export async function getCategoryOptions(managementId: string): Promise<Category
     name: category.name,
     color: category.color,
     icon: category.icon ?? null,
+    budgetDaily: category.budgetDaily,
+    budgetWeekly: category.budgetWeekly,
+    budgetMonthly: category.budgetMonthly,
   }));
 }
 
@@ -500,14 +523,27 @@ export async function getCategoryOptionsWithUsage(managementId: string): Promise
     name: category.name,
     color: category.color,
     icon: category.icon ?? null,
+    budgetDaily: category.budgetDaily,
+    budgetWeekly: category.budgetWeekly,
+    budgetMonthly: category.budgetMonthly,
     usageCount: usageByCategoryId.get(category.id) || 0,
   }));
 }
 
-export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string): Promise<CategoryOptionWithColor[]> {
+export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string, budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null }): Promise<CategoryOptionWithColor[]> {
   if (!managementId) throw new Error("managementId required");
   try {
-    await prisma.category.create({ data: { name, color: color || "default", icon: icon ?? null, managementId } });
+    await prisma.category.create({
+      data: {
+        name,
+        color: color || "default",
+        icon: icon ?? null,
+        managementId,
+        budgetDaily: budgets?.budgetDaily ?? null,
+        budgetWeekly: budgets?.budgetWeekly ?? null,
+        budgetMonthly: budgets?.budgetMonthly ?? null,
+      },
+    });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new Error(`Category "${name}" already exists`);
@@ -520,13 +556,16 @@ export async function addCategoryOption(name: string, color?: string, icon?: str
 
 export async function updateCategoryOption(
   categoryId: string,
-  data: { name?: string; color?: string; icon?: string | null },
+  data: { name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null },
   managementId?: string,
 ): Promise<CategoryOptionWithColor[]> {
-  const updateData: Record<string, string | null> = {};
+  const updateData: Record<string, string | number | null> = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.color !== undefined) updateData.color = data.color;
   if (data.icon !== undefined) updateData.icon = data.icon;
+  if (data.budgetDaily !== undefined) updateData.budgetDaily = data.budgetDaily;
+  if (data.budgetWeekly !== undefined) updateData.budgetWeekly = data.budgetWeekly;
+  if (data.budgetMonthly !== undefined) updateData.budgetMonthly = data.budgetMonthly;
 
   try {
     await prisma.category.update({ where: { id: categoryId }, data: updateData });
@@ -637,4 +676,139 @@ export async function updateQuickFill(id: string, data: { name?: string; nominal
 
 export async function deleteQuickFill(id: string): Promise<void> {
   await prisma.quickFill.delete({ where: { id } });
+}
+
+// --- Overall Budget CRUD ---
+
+export async function getOverallBudgets(managementId: string): Promise<OverallBudgetOption[]> {
+  const budgets = await prisma.overallBudget.findMany({
+    where: { managementId },
+    orderBy: { period: "asc" },
+  });
+  return budgets.map((b) => ({
+    id: b.id,
+    period: b.period as BudgetPeriod,
+    amount: b.amount,
+  }));
+}
+
+export async function upsertOverallBudget(managementId: string, period: BudgetPeriod, amount: number): Promise<OverallBudgetOption> {
+  const budget = await prisma.overallBudget.upsert({
+    where: { managementId_period: { managementId, period } },
+    update: { amount },
+    create: { managementId, period, amount },
+  });
+  return { id: budget.id, period: budget.period as BudgetPeriod, amount: budget.amount };
+}
+
+export async function deleteOverallBudget(managementId: string, period: BudgetPeriod): Promise<void> {
+  await prisma.overallBudget.deleteMany({ where: { managementId, period } });
+}
+
+// --- Budget Status ---
+
+function getCurrentDateRange(period: BudgetPeriod): { start: string; end: string } {
+  const now = new Date();
+
+  if (period === "daily") {
+    const date = formatDate(now);
+    return { start: date, end: date };
+  }
+
+  if (period === "weekly") {
+    const { start, end } = getWeekStartEnd(now);
+    return { start: formatDate(start), end: formatDate(end) };
+  }
+
+  // monthly
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { start: formatDate(start), end: formatDate(end) };
+}
+
+export async function getBudgetStatus(managementId: string): Promise<BudgetStatusItem[]> {
+  const [categories, overallBudgets] = await Promise.all([
+    prisma.category.findMany({
+      where: { managementId },
+      orderBy: { name: "asc" },
+    }),
+    prisma.overallBudget.findMany({ where: { managementId } }),
+  ]);
+
+  const results: BudgetStatusItem[] = [];
+
+  const periods: BudgetPeriod[] = ["daily", "weekly", "monthly"];
+
+  for (const period of periods) {
+    const { start, end } = getCurrentDateRange(period);
+
+    // Overall budget for this period
+    const overallBudget = overallBudgets.find((b) => b.period === period);
+    if (overallBudget) {
+      const overallSpent = await prisma.entry.aggregate({
+        where: {
+          managementId,
+          io: "Expenses",
+          date: { gte: start, lte: end },
+        },
+        _sum: { nominal: true },
+      });
+      const spent = overallSpent._sum.nominal ?? 0;
+      const percentage = overallBudget.amount > 0 ? Math.round((spent / overallBudget.amount) * 100) : 0;
+      results.push({
+        type: "overall",
+        id: overallBudget.id,
+        name: "Total",
+        period,
+        budgetAmount: overallBudget.amount,
+        spent,
+        remaining: Math.max(0, overallBudget.amount - spent),
+        percentage,
+        isWarning: percentage >= 80 && percentage < 100,
+        isOverBudget: percentage >= 100,
+      });
+    }
+
+    // Category budgets for this period
+    const categoriesWithBudget = categories.filter((c) => {
+      if (period === "daily") return c.budgetDaily != null;
+      if (period === "weekly") return c.budgetWeekly != null;
+      return c.budgetMonthly != null;
+    });
+
+    for (const category of categoriesWithBudget) {
+      const budgetAmount = period === "daily"
+        ? category.budgetDaily!
+        : period === "weekly"
+          ? category.budgetWeekly!
+          : category.budgetMonthly!;
+
+      const categorySpent = await prisma.entry.aggregate({
+        where: {
+          managementId,
+          io: "Expenses",
+          categoryId: category.id,
+          date: { gte: start, lte: end },
+        },
+        _sum: { nominal: true },
+      });
+
+      const spent = categorySpent._sum.nominal ?? 0;
+      const percentage = budgetAmount > 0 ? Math.round((spent / budgetAmount) * 100) : 0;
+      results.push({
+        type: "category",
+        id: category.id,
+        name: category.name,
+        period,
+        budgetAmount,
+        spent,
+        remaining: Math.max(0, budgetAmount - spent),
+        percentage,
+        isWarning: percentage >= 80 && percentage < 100,
+        isOverBudget: percentage >= 100,
+      });
+    }
+  }
+
+  return results;
 }

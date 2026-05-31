@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, Analytics01Icon, BellDotIcon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon } from "@hugeicons/core-free-icons";
 import { useSession, signOut } from "@/lib/auth-client";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
@@ -18,16 +18,19 @@ import { Stats, type StatsData } from "@/components/stats";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
 import { QuickFillManager } from "@/components/quick-fill-manager";
+import { BudgetManager } from "@/components/budget-manager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
+import { useBudgetStatus } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
 import { getCurrentManagement, createInvite } from "@/app/actions/management";
 import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
 import type { UserOAuthConnection } from "@/lib/oauth/server";
+import { cn } from "@/lib/utils";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -261,6 +264,39 @@ function DailyReminderPreference() {
   );
 }
 
+function BudgetWarningCard() {
+  const budgetStatusQuery = useBudgetStatus();
+  const allStatuses = budgetStatusQuery.data ?? [];
+  const warnings = allStatuses.filter((s) => s.isWarning || s.isOverBudget);
+
+  if (warnings.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3 space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} className="size-3.5 text-yellow-600 dark:text-yellow-400" />
+        <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Budget Warning</span>
+      </div>
+      {warnings.slice(0, 3).map((s) => (
+        <div key={`${s.type}-${s.id}-${s.period}`} className="flex items-center justify-between text-[11px]">
+          <span className="text-yellow-700/80 dark:text-yellow-400/80 truncate">
+            {s.type === "overall" ? "Total" : s.name} ({s.period})
+          </span>
+          <span className={cn(
+            "font-medium shrink-0 ml-2",
+            s.isOverBudget ? "text-red-600 dark:text-red-400" : "text-yellow-600 dark:text-yellow-400"
+          )}>
+            {s.percentage}%
+          </span>
+        </div>
+      ))}
+      {warnings.length > 3 && (
+        <p className="text-[10px] text-yellow-700/60 dark:text-yellow-400/60">+{warnings.length - 3} lainnya</p>
+      )}
+    </div>
+  );
+}
+
 function HomeTab() {
   const summaryQuery = useSummary();
   const activityQuery = useActivityOverview();
@@ -273,6 +309,7 @@ function HomeTab() {
       <PageHeader icon={Wallet01Icon} title="Cashflow Tracker" />
 
       {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
+      <BudgetWarningCard />
       {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} />}
       <CashflowTable dateFilter={today} />
     </>
@@ -526,6 +563,18 @@ function ProfileTab() {
           </AccordionTrigger>
           <AccordionContent>
             <CategoryManager />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="budget">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-4" />
+              Budget
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <BudgetManager />
           </AccordionContent>
         </AccordionItem>
 

@@ -13,6 +13,8 @@ import {
 } from "@/lib/db";
 import type { CashflowEntry, CashflowSummary, IOType, CategoryType } from "@/lib/db";
 import { getCurrentManagementId } from "@/lib/management";
+import { checkBudgetAlerts } from "@/lib/budget-alerts";
+import { prisma } from "@/lib/db";
 
 export async function fetchAllEntries(): Promise<CashflowEntry[]> {
   const managementId = await getCurrentManagementId();
@@ -105,10 +107,16 @@ export async function addEntry(data: {
   io?: IOType;
 }): Promise<CashflowEntry> {
   const managementId = await getCurrentManagementId();
-  if (data.io === "Expenses" && !data.category) {
-    throw new Error("Category is required for expenses")
+  const entry = await createEntry({ ...data, managementId });
+
+  if (data.io === "Expenses" && data.category) {
+    const cat = await prisma.category.findFirst({ where: { name: data.category, managementId } });
+    if (cat) {
+      checkBudgetAlerts(managementId, { categoryId: cat.id, io: data.io, date: data.date });
+    }
   }
-  return createEntry({ ...data, managementId });
+
+  return entry;
 }
 
 export async function editEntry(
@@ -122,7 +130,16 @@ export async function editEntry(
   }>
 ): Promise<CashflowEntry> {
   const managementId = await getCurrentManagementId();
-  return updateEntry(pageId, { ...data, managementId });
+  const entry = await updateEntry(pageId, { ...data, managementId });
+
+  if (data.io === "Expenses" && data.category) {
+    const cat = await prisma.category.findFirst({ where: { name: data.category, managementId } });
+    if (cat) {
+      checkBudgetAlerts(managementId, { categoryId: cat.id, io: data.io, date: data.date });
+    }
+  }
+
+  return entry;
 }
 
 export async function removeEntry(pageId: string): Promise<void> {

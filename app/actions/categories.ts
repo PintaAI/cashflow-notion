@@ -27,19 +27,19 @@ export async function fetchCategoriesWithDetails(): Promise<CategoryWithUsage[]>
   return getCategoryOptionsWithUsage(managementId);
 }
 
-export async function createCategory(name: string, color?: string, icon?: string): Promise<CategoryOptionWithColor[]> {
+export async function createCategory(name: string, color?: string, icon?: string, budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null }): Promise<CategoryOptionWithColor[]> {
   const managementId = await getCurrentManagementId();
   const trimmedName = name.trim();
   if (!trimmedName) {
     throw new Error("Category name cannot be empty");
   }
 
-  return addCategoryOption(trimmedName, color ?? "default", icon, managementId);
+  return addCategoryOption(trimmedName, color ?? "default", icon, managementId, budgets);
 }
 
 export async function updateCategory(
   categoryId: string,
-  data: { name?: string; color?: string; icon?: string | null },
+  data: { name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null },
 ): Promise<CategoryOptionWithColor[]> {
   const managementId = await getCurrentManagementId();
   if (data.name !== undefined) {

@@ -18,6 +18,12 @@ import {
   editQuickFill,
   removeQuickFill,
 } from "@/app/actions/quick-fill";
+import {
+  fetchBudgetStatus,
+  saveOverallBudget,
+  removeOverallBudget,
+} from "@/app/actions/budgets";
+import type { BudgetPeriod } from "@/lib/db";
 
 export const cashflowQueryKeys = {
   entries: ["cashflow-entries"] as const,
@@ -28,6 +34,7 @@ export const cashflowQueryKeys = {
   categories: ["cashflow-categories"] as const,
   categoriesWithDetails: ["cashflow-categories-details"] as const,
   quickFills: ["cashflow-quick-fills"] as const,
+  budgetStatus: ["cashflow-budget-status"] as const,
 };
 
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
@@ -73,10 +80,11 @@ export function useCreateCategory() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ name, color, icon }: { name: string; color?: string; icon?: string }) => createCategory(name, color ?? "default", icon),
+    mutationFn: ({ name, color, icon, budgets }: { name: string; color?: string; icon?: string; budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null } }) => createCategory(name, color ?? "default", icon, budgets),
     onSuccess: (newCategories) => {
       queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
     },
   });
 }
@@ -92,6 +100,7 @@ export function useDeleteCategory() {
         queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
         queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
         queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot });
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
       }
       return result;
     },
@@ -102,11 +111,12 @@ export function useUpdateCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, name, color, icon }: { id: string; name?: string; color?: string; icon?: string | null }) =>
-      updateCategoryAction(id, { name, color, icon }),
+    mutationFn: ({ id, name, color, icon, budgetDaily, budgetWeekly, budgetMonthly }: { id: string; name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null }) =>
+      updateCategoryAction(id, { name, color, icon, budgetDaily, budgetWeekly, budgetMonthly }),
     onSuccess: (newCategories) => {
       queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
     },
   });
 }
@@ -148,6 +158,35 @@ export function useDeleteQuickFill() {
     mutationFn: (id: string) => removeQuickFill(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
+    },
+  });
+}
+
+export function useBudgetStatus() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.budgetStatus,
+    queryFn: fetchBudgetStatus,
+  });
+}
+
+export function useSaveOverallBudget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ period, amount }: { period: BudgetPeriod; amount: number }) => saveOverallBudget(period, amount),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+    },
+  });
+}
+
+export function useRemoveOverallBudget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (period: BudgetPeriod) => removeOverallBudget(period),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
     },
   });
 }

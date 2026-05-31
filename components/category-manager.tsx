@@ -9,6 +9,7 @@ import {
   Edit02Icon,
   Loading03Icon,
   Tick02Icon,
+  Wallet01Icon,
 } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +37,12 @@ const colorHexMap: Record<string, string> = {
   red: "#ef4444",
 }
 
+function formatBudgetValue(value: string): string {
+  const num = Number(value.replace(/[^0-9]/g, ""))
+  if (isNaN(num) || num === 0) return ""
+  return num.toLocaleString("id-ID")
+}
+
 export function CategoryManager() {
   const categoriesQuery = useCategoriesWithDetails()
   const createCategory = useCreateCategory()
@@ -44,12 +51,19 @@ export function CategoryManager() {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [selectedIcon, setSelectedIcon] = useState("More01Icon")
   const [selectedColor, setSelectedColor] = useState("default")
+  const [newBudgetDaily, setNewBudgetDaily] = useState("")
+  const [newBudgetWeekly, setNewBudgetWeekly] = useState("")
+  const [newBudgetMonthly, setNewBudgetMonthly] = useState("")
+  const [showBudgets, setShowBudgets] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editIcon, setEditIcon] = useState("")
   const [editColor, setEditColor] = useState("default")
+  const [editBudgetDaily, setEditBudgetDaily] = useState("")
+  const [editBudgetWeekly, setEditBudgetWeekly] = useState("")
+  const [editBudgetMonthly, setEditBudgetMonthly] = useState("")
   const [isNameFocused, setIsNameFocused] = useState(false)
   const [isEditFocused, setIsEditFocused] = useState(false)
 
@@ -59,10 +73,23 @@ export function CategoryManager() {
 
     setError(null)
     try {
-      await createCategory.mutateAsync({ name: trimmedName, color: selectedColor, icon: selectedIcon })
+      await createCategory.mutateAsync({
+        name: trimmedName,
+        color: selectedColor,
+        icon: selectedIcon,
+        budgets: {
+          budgetDaily: newBudgetDaily ? Number(newBudgetDaily.replace(/[^0-9]/g, "")) : null,
+          budgetWeekly: newBudgetWeekly ? Number(newBudgetWeekly.replace(/[^0-9]/g, "")) : null,
+          budgetMonthly: newBudgetMonthly ? Number(newBudgetMonthly.replace(/[^0-9]/g, "")) : null,
+        },
+      })
       setNewCategoryName("")
       setSelectedIcon("More01Icon")
       setSelectedColor("default")
+      setNewBudgetDaily("")
+      setNewBudgetWeekly("")
+      setNewBudgetMonthly("")
+      setShowBudgets(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal membuat kategori")
     }
@@ -77,6 +104,9 @@ export function CategoryManager() {
     setEditName(category.name)
     setEditIcon(category.icon ?? "More01Icon")
     setEditColor(category.color ?? "default")
+    setEditBudgetDaily(category.budgetDaily != null ? String(category.budgetDaily) : "")
+    setEditBudgetWeekly(category.budgetWeekly != null ? String(category.budgetWeekly) : "")
+    setEditBudgetMonthly(category.budgetMonthly != null ? String(category.budgetMonthly) : "")
     setError(null)
   }
 
@@ -87,7 +117,15 @@ export function CategoryManager() {
 
     setError(null)
     try {
-      await updateCategory.mutateAsync({ id: editingId, name: trimmedName, color: editColor, icon: editIcon })
+      await updateCategory.mutateAsync({
+        id: editingId,
+        name: trimmedName,
+        color: editColor,
+        icon: editIcon,
+        budgetDaily: editBudgetDaily ? Number(editBudgetDaily.replace(/[^0-9]/g, "")) : null,
+        budgetWeekly: editBudgetWeekly ? Number(editBudgetWeekly.replace(/[^0-9]/g, "")) : null,
+        budgetMonthly: editBudgetMonthly ? Number(editBudgetMonthly.replace(/[^0-9]/g, "")) : null,
+      })
       setEditingId(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal memperbarui kategori")
@@ -226,6 +264,51 @@ export function CategoryManager() {
           ))}
         </div>
       )}
+
+      <div className="space-y-2">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setShowBudgets(!showBudgets)}
+        >
+          <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-3.5" />
+          Budget {showBudgets ? "▲" : "▼"}
+        </button>
+        {showBudgets && (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Harian</label>
+              <Input
+                placeholder="Rp"
+                value={newBudgetDaily}
+                onChange={(e) => setNewBudgetDaily(formatBudgetValue(e.target.value))}
+                className="h-8 text-xs"
+                inputMode="numeric"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Mingguan</label>
+              <Input
+                placeholder="Rp"
+                value={newBudgetWeekly}
+                onChange={(e) => setNewBudgetWeekly(formatBudgetValue(e.target.value))}
+                className="h-8 text-xs"
+                inputMode="numeric"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Bulanan</label>
+              <Input
+                placeholder="Rp"
+                value={newBudgetMonthly}
+                onChange={(e) => setNewBudgetMonthly(formatBudgetValue(e.target.value))}
+                className="h-8 text-xs"
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
 
       <ScrollArea className="h-[200px] sm:h-[300px]">
@@ -320,6 +403,38 @@ export function CategoryManager() {
                       ))}
                     </div>
                     )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground">Budget Harian</label>
+                        <Input
+                          placeholder="Rp"
+                          value={editBudgetDaily}
+                          onChange={(e) => setEditBudgetDaily(formatBudgetValue(e.target.value))}
+                          className="h-8 text-xs"
+                          inputMode="numeric"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground">Budget Mingguan</label>
+                        <Input
+                          placeholder="Rp"
+                          value={editBudgetWeekly}
+                          onChange={(e) => setEditBudgetWeekly(formatBudgetValue(e.target.value))}
+                          className="h-8 text-xs"
+                          inputMode="numeric"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground">Budget Bulanan</label>
+                        <Input
+                          placeholder="Rp"
+                          value={editBudgetMonthly}
+                          onChange={(e) => setEditBudgetMonthly(formatBudgetValue(e.target.value))}
+                          className="h-8 text-xs"
+                          inputMode="numeric"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )
               }
@@ -341,6 +456,12 @@ export function CategoryManager() {
                     {category.usageCount > 0 && (
                       <span className="text-xs text-muted-foreground">
                         {category.usageCount} entri
+                      </span>
+                    )}
+                    {(category.budgetDaily || category.budgetWeekly || category.budgetMonthly) && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                        <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-2.5" />
+                        {category.budgetMonthly ? `Rp ${Math.round(category.budgetMonthly / 1000)}k/bln` : category.budgetWeekly ? `Rp ${Math.round(category.budgetWeekly / 1000)}k/mgg` : `Rp ${Math.round(category.budgetDaily! / 1000)}k/hr`}
                       </span>
                     )}
                   </button>
