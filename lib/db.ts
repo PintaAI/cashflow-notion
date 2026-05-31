@@ -440,10 +440,35 @@ export async function deleteEntry(entryId: string): Promise<void> {
   await prisma.entry.delete({ where: { id: entryId } });
 }
 
+const DEFAULT_CATEGORIES = [
+  { name: "Makanan", color: "orange", icon: "CookieIcon" },
+  { name: "Transportasi", color: "blue", icon: "Bus01Icon" },
+  { name: "Belanja", color: "green", icon: "ShoppingCart01Icon" },
+  { name: "Tagihan", color: "red", icon: "Invoice01Icon" },
+  { name: "Hiburan", color: "purple", icon: "GameController01Icon" },
+  { name: "Kesehatan", color: "pink", icon: "HealthIcon" },
+  { name: "Lainnya", color: "gray", icon: "More01Icon" },
+];
+
+export async function ensureDefaultCategories(managementId: string): Promise<void> {
+  const count = await prisma.category.count({ where: { managementId } });
+  if (count > 0) return;
+
+  await prisma.category.createMany({
+    data: DEFAULT_CATEGORIES.map((cat) => ({
+      name: cat.name,
+      color: cat.color,
+      icon: cat.icon,
+      managementId,
+    })),
+  });
+}
+
 export async function getCategoryOptions(managementId: string): Promise<CategoryOptionWithColor[]> {
+  await ensureDefaultCategories(managementId);
   const categories = await prisma.category.findMany({
     where: { managementId },
-    orderBy: { name: "asc" },
+    orderBy: [{ name: "asc" }],
   });
   return categories.map((category) => ({
     id: category.id,
@@ -454,6 +479,7 @@ export async function getCategoryOptions(managementId: string): Promise<Category
 }
 
 export async function getCategoryOptionsWithUsage(managementId: string): Promise<CategoryOptionWithUsage[]> {
+  await ensureDefaultCategories(managementId);
   const [categories, usageCounts] = await Promise.all([
     prisma.category.findMany({
       where: { managementId },
