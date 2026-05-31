@@ -80,7 +80,7 @@ export function useCreateCategory() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ name, color, icon, budgets }: { name: string; color?: string; icon?: string; budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null } }) => createCategory(name, color ?? "default", icon, budgets),
+    mutationFn: ({ name, color, icon, budgets }: { name: string; color?: string; icon?: string; budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null } }) => createCategory(name, color ?? "default", icon, budgets),
     onSuccess: (newCategories) => {
       queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
@@ -111,8 +111,8 @@ export function useUpdateCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, name, color, icon, budgetDaily, budgetWeekly, budgetMonthly }: { id: string; name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null }) =>
-      updateCategoryAction(id, { name, color, icon, budgetDaily, budgetWeekly, budgetMonthly }),
+    mutationFn: ({ id, name, color, icon, budgetDaily, budgetWeekly, budgetMonthly, budgetYearly }: { id: string; name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null }) =>
+      updateCategoryAction(id, { name, color, icon, budgetDaily, budgetWeekly, budgetMonthly, budgetYearly }),
     onSuccess: (newCategories) => {
       queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });

@@ -54,6 +54,7 @@ export function CategoryManager() {
   const [newBudgetDaily, setNewBudgetDaily] = useState("")
   const [newBudgetWeekly, setNewBudgetWeekly] = useState("")
   const [newBudgetMonthly, setNewBudgetMonthly] = useState("")
+  const [newBudgetYearly, setNewBudgetYearly] = useState("")
   const [showBudgets, setShowBudgets] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -64,6 +65,7 @@ export function CategoryManager() {
   const [editBudgetDaily, setEditBudgetDaily] = useState("")
   const [editBudgetWeekly, setEditBudgetWeekly] = useState("")
   const [editBudgetMonthly, setEditBudgetMonthly] = useState("")
+  const [editBudgetYearly, setEditBudgetYearly] = useState("")
   const [isNameFocused, setIsNameFocused] = useState(false)
   const [isEditFocused, setIsEditFocused] = useState(false)
 
@@ -81,6 +83,7 @@ export function CategoryManager() {
           budgetDaily: newBudgetDaily ? Number(newBudgetDaily.replace(/[^0-9]/g, "")) : null,
           budgetWeekly: newBudgetWeekly ? Number(newBudgetWeekly.replace(/[^0-9]/g, "")) : null,
           budgetMonthly: newBudgetMonthly ? Number(newBudgetMonthly.replace(/[^0-9]/g, "")) : null,
+          budgetYearly: newBudgetYearly ? Number(newBudgetYearly.replace(/[^0-9]/g, "")) : null,
         },
       })
       setNewCategoryName("")
@@ -89,6 +92,7 @@ export function CategoryManager() {
       setNewBudgetDaily("")
       setNewBudgetWeekly("")
       setNewBudgetMonthly("")
+      setNewBudgetYearly("")
       setShowBudgets(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal membuat kategori")
@@ -107,6 +111,7 @@ export function CategoryManager() {
     setEditBudgetDaily(category.budgetDaily != null ? String(category.budgetDaily) : "")
     setEditBudgetWeekly(category.budgetWeekly != null ? String(category.budgetWeekly) : "")
     setEditBudgetMonthly(category.budgetMonthly != null ? String(category.budgetMonthly) : "")
+    setEditBudgetYearly(category.budgetYearly != null ? String(category.budgetYearly) : "")
     setError(null)
   }
 
@@ -125,6 +130,7 @@ export function CategoryManager() {
         budgetDaily: editBudgetDaily ? Number(editBudgetDaily.replace(/[^0-9]/g, "")) : null,
         budgetWeekly: editBudgetWeekly ? Number(editBudgetWeekly.replace(/[^0-9]/g, "")) : null,
         budgetMonthly: editBudgetMonthly ? Number(editBudgetMonthly.replace(/[^0-9]/g, "")) : null,
+        budgetYearly: editBudgetYearly ? Number(editBudgetYearly.replace(/[^0-9]/g, "")) : null,
       })
       setEditingId(null)
     } catch (err) {
@@ -275,7 +281,7 @@ export function CategoryManager() {
           Budget {showBudgets ? "▲" : "▼"}
         </button>
         {showBudgets && (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <label className="text-[10px] text-muted-foreground">Harian</label>
               <Input
@@ -302,6 +308,16 @@ export function CategoryManager() {
                 placeholder="Rp"
                 value={newBudgetMonthly}
                 onChange={(e) => setNewBudgetMonthly(formatBudgetValue(e.target.value))}
+                className="h-8 text-xs"
+                inputMode="numeric"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Tahunan</label>
+              <Input
+                placeholder="Rp"
+                value={newBudgetYearly}
+                onChange={(e) => setNewBudgetYearly(formatBudgetValue(e.target.value))}
                 className="h-8 text-xs"
                 inputMode="numeric"
               />
@@ -403,7 +419,7 @@ export function CategoryManager() {
                       ))}
                     </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <label className="text-[10px] text-muted-foreground">Budget Harian</label>
                         <Input
@@ -434,6 +450,16 @@ export function CategoryManager() {
                           inputMode="numeric"
                         />
                       </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground">Budget Tahunan</label>
+                        <Input
+                          placeholder="Rp"
+                          value={editBudgetYearly}
+                          onChange={(e) => setEditBudgetYearly(formatBudgetValue(e.target.value))}
+                          className="h-8 text-xs"
+                          inputMode="numeric"
+                        />
+                      </div>
                     </div>
                   </div>
                 )
@@ -458,10 +484,10 @@ export function CategoryManager() {
                         {category.usageCount} entri
                       </span>
                     )}
-                    {(category.budgetDaily || category.budgetWeekly || category.budgetMonthly) && (
+                    {(category.budgetDaily || category.budgetWeekly || category.budgetMonthly || category.budgetYearly) && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
                         <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-2.5" />
-                        {category.budgetMonthly ? `Rp ${Math.round(category.budgetMonthly / 1000)}k/bln` : category.budgetWeekly ? `Rp ${Math.round(category.budgetWeekly / 1000)}k/mgg` : `Rp ${Math.round(category.budgetDaily! / 1000)}k/hr`}
+                        {category.budgetYearly ? `Rp ${Math.round(category.budgetYearly / 1_000_000)}jt/thn` : category.budgetMonthly ? `Rp ${Math.round(category.budgetMonthly / 1000)}k/bln` : category.budgetWeekly ? `Rp ${Math.round(category.budgetWeekly / 1000)}k/mgg` : `Rp ${Math.round(category.budgetDaily! / 1000)}k/hr`}
                       </span>
                     )}
                   </button>

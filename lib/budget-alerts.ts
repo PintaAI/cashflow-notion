@@ -36,6 +36,12 @@ function getDateRange(period: string): { start: string; end: string } {
     return { start: formatDate(start), end: formatDate(end) };
   }
 
+  if (period === "yearly") {
+    const start = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear(), 11, 31);
+    return { start: formatDate(start), end: formatDate(end) };
+  }
+
   // monthly
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -85,7 +91,7 @@ export async function checkBudgetAlerts(
   if (entry.io !== "Expenses" || !entry.date) return;
 
   const now = Date.now();
-  const periods = ["daily", "weekly", "monthly"];
+  const periods = ["daily", "weekly", "monthly", "yearly"];
 
   for (const period of periods) {
     const { start, end } = getDateRange(period);
@@ -117,7 +123,7 @@ export async function checkBudgetAlerts(
           const totalSpent = spent._sum.nominal ?? 0;
           const percentage = Math.round((totalSpent / budgetAmount) * 100);
 
-          const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : "bulanan";
+          const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : period === "monthly" ? "bulanan" : "tahunan";
 
           if (percentage >= 100) {
             const key = getAlertKey(managementId, "category", category.id, period, "100");
@@ -161,7 +167,7 @@ export async function checkBudgetAlerts(
 
       const totalSpent = spent._sum.nominal ?? 0;
       const percentage = Math.round((totalSpent / overallBudget.amount) * 100);
-      const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : "bulanan";
+      const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : period === "monthly" ? "bulanan" : "tahunan";
 
       if (percentage >= 100) {
         const key = getAlertKey(managementId, "overall", overallBudget.id, period, "100");

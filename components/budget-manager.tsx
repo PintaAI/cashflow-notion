@@ -182,6 +182,9 @@ export function BudgetManager() {
           <div className="px-3">
             <OverallBudgetRow period="monthly" label="Bulanan" status={getStatus("monthly")} />
           </div>
+          <div className="px-3">
+            <OverallBudgetRow period="yearly" label="Tahunan" status={getStatus("yearly")} />
+          </div>
         </div>
       )}
     </div>

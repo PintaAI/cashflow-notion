@@ -133,6 +133,7 @@ model Category {
   budgetDaily   Float?
   budgetWeekly  Float?
   budgetMonthly Float?
+  budgetYearly  Float?
   managementId  String?
   management    Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
   createdAt     DateTime    @default(now())

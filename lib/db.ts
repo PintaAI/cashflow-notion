@@ -75,13 +75,14 @@ export interface CategoryOptionWithColor {
   budgetDaily: number | null;
   budgetWeekly: number | null;
   budgetMonthly: number | null;
+  budgetYearly: number | null;
 }
 
 export type CategoryOptionWithUsage = CategoryOptionWithColor & {
   usageCount: number;
 };
 
-export type BudgetPeriod = "daily" | "weekly" | "monthly";
+export type BudgetPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface OverallBudgetOption {
   id: string;
@@ -498,6 +499,7 @@ export async function getCategoryOptions(managementId: string): Promise<Category
     budgetDaily: category.budgetDaily,
     budgetWeekly: category.budgetWeekly,
     budgetMonthly: category.budgetMonthly,
+    budgetYearly: category.budgetYearly,
   }));
 }
 
@@ -526,11 +528,12 @@ export async function getCategoryOptionsWithUsage(managementId: string): Promise
     budgetDaily: category.budgetDaily,
     budgetWeekly: category.budgetWeekly,
     budgetMonthly: category.budgetMonthly,
+    budgetYearly: category.budgetYearly,
     usageCount: usageByCategoryId.get(category.id) || 0,
   }));
 }
 
-export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string, budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null }): Promise<CategoryOptionWithColor[]> {
+export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string, budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null }): Promise<CategoryOptionWithColor[]> {
   if (!managementId) throw new Error("managementId required");
   try {
     await prisma.category.create({
@@ -542,6 +545,7 @@ export async function addCategoryOption(name: string, color?: string, icon?: str
         budgetDaily: budgets?.budgetDaily ?? null,
         budgetWeekly: budgets?.budgetWeekly ?? null,
         budgetMonthly: budgets?.budgetMonthly ?? null,
+        budgetYearly: budgets?.budgetYearly ?? null,
       },
     });
   } catch (error) {
@@ -556,7 +560,7 @@ export async function addCategoryOption(name: string, color?: string, icon?: str
 
 export async function updateCategoryOption(
   categoryId: string,
-  data: { name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null },
+  data: { name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null },
   managementId?: string,
 ): Promise<CategoryOptionWithColor[]> {
   const updateData: Record<string, string | number | null> = {};
@@ -566,6 +570,7 @@ export async function updateCategoryOption(
   if (data.budgetDaily !== undefined) updateData.budgetDaily = data.budgetDaily;
   if (data.budgetWeekly !== undefined) updateData.budgetWeekly = data.budgetWeekly;
   if (data.budgetMonthly !== undefined) updateData.budgetMonthly = data.budgetMonthly;
+  if (data.budgetYearly !== undefined) updateData.budgetYearly = data.budgetYearly;
 
   try {
     await prisma.category.update({ where: { id: categoryId }, data: updateData });
@@ -720,6 +725,12 @@ function getCurrentDateRange(period: BudgetPeriod): { start: string; end: string
     return { start: formatDate(start), end: formatDate(end) };
   }
 
+  if (period === "yearly") {
+    const start = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear(), 11, 31);
+    return { start: formatDate(start), end: formatDate(end) };
+  }
+
   // monthly
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -737,7 +748,7 @@ export async function getBudgetStatus(managementId: string): Promise<BudgetStatu
 
   const results: BudgetStatusItem[] = [];
 
-  const periods: BudgetPeriod[] = ["daily", "weekly", "monthly"];
+  const periods: BudgetPeriod[] = ["daily", "weekly", "monthly", "yearly"];
 
   for (const period of periods) {
     const { start, end } = getCurrentDateRange(period);
@@ -773,7 +784,8 @@ export async function getBudgetStatus(managementId: string): Promise<BudgetStatu
     const categoriesWithBudget = categories.filter((c) => {
       if (period === "daily") return c.budgetDaily != null;
       if (period === "weekly") return c.budgetWeekly != null;
-      return c.budgetMonthly != null;
+      if (period === "monthly") return c.budgetMonthly != null;
+      return c.budgetYearly != null;
     });
 
     for (const category of categoriesWithBudget) {
@@ -781,7 +793,9 @@ export async function getBudgetStatus(managementId: string): Promise<BudgetStatu
         ? category.budgetDaily!
         : period === "weekly"
           ? category.budgetWeekly!
-          : category.budgetMonthly!;
+          : period === "monthly"
+            ? category.budgetMonthly!
+            : category.budgetYearly!;
 
       const categorySpent = await prisma.entry.aggregate({
         where: {
