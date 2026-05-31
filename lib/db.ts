@@ -109,12 +109,6 @@ type EntryWithCategory = Prisma.EntryGetPayload<{
 
 export type EntryWhereInput = Prisma.EntryWhereInput;
 
-type SummaryRow = {
-  totalIncome: number | string | null;
-  totalExpenses: number | string | null;
-  totalEntries: number | bigint;
-};
-
 type SummaryCategoryRow = {
   category: string;
   total: number | string | null;
@@ -202,15 +196,18 @@ export async function getSummary(managementId: string): Promise<CashflowSummary>
   const currentYear = now.getFullYear();
   const { start: weekStart, end: weekEnd } = getWeekStartEnd(now);
 
-  const [summaryRows, categoryRows, dayRows] = await Promise.all([
-    prisma.$queryRaw<SummaryRow[]>`
-      SELECT
-        COUNT(*) AS "totalEntries",
-        COALESCE(SUM("nominal") FILTER (WHERE "io"::text = 'Income'), 0) AS "totalIncome",
-        COALESCE(SUM("nominal") FILTER (WHERE "io"::text = 'Expenses'), 0) AS "totalExpenses"
-      FROM "Entry"
-      WHERE "managementId" = ${managementId}
-    `,
+  const categoryWindowDate = new Date(now);
+  categoryWindowDate.setFullYear(categoryWindowDate.getFullYear() - 1);
+  const categoryWindow = formatDate(categoryWindowDate);
+
+  const dayWindowDate = new Date(now);
+  dayWindowDate.setDate(dayWindowDate.getDate() - 90);
+  const dayWindow = formatDate(dayWindowDate);
+
+  const [entryCount, incomeAgg, expensesAgg, categoryRows, dayRows] = await Promise.all([
+    prisma.entry.count({ where: { managementId } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Income" }, _sum: { nominal: true } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Expenses" }, _sum: { nominal: true } }),
     prisma.$queryRaw<SummaryCategoryRow[]>`
       SELECT
         c."name" AS "category",
@@ -219,32 +216,34 @@ export async function getSummary(managementId: string): Promise<CashflowSummary>
         COUNT(*) FILTER (WHERE e."io"::text = 'Expenses') AS "expenseCount"
       FROM "Entry" e
       INNER JOIN "Category" c ON c."id" = e."categoryId"
-      WHERE e."managementId" = ${managementId}
+      WHERE e."managementId" = ${managementId} AND e."date" >= ${categoryWindow}
       GROUP BY c."name"
     `,
     prisma.$queryRaw<SummaryDayRow[]>`
       SELECT "date", "io"::text AS "io", COALESCE(SUM("nominal"), 0) AS "total"
       FROM "Entry"
-      WHERE "date" IS NOT NULL AND "managementId" = ${managementId}
+      WHERE "date" IS NOT NULL AND "managementId" = ${managementId} AND "date" >= ${dayWindow}
       GROUP BY "date", "io"
     `,
   ]);
 
-  const summaryRow = summaryRows[0] || { totalEntries: 0, totalIncome: 0, totalExpenses: 0 };
+  const totalEntries = entryCount;
+  const totalIncome = incomeAgg._sum.nominal ?? 0;
+  const totalExpenses = expensesAgg._sum.nominal ?? 0;
 
   const categoryMap = new Map<string, { total: number; count: number }>();
   const weeklyMap = new Map<string, { income: number; expenses: number }>();
   const monthlyMap = new Map<string, { income: number; expenses: number }>();
 
   const summary: Omit<CashflowSummary, "currentWeek" | "currentMonth" | "topExpenseCategories" | "weeklyBreakdown"> = {
-    totalEntries: toNumber(summaryRow.totalEntries),
-    totalIncome: toNumber(summaryRow.totalIncome),
-    totalExpenses: toNumber(summaryRow.totalExpenses),
+    totalEntries,
+    totalIncome,
+    totalExpenses,
     balance: 0,
     byCategory: {},
     byIO: {
-      Income: toNumber(summaryRow.totalIncome),
-      Expenses: toNumber(summaryRow.totalExpenses),
+      Income: totalIncome,
+      Expenses: totalExpenses,
     },
   };
 
@@ -746,85 +745,83 @@ export async function getBudgetStatus(managementId: string): Promise<BudgetStatu
     prisma.overallBudget.findMany({ where: { managementId } }),
   ]);
 
-  const results: BudgetStatusItem[] = [];
-
   const periods: BudgetPeriod[] = ["daily", "weekly", "monthly", "yearly"];
 
-  for (const period of periods) {
-    const { start, end } = getCurrentDateRange(period);
+  const periodResults = await Promise.all(
+    periods.map(async (period) => {
+      const results: BudgetStatusItem[] = [];
+      const { start, end } = getCurrentDateRange(period);
 
-    // Overall budget for this period
-    const overallBudget = overallBudgets.find((b) => b.period === period);
-    if (overallBudget) {
-      const overallSpent = await prisma.entry.aggregate({
-        where: {
-          managementId,
-          io: "Expenses",
-          date: { gte: start, lte: end },
-        },
-        _sum: { nominal: true },
-      });
-      const spent = overallSpent._sum.nominal ?? 0;
-      const percentage = overallBudget.amount > 0 ? Math.round((spent / overallBudget.amount) * 100) : 0;
-      results.push({
-        type: "overall",
-        id: overallBudget.id,
-        name: "Total",
-        period,
-        budgetAmount: overallBudget.amount,
-        spent,
-        remaining: Math.max(0, overallBudget.amount - spent),
-        percentage,
-        isWarning: percentage >= 80 && percentage < 100,
-        isOverBudget: percentage >= 100,
-      });
-    }
+      const overallBudget = overallBudgets.find((b) => b.period === period);
+      if (overallBudget) {
+        const overallSpent = await prisma.entry.aggregate({
+          where: {
+            managementId,
+            io: "Expenses",
+            date: { gte: start, lte: end },
+          },
+          _sum: { nominal: true },
+        });
+        const spent = overallSpent._sum.nominal ?? 0;
+        const percentage = overallBudget.amount > 0 ? Math.round((spent / overallBudget.amount) * 100) : 0;
+        results.push({
+          type: "overall",
+          id: overallBudget.id,
+          name: "Total",
+          period,
+          budgetAmount: overallBudget.amount,
+          spent,
+          remaining: Math.max(0, overallBudget.amount - spent),
+          percentage,
+          isWarning: percentage >= 80 && percentage < 100,
+          isOverBudget: percentage >= 100,
+        });
+      }
 
-    // Category budgets for this period
-    const categoriesWithBudget = categories.filter((c) => {
-      if (period === "daily") return c.budgetDaily != null;
-      if (period === "weekly") return c.budgetWeekly != null;
-      if (period === "monthly") return c.budgetMonthly != null;
-      return c.budgetYearly != null;
-    });
+      const budgetField = period === "daily" ? "budgetDaily" as const : period === "weekly" ? "budgetWeekly" as const : period === "monthly" ? "budgetMonthly" as const : "budgetYearly" as const;
+      const categoriesWithBudget = categories.filter((c) => c[budgetField] != null);
 
-    for (const category of categoriesWithBudget) {
-      const budgetAmount = period === "daily"
-        ? category.budgetDaily!
-        : period === "weekly"
-          ? category.budgetWeekly!
-          : period === "monthly"
-            ? category.budgetMonthly!
-            : category.budgetYearly!;
+      if (categoriesWithBudget.length > 0) {
+        const categoryIds = categoriesWithBudget.map((c) => c.id);
+        const categorySpending = await prisma.entry.groupBy({
+          by: ["categoryId"],
+          where: {
+            managementId,
+            io: "Expenses",
+            categoryId: { in: categoryIds },
+            date: { gte: start, lte: end },
+          },
+          _sum: { nominal: true },
+        });
 
-      const categorySpent = await prisma.entry.aggregate({
-        where: {
-          managementId,
-          io: "Expenses",
-          categoryId: category.id,
-          date: { gte: start, lte: end },
-        },
-        _sum: { nominal: true },
-      });
+        const spendingMap = new Map(
+          categorySpending.map((s) => [s.categoryId, s._sum.nominal ?? 0])
+        );
 
-      const spent = categorySpent._sum.nominal ?? 0;
-      const percentage = budgetAmount > 0 ? Math.round((spent / budgetAmount) * 100) : 0;
-      results.push({
-        type: "category",
-        id: category.id,
-        name: category.name,
-        period,
-        budgetAmount,
-        spent,
-        remaining: Math.max(0, budgetAmount - spent),
-        percentage,
-        isWarning: percentage >= 80 && percentage < 100,
-        isOverBudget: percentage >= 100,
-      });
-    }
-  }
+        for (const category of categoriesWithBudget) {
+          const budgetAmount = category[budgetField]!;
+          const spent = spendingMap.get(category.id) ?? 0;
+          const percentage = budgetAmount > 0 ? Math.round((spent / budgetAmount) * 100) : 0;
+          results.push({
+            type: "category",
+            id: category.id,
+            name: category.name,
+            period,
+            budgetAmount,
+            spent,
+            remaining: Math.max(0, budgetAmount - spent),
+            percentage,
+            isWarning: percentage >= 80 && percentage < 100,
+            isOverBudget: percentage >= 100,
+          });
+        }
+      }
 
-  return results;
+      return results;
+    })
+  );
+
+  return periodResults.flat();
 }
 
 // --- Recurring Entry CRUD ---

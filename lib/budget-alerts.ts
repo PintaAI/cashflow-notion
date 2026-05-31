@@ -91,105 +91,111 @@ export async function checkBudgetAlerts(
   if (entry.io !== "Expenses" || !entry.date) return;
 
   const now = Date.now();
-  const periods = ["daily", "weekly", "monthly", "yearly"];
+  const periods = ["daily", "weekly", "monthly", "yearly"] as const;
 
-  for (const period of periods) {
-    const { start, end } = getDateRange(period);
+  const [category, overallBudgets] = await Promise.all([
+    entry.categoryId
+      ? prisma.category.findUnique({ where: { id: entry.categoryId } })
+      : Promise.resolve(null),
+    prisma.overallBudget.findMany({ where: { managementId } }),
+  ]);
 
-    // Check category-specific budget
-    if (entry.categoryId) {
-      const category = await prisma.category.findUnique({
-        where: { id: entry.categoryId },
-      });
+  await Promise.all(
+    periods.map(async (period) => {
+      const { start, end } = getDateRange(period);
+      const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : period === "monthly" ? "bulanan" : "tahunan";
+
+      const checks: Array<Promise<void>> = [];
 
       if (category) {
         const budgetAmount = period === "daily"
           ? category.budgetDaily
           : period === "weekly"
             ? category.budgetWeekly
-            : category.budgetMonthly;
+            : period === "monthly"
+              ? category.budgetMonthly
+              : category.budgetYearly;
 
         if (budgetAmount != null && budgetAmount > 0) {
-          const spent = await prisma.entry.aggregate({
+          checks.push(
+            prisma.entry.aggregate({
+              where: {
+                managementId,
+                io: "Expenses",
+                categoryId: category.id,
+                date: { gte: start, lte: end },
+              },
+              _sum: { nominal: true },
+            }).then((spent) => {
+              const totalSpent = spent._sum.nominal ?? 0;
+              const percentage = Math.round((totalSpent / budgetAmount) * 100);
+
+              if (percentage >= 100) {
+                const key = getAlertKey(managementId, "category", category.id, period, "100");
+                if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
+                  lastAlertTimestamps.set(key, now);
+                  return sendBudgetNotification(
+                    managementId,
+                    `Budget ${category.name} terlampaui!`,
+                    `Pengeluaran ${periodLabel} ${category.name} mencapai Rp ${Math.round(totalSpent).toLocaleString("id-ID")} dari budget Rp ${Math.round(budgetAmount).toLocaleString("id-ID")} (${percentage}%)`,
+                  );
+                }
+              } else if (percentage >= 80) {
+                const key = getAlertKey(managementId, "category", category.id, period, "80");
+                if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
+                  lastAlertTimestamps.set(key, now);
+                  return sendBudgetNotification(
+                    managementId,
+                    `Budget ${category.name} mendekati batas`,
+                    `Pengeluaran ${periodLabel} ${category.name} sudah ${percentage}% (Rp ${Math.round(totalSpent).toLocaleString("id-ID")} / Rp ${Math.round(budgetAmount).toLocaleString("id-ID")})`,
+                  );
+                }
+              }
+            })
+          );
+        }
+      }
+
+      const overallBudget = overallBudgets.find((b) => b.period === period);
+      if (overallBudget && overallBudget.amount > 0) {
+        checks.push(
+          prisma.entry.aggregate({
             where: {
               managementId,
               io: "Expenses",
-              categoryId: category.id,
               date: { gte: start, lte: end },
             },
             _sum: { nominal: true },
-          });
+          }).then((spent) => {
+            const totalSpent = spent._sum.nominal ?? 0;
+            const percentage = Math.round((totalSpent / overallBudget.amount) * 100);
 
-          const totalSpent = spent._sum.nominal ?? 0;
-          const percentage = Math.round((totalSpent / budgetAmount) * 100);
-
-          const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : period === "monthly" ? "bulanan" : "tahunan";
-
-          if (percentage >= 100) {
-            const key = getAlertKey(managementId, "category", category.id, period, "100");
-            if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
-              lastAlertTimestamps.set(key, now);
-              await sendBudgetNotification(
-                managementId,
-                `Budget ${category.name} terlampaui!`,
-                `Pengeluaran ${periodLabel} ${category.name} mencapai Rp ${Math.round(totalSpent).toLocaleString("id-ID")} dari budget Rp ${Math.round(budgetAmount).toLocaleString("id-ID")} (${percentage}%)`,
-              );
+            if (percentage >= 100) {
+              const key = getAlertKey(managementId, "overall", overallBudget.id, period, "100");
+              if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
+                lastAlertTimestamps.set(key, now);
+                return sendBudgetNotification(
+                  managementId,
+                  `Budget ${periodLabel} terlampaui!`,
+                  `Total pengeluaran ${periodLabel} mencapai Rp ${Math.round(totalSpent).toLocaleString("id-ID")} dari budget Rp ${Math.round(overallBudget.amount).toLocaleString("id-ID")} (${percentage}%)`,
+                );
+              }
+            } else if (percentage >= 80) {
+              const key = getAlertKey(managementId, "overall", overallBudget.id, period, "80");
+              if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
+                lastAlertTimestamps.set(key, now);
+                return sendBudgetNotification(
+                  managementId,
+                  `Budget ${periodLabel} mendekati batas`,
+                  `Total pengeluaran ${periodLabel} sudah ${percentage}% (Rp ${Math.round(totalSpent).toLocaleString("id-ID")} / Rp ${Math.round(overallBudget.amount).toLocaleString("id-ID")})`,
+                );
+              }
             }
-          } else if (percentage >= 80) {
-            const key = getAlertKey(managementId, "category", category.id, period, "80");
-            if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
-              lastAlertTimestamps.set(key, now);
-              await sendBudgetNotification(
-                managementId,
-                `Budget ${category.name} mendekati batas`,
-                `Pengeluaran ${periodLabel} ${category.name} sudah ${percentage}% (Rp ${Math.round(totalSpent).toLocaleString("id-ID")} / Rp ${Math.round(budgetAmount).toLocaleString("id-ID")})`,
-              );
-            }
-          }
-        }
+          })
+        );
       }
-    }
 
-    // Check overall budget
-    const overallBudget = await prisma.overallBudget.findUnique({
-      where: { managementId_period: { managementId, period } },
-    });
-
-    if (overallBudget && overallBudget.amount > 0) {
-      const spent = await prisma.entry.aggregate({
-        where: {
-          managementId,
-          io: "Expenses",
-          date: { gte: start, lte: end },
-        },
-        _sum: { nominal: true },
-      });
-
-      const totalSpent = spent._sum.nominal ?? 0;
-      const percentage = Math.round((totalSpent / overallBudget.amount) * 100);
-      const periodLabel = period === "daily" ? "harian" : period === "weekly" ? "mingguan" : period === "monthly" ? "bulanan" : "tahunan";
-
-      if (percentage >= 100) {
-        const key = getAlertKey(managementId, "overall", overallBudget.id, period, "100");
-        if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
-          lastAlertTimestamps.set(key, now);
-          await sendBudgetNotification(
-            managementId,
-            `Budget ${periodLabel} terlampaui!`,
-            `Total pengeluaran ${periodLabel} mencapai Rp ${Math.round(totalSpent).toLocaleString("id-ID")} dari budget Rp ${Math.round(overallBudget.amount).toLocaleString("id-ID")} (${percentage}%)`,
-          );
-        }
-      } else if (percentage >= 80) {
-        const key = getAlertKey(managementId, "overall", overallBudget.id, period, "80");
-        if (now - (lastAlertTimestamps.get(key) ?? 0) > ALERT_COOLDOWN_MS) {
-          lastAlertTimestamps.set(key, now);
-          await sendBudgetNotification(
-            managementId,
-            `Budget ${periodLabel} mendekati batas`,
-            `Total pengeluaran ${periodLabel} sudah ${percentage}% (Rp ${Math.round(totalSpent).toLocaleString("id-ID")} / Rp ${Math.round(overallBudget.amount).toLocaleString("id-ID")})`,
-          );
-        }
-      }
-    }
-  }
+      await Promise.all(checks);
+    })
+  );
 }
