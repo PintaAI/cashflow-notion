@@ -75,7 +75,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <span>{activity.totalEntries} entries</span>
+        <span>{activity.totalEntries} tercatat</span>
         <span>|</span>
         <span>{activity.activeDays} active days</span>
       </div>

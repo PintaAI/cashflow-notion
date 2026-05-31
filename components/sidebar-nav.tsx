@@ -41,7 +41,7 @@ export function SidebarNav() {
         trigger={
           <Button className="mb-4 w-full gap-2 rounded-xl">
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2.5} className="size-4" />
-            New Entry
+            Tambah Catatan
           </Button>
         }
       />

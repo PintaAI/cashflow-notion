@@ -102,13 +102,12 @@ export function registerEntryTools(server: McpServer) {
     "create_entry",
     {
       title: "Create Cashflow Entry",
-      description: "Create a new income or expense entry. Expense entries require a category.",
+      description: "Create a new income or expense entry.",
       inputSchema: entryFields,
     },
     async ({ name, nominal, category, date, io }) => {
       try {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
-        if (io === "Expenses" && !category) throw new Error("Category is required for expenses");
 
         const entry = await createEntry({ name, nominal, category, date, io, managementId: getManagementId() });
         return ok("Created cashflow entry.", entry);

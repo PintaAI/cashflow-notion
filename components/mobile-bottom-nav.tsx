@@ -100,7 +100,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
             trigger={
               <motion.button
                 type="button"
-                aria-label="Add entry"
+                aria-label="Tambah catatan"
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.92 }}
                 transition={transition}

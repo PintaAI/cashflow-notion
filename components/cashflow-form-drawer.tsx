@@ -73,7 +73,7 @@ export function CashflowFormDrawer({
   const [showCamera, setShowCamera] = useState(false)
   const [name, setName] = useState(() => isEdit ? (entry?.name ?? "") : "")
   const [nominal, setNominal] = useState(() => isEdit && entry ? String(entry.nominal) : "")
-  const [category, setCategory] = useState<CategoryType>(() => isEdit ? (entry?.category ?? "Lainnya") : "Lainnya")
+  const [category, setCategory] = useState<CategoryType>(() => isEdit ? (entry?.category ?? "") : "")
   const [date, setDate] = useState<Date | undefined>(() => isEdit && entry?.date ? new Date(entry.date) : new Date())
   const [io, setIo] = useState<IOType>(() => isEdit ? (entry?.io ?? "Expenses") : "Expenses")
 
@@ -187,7 +187,7 @@ export function CashflowFormDrawer({
         await editEntry(entry.id, {
           name: name.trim(),
           nominal: Number(nominal),
-          category: io === "Expenses" ? (category as CategoryType) : undefined,
+          category: category || undefined,
           date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
         })
@@ -195,7 +195,7 @@ export function CashflowFormDrawer({
         await addEntry({
           name: name.trim(),
           nominal: Number(nominal),
-          category: io === "Expenses" ? (category as CategoryType) : undefined,
+          category: category || undefined,
           date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
         })
@@ -204,7 +204,7 @@ export function CashflowFormDrawer({
       celebrateSave()
       setName("")
       setNominal("")
-      setCategory("Lainnya")
+    setCategory("")
       setDate(new Date())
       setIo("Expenses")
       setOpen(false)
@@ -237,7 +237,7 @@ export function CashflowFormDrawer({
         <DrawerHeader className="flex flex-row items-center justify-between pb-2">
           <div className="w-8" />
           <DrawerTitle className="text-lg font-semibold">
-            {isEdit ? "Edit Entry" : "Catat Cashflow"}
+            {isEdit ? "Edit Catatan" : "Tambah Catatan"}
           </DrawerTitle>
           <Button
             type="button"
@@ -361,8 +361,8 @@ export function CashflowFormDrawer({
             </div>
           </div>
 
-          {/* Category Select - Only for Expenses */}
-          {io === "Expenses" && (
+          {/* Category Select */}
+          {(
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Category

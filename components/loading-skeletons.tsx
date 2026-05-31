@@ -18,7 +18,7 @@ export function StatsSkeleton() {
             size={16}
             className="text-muted-foreground sm:w-5 sm:h-5"
           />
-          <div className="text-xs sm:text-sm font-medium text-muted-foreground">Entries</div>
+          <div className="text-xs sm:text-sm font-medium text-muted-foreground">Tercatat</div>
         </div>
         <Skeleton className="h-6 sm:h-8 w-12 sm:w-16 mt-2" />
       </div>

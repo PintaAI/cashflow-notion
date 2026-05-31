@@ -99,7 +99,7 @@ function OverviewTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatsCard label="Total Users" value={stats.userCount} icon={UserCircleIcon} />
         <StatsCard label="Managements" value={stats.managementCount} icon={File01Icon} />
-        <StatsCard label="Total Entries" value={stats.totalEntries} icon={Analytics01Icon} />
+        <StatsCard label="Total Tercatat" value={stats.totalEntries} icon={Analytics01Icon} />
         <StatsCard label="Total Nominal" value={`Rp ${(stats.totalNominal).toLocaleString("id-ID")}`} icon={Shield01Icon} />
       </div>
 
@@ -141,7 +141,7 @@ function OverviewTab() {
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{m.name}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {m.memberCount} member{m.memberCount !== 1 ? "s" : ""} · {m.entryCount} entries
+                    {m.memberCount} member{m.memberCount !== 1 ? "" : ""} · {m.entryCount} tercatat
                   </p>
                 </div>
                 <p className="text-[10px] text-muted-foreground shrink-0">
@@ -356,7 +356,7 @@ function ManagementDetailView({
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <div className="rounded-md border p-2.5 text-center">
           <p className="text-lg font-bold">{detail._count.entries}</p>
-          <p className="text-[10px] text-muted-foreground">Entries</p>
+          <p className="text-[10px] text-muted-foreground">Tercatat</p>
         </div>
         <div className="rounded-md border p-2.5 text-center">
           <p className="text-lg font-bold">{detail.members.length}</p>
@@ -548,7 +548,7 @@ function ManagementsTab() {
             <TableHead>Name</TableHead>
             <TableHead>Owner</TableHead>
             <TableHead>Members</TableHead>
-            <TableHead>Entries</TableHead>
+            <TableHead>Tercatat</TableHead>
             <TableHead>Last Activity</TableHead>
             <TableHead>Created</TableHead>
             <TableHead className="text-right">Actions</TableHead>

@@ -403,7 +403,7 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
   return (
     <div className="space-y-4">
       <div className="flex min-h-6 items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-foreground">Entries</h2>
+        <h2 className="text-sm font-semibold text-foreground">Tercatat</h2>
         {pendingCashflow.count > 0 && (
           <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
             <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin text-primary" />
@@ -506,12 +506,12 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
           <HugeiconsIcon icon={File01Icon} strokeWidth={1.5} className="size-10" />
           <p className="text-sm font-medium">
-            {dateFilter ? "Hayo hari ini belum nyatet keuangan yaa? 😜" : "No entries yet"}
+            {dateFilter ? "Hayo hari ini belum nyatet keuangan yaa? 😜" : "Belum ada tercatat"}
           </p>
           <p className="text-xs">
             {dateFilter
               ? "Catat pengeluaran atau pemasukan hari ini biar keuanganmu terkontrol."
-              : "Add your first entry to get started."}
+              : "Mulai dengan mencatat pengeluaran atau pemasukan."}
           </p>
         </div>
       ) : (
@@ -579,12 +579,12 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              Loading more entries...
+              Memuat lebih banyak...
             </span>
           ) : hasNextPage ? (
             "Scroll down to load more..."
           ) : (
-            `Showing ${entries.length} entries (all loaded)`
+            `Menampilkan ${entries.length} tercatat`
           )}
         </div>
       </div>

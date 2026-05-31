@@ -73,7 +73,7 @@ export function Stats({ stats }: StatsProps) {
                 className="text-muted-foreground sm:w-5 sm:h-5"
               />
               <div className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Entries
+Tercatat
               </div>
             </div>
             <div className="text-lg sm:text-2xl font-bold">{stats.totalEntries}</div>
