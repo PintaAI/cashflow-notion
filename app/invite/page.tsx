@@ -11,28 +11,28 @@ export default function InvitePage() {
   const code = searchParams.get("code");
   const router = useRouter();
   const { data: session, isPending: sessionLoading } = useSession();
-  const [status, setStatus] = useState<"loading" | "ready" | "accepting" | "done" | "error">("loading");
+  const [status, setStatus] = useState<"ready" | "accepting" | "done" | "error">("ready");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (sessionLoading) return;
     if (!session) {
-      router.push(`/auth?redirect=/invite?code=${code}`);
+      const redirect = code ? `/invite?code=${encodeURIComponent(code)}` : "/invite";
+      router.push(`/auth?redirect=${encodeURIComponent(redirect)}`);
       return;
     }
-    if (!code) {
-      setStatus("error");
-      setMessage("Kode undangan tidak valid.");
-      return;
-    }
-    setStatus("ready");
   }, [session, sessionLoading, code, router]);
 
   async function handleAccept() {
     if (!code) return;
     setStatus("accepting");
     try {
-      await acceptInvite(code);
+      const result = await acceptInvite(code);
+      if (result.success === false) {
+        setStatus("error");
+        setMessage(result.message);
+        return;
+      }
       setStatus("done");
       setMessage("Berhasil bergabung! Anda sekarang memiliki akses ke management ini.");
     } catch (err) {
@@ -41,7 +41,7 @@ export default function InvitePage() {
     }
   }
 
-  if (sessionLoading || status === "loading") {
+  if (sessionLoading || !session) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <p className="text-muted-foreground">Memuat...</p>
@@ -53,7 +53,7 @@ export default function InvitePage() {
     <div className="mx-auto flex min-h-dvh w-full max-w-sm flex-col items-center justify-center px-4">
       <div className="w-full space-y-6 text-center">
         {status === "ready" && (
-          <>
+          code ? <>
             <h1 className="text-2xl font-bold tracking-tight">
               Undangan Bergabung
             </h1>
@@ -63,6 +63,15 @@ export default function InvitePage() {
             </p>
             <Button className="w-full" onClick={handleAccept}>
               Terima Undangan
+            </Button>
+          </> : <>
+            <p className="text-destructive">Kode undangan tidak valid.</p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push("/")}
+            >
+              Kembali
             </Button>
           </>
         )}

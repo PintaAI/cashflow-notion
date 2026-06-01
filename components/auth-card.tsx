@@ -1,10 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+function getSafeRedirect(redirect: string | null) {
+  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//")) return "/";
+  return redirect;
+}
 
 export function AuthCard() {
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
@@ -14,6 +19,8 @@ export function AuthCard() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = getSafeRedirect(searchParams.get("redirect"));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,7 +48,7 @@ export function AuthCard() {
           return;
         }
       }
-      router.push("/");
+      router.push(redirect);
       router.refresh();
     } catch {
       setError("Terjadi kesalahan. Coba lagi.");
@@ -53,7 +60,7 @@ export function AuthCard() {
   async function handleGoogleSignIn() {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
+      callbackURL: redirect,
     });
   }
 

@@ -36,10 +36,14 @@ import type { CashflowSummary } from "@/lib/db";
 import {
   getCurrentManagement,
   createInvite,
+  deleteInvite,
+  getManagementInvitations,
   getUserManagements,
+  removeManagementMember,
   switchManagement,
   renameManagement,
   createManagement,
+  type ManagementInvitation,
   type ManagementWithMembers,
 } from "@/app/actions/management";
 import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
@@ -456,10 +460,13 @@ function CatatanTab() {
 }
 
 function ManagementSettings() {
+  const { data: session } = useSession();
   const [management, setManagement] = useState<ManagementWithMembers | null>(null);
   const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteLink, setInviteLink] = useState("");
+  const [invitations, setInvitations] = useState<ManagementInvitation[]>([]);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
@@ -475,6 +482,9 @@ function ManagementSettings() {
       }
     });
     getUserManagements().then(setManagements);
+    getManagementInvitations()
+      .then(setInvitations)
+      .catch(() => setInvitations([]));
   }
 
   useEffect(() => { load(); }, []);
@@ -489,12 +499,48 @@ function ManagementSettings() {
   }
 
   async function handleGenerateInvite() {
+    setCreatingInvite(true);
     try {
-      const code = await createInvite();
-      setInviteCode(code);
-      setInviteLink(`${window.location.origin}/invite?code=${code}`);
+      await createInvite();
+      setInvitations(await getManagementInvitations());
     } catch (err) {
       console.error(err);
+    } finally {
+      setCreatingInvite(false);
+    }
+  }
+
+  async function handleDeleteInvite(invitationId: string) {
+    setDeletingInviteId(invitationId);
+    try {
+      await deleteInvite(invitationId);
+      setInvitations((prev) => prev.filter((invitation) => invitation.id !== invitationId));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeletingInviteId(null);
+    }
+  }
+
+  async function handleRemoveMember(memberId: string) {
+    setRemovingMemberId(memberId);
+    try {
+      await removeManagementMember(memberId);
+      setManagement((prev) => prev
+        ? {
+            ...prev,
+            management: {
+              ...prev.management,
+              members: prev.management.members.filter((member) => member.id !== memberId),
+            },
+          }
+        : prev
+      );
+      setManagements(await getUserManagements());
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRemovingMemberId(null);
     }
   }
 
@@ -539,6 +585,7 @@ function ManagementSettings() {
   if (!management) return null;
 
   const isOwner = management.role === "owner";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
     <div className="space-y-4">
@@ -647,6 +694,16 @@ function ManagementSettings() {
                 <p className="text-xs font-medium truncate">{member.user.name ?? member.user.email}</p>
                 <p className="text-[10px] text-muted-foreground">{member.role === "owner" ? "Pemilik" : "Anggota"}</p>
               </div>
+              {isOwner && member.role !== "owner" && member.user.id !== session?.user.id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRemoveMember(member.id)}
+                  disabled={removingMemberId === member.id}
+                >
+                  {removingMemberId === member.id ? "Menghapus..." : "Hapus"}
+                </Button>
+              )}
             </div>
           ))}
         </div>
@@ -654,14 +711,48 @@ function ManagementSettings() {
 
       {isOwner && (
         <div className="space-y-2">
-          <Button size="sm" onClick={handleGenerateInvite}>
-            Buat Undangan
-          </Button>
-          {inviteCode && (
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Bagikan link ini:</p>
-              <pre className="bg-muted p-2 rounded text-xs break-all">{inviteLink}</pre>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">Undangan</p>
+            <Button size="sm" onClick={handleGenerateInvite} disabled={creatingInvite}>
+              {creatingInvite ? "Membuat..." : "Buat Undangan"}
+            </Button>
+          </div>
+          {invitations.length > 0 ? (
+            <div className="space-y-1.5">
+              {invitations.map((invitation) => {
+                const isExpired = new Date(invitation.expiresAt) < new Date();
+                const inviteLink = `${origin}/invite?code=${invitation.code}`;
+
+                return (
+                  <div key={invitation.id} className="space-y-2 rounded-md border border-border p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                        invitation.status === "pending" && !isExpired
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {isExpired ? "Kadaluarsa" : invitation.status === "pending" ? "Aktif" : "Digunakan"}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteInvite(invitation.id)}
+                        disabled={deletingInviteId === invitation.id}
+                      >
+                        {deletingInviteId === invitation.id ? "Menghapus..." : "Hapus"}
+                      </Button>
+                    </div>
+                    <pre className="bg-muted p-2 rounded text-xs break-all">{inviteLink}</pre>
+                    <p className="text-[10px] text-muted-foreground">
+                      Dibuat {new Date(invitation.createdAt).toLocaleDateString("id-ID")} · Berlaku sampai {new Date(invitation.expiresAt).toLocaleDateString("id-ID")}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Belum ada undangan.</p>
           )}
         </div>
       )}

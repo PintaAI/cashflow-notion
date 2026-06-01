@@ -26,13 +26,17 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === "/auth") {
     if (session) {
-      return NextResponse.redirect(new URL("/", request.url));
+      const redirectTo = request.nextUrl.searchParams.get("redirect");
+      const safeRedirect = redirectTo?.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/";
+      return NextResponse.redirect(new URL(safeRedirect, request.url));
     }
     return NextResponse.next();
   }
 
   if (!session) {
-    return NextResponse.redirect(new URL("/auth", request.url));
+    const authUrl = new URL("/auth", request.url);
+    authUrl.searchParams.set("redirect", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(authUrl);
   }
 
   return NextResponse.next();

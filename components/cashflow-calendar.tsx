@@ -3,13 +3,13 @@
 import * as React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   Calendar03Icon,
   AlertCircleIcon,
   Loading03Icon,
 } from "@hugeicons/core-free-icons";
-import type { DayButton } from "react-day-picker";
 
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,50 +28,128 @@ function formatCompactAmount(amount: number, format: (amountIdr: number, opts?: 
   return format(amount, { compact: true });
 }
 
-function CalendarDayContent({
-  day,
-  modifiers,
+type CalendarData = Record<string, { entries: CashflowEntry[]; income: number; expenses: number }>;
+
+function isSameDate(a: Date | undefined, b: Date): boolean {
+  return Boolean(a && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate());
+}
+
+function getCalendarDays(monthDate: Date): Date[] {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startDate = new Date(year, month, 1 - firstDay.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+    return date;
+  });
+}
+
+function CalendarMonthView({
+  currentMonth,
+  selectedDay,
   calendarData,
-  locale,
-  className,
-  ...props
-}: React.ComponentProps<typeof DayButton> & {
-  calendarData: Record<string, { entries: CashflowEntry[]; income: number; expenses: number }>;
-  locale?: Intl.LocalesArgument;
+  onMonthChange,
+  onDaySelect,
+}: {
+  currentMonth: Date;
+  selectedDay?: Date;
+  calendarData: CalendarData;
+  onMonthChange: (date: Date) => void;
+  onDaySelect: (date: Date) => void;
 }) {
   const { format } = useCurrency();
-  const dateKey = formatDateKey(day.date);
-  const dayData = calendarData[dateKey];
-  const hasEntries = Boolean(dayData && dayData.entries.length > 0);
-  const isToday = modifiers.today;
-  const isSelected = modifiers.selected;
-  const isOutside = modifiers.outside;
-  const net = dayData ? dayData.income - dayData.expenses : 0;
+  const days = React.useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
+  const today = React.useMemo(() => new Date(), []);
+  const monthLabel = currentMonth.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  const weekdays = React.useMemo(() => {
+    const base = new Date(2024, 0, 7);
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(base);
+      date.setDate(base.getDate() + index);
+      return date.toLocaleDateString("id-ID", { weekday: "short" });
+    });
+  }, []);
+
+  function moveMonth(delta: number) {
+    onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1));
+  }
+
+  function selectDay(date: Date) {
+    if (date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()) {
+      onMonthChange(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
+    onDaySelect(date);
+  }
 
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-md p-1 text-center transition-colors md:gap-1 md:p-1.5",
-        "hover:bg-muted/70",
-        isToday && "border border-primary/50",
-        isSelected && "bg-primary/15 ring-1 ring-primary",
-        hasEntries && !isSelected && "bg-muted/40",
-        isOutside && "opacity-40",
-        className,
-      )}
-      data-has-entries={hasEntries ? "true" : undefined}
-      {...props}
-    >
-      <span className={cn("text-xs md:text-sm leading-none", isToday || isSelected ? "font-bold text-primary" : "text-muted-foreground")}>
-        {day.date.toLocaleDateString(locale, { day: "numeric" })}
-      </span>
-      {hasEntries && (
-        <span className={cn("text-[10px] md:text-xs font-medium leading-none truncate", net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500")}>
-          {net >= 0 ? "+" : "-"}{formatCompactAmount(net, format)}
-        </span>
-      )}
-    </button>
+    <div className="rounded-xl border bg-card p-2 shadow-sm sm:p-3">
+      <div className="mb-3 flex items-center justify-between gap-3 px-1">
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Bulan sebelumnya" onClick={() => moveMonth(-1)}>
+          <HugeiconsIcon icon={ArrowLeftIcon} strokeWidth={2} className="size-4" />
+        </Button>
+        <h3 className="min-w-0 flex-1 truncate text-center text-sm font-semibold capitalize text-foreground sm:text-base">
+          {monthLabel}
+        </h3>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Bulan berikutnya" onClick={() => moveMonth(1)}>
+          <HugeiconsIcon icon={ArrowRightIcon} strokeWidth={2} className="size-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-muted-foreground sm:gap-1.5 sm:text-xs">
+        {weekdays.map((weekday) => (
+          <div key={weekday} className="py-1 capitalize">
+            {weekday}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-1 grid grid-cols-7 gap-1 sm:gap-1.5">
+        {days.map((date) => {
+          const dateKey = formatDateKey(date);
+          const dayData = calendarData[dateKey];
+          const hasEntries = Boolean(dayData && dayData.entries.length > 0);
+          const net = dayData ? dayData.income - dayData.expenses : 0;
+          const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+          const isSelected = isSameDate(selectedDay, date);
+          const isToday = isSameDate(today, date);
+
+          return (
+            <button
+              key={dateKey}
+              type="button"
+              onClick={() => selectDay(date)}
+              className={cn(
+                "group min-w-0 overflow-hidden rounded-lg border border-transparent p-1 text-center transition-colors",
+                "min-h-12 sm:min-h-16 md:min-h-20",
+                "hover:bg-muted/70 active:bg-muted",
+                hasEntries && !isSelected && "bg-muted/35",
+                isSelected && "border-primary/50 bg-primary/15 ring-1 ring-primary/70",
+                isToday && !isSelected && "border-primary/40",
+                !isCurrentMonth && "opacity-35",
+              )}
+            >
+              <span className={cn(
+                "block text-xs leading-none sm:text-sm",
+                isSelected || isToday ? "font-bold text-primary" : "font-medium text-muted-foreground",
+              )}>
+                {date.getDate()}
+              </span>
+              {hasEntries && (
+                <span className={cn(
+                  "mt-1 block whitespace-nowrap text-[7px] font-semibold leading-none tracking-[-0.04em] sm:text-[10px] md:text-xs md:tracking-normal",
+                  net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500",
+                )}>
+                  <span className="hidden sm:inline">{net >= 0 ? "+" : "-"}</span>{formatCompactAmount(Math.abs(net), format)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -142,6 +220,9 @@ export function CashflowCalendar() {
     if (categoryFilter !== "all") entries = entries.filter((e) => e.category === categoryFilter);
     return entries;
   }, [selectedDayData, ioFilter, categoryFilter]);
+  const selectedEntriesTotal = React.useMemo(() => {
+    return selectedEntries.reduce((total, entry) => total + (entry.io === "Income" ? entry.nominal : -entry.nominal), 0);
+  }, [selectedEntries]);
 
   const hasFilteredEntries = selectedEntries.length > 0;
 
@@ -248,34 +329,34 @@ export function CashflowCalendar() {
         </Popover>
       </div>
 
-      <div className="rounded-lg border overflow-hidden">
-        <Calendar
-          mode="single"
-          selected={selectedDay}
-          onSelect={(day) => { if (day) handleDayClick(day); }}
-          month={currentMonth}
-          onMonthChange={setCurrentMonth}
-          captionLayout="label"
-          showOutsideDays
-          buttonVariant="ghost"
-          className="w-full [--cell-size:--spacing(16)]"
-          components={{
-            DayButton: (props) => (
-              <CalendarDayContent {...props} calendarData={calendarData} />
-            ),
-          }}
-        />
-      </div>
+      <CalendarMonthView
+        currentMonth={currentMonth}
+        selectedDay={selectedDay}
+        calendarData={calendarData}
+        onMonthChange={setCurrentMonth}
+        onDaySelect={handleDayClick}
+      />
 
       {selectedDay && selectedDayData && hasFilteredEntries && (
         <div className="rounded-lg border bg-card shadow-sm">
-          <div className="flex items-center justify-between border-b p-3">
-            <span className="text-sm font-medium">
-              {selectedDay.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {selectedEntries.length} catatan
-            </span>
+          <div className="flex items-center justify-between gap-3 border-b p-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">
+                {selectedDay.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {selectedEntries.length} catatan
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] text-muted-foreground">Total</p>
+              <p className={cn(
+                "text-sm font-semibold tabular-nums",
+                selectedEntriesTotal >= 0 ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500",
+              )}>
+                {formatCompactAmount(selectedEntriesTotal, format)}
+              </p>
+            </div>
           </div>
           <div className="divide-y">
             {selectedEntries.map((entry) => {

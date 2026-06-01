@@ -220,21 +220,141 @@ export async function createInvite() {
   return code;
 }
 
-export async function acceptInvite(code: string) {
+export type ManagementInvitation = {
+  id: string;
+  code: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export async function getManagementInvitations(): Promise<ManagementInvitation[]> {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const invitation = await prisma.invitation.findUnique({
-    where: { code },
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { activeManagementId: true },
   });
-  if (!invitation) throw new Error("Undangan tidak ditemukan");
-  if (invitation.status !== "pending") throw new Error("Undangan sudah digunakan");
-  if (invitation.expiresAt < new Date()) throw new Error("Undangan sudah kadaluarsa");
+  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+
+  const membership = await prisma.managementMember.findFirst({
+    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+  });
+  if (!membership) throw new Error("Only management owner can view invites");
+
+  const invitations = await prisma.invitation.findMany({
+    where: { managementId: membership.managementId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      code: true,
+      status: true,
+      createdAt: true,
+      expiresAt: true,
+    },
+  });
+
+  return invitations.map((invitation) => ({
+    ...invitation,
+    createdAt: invitation.createdAt.toISOString(),
+    expiresAt: invitation.expiresAt.toISOString(),
+  }));
+}
+
+export async function deleteInvite(invitationId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { activeManagementId: true },
+  });
+  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+
+  const membership = await prisma.managementMember.findFirst({
+    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+  });
+  if (!membership) throw new Error("Only management owner can delete invites");
+
+  await prisma.invitation.deleteMany({
+    where: { id: invitationId, managementId: membership.managementId },
+  });
+
+  return { success: true };
+}
+
+export async function removeManagementMember(memberId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { activeManagementId: true },
+  });
+  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+
+  const ownerMembership = await prisma.managementMember.findFirst({
+    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+  });
+  if (!ownerMembership) throw new Error("Only management owner can remove members");
+
+  const targetMember = await prisma.managementMember.findFirst({
+    where: { id: memberId, managementId: ownerMembership.managementId },
+    select: { id: true, userId: true, role: true, managementId: true },
+  });
+  if (!targetMember) throw new Error("Anggota tidak ditemukan");
+  if (targetMember.role === "owner") throw new Error("Pemilik tidak bisa dihapus");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.managementMember.delete({
+      where: { id: targetMember.id },
+    });
+
+    const targetUser = await tx.user.findUnique({
+      where: { id: targetMember.userId },
+      select: { activeManagementId: true },
+    });
+
+    if (targetUser?.activeManagementId === targetMember.managementId) {
+      const nextMembership = await tx.managementMember.findFirst({
+        where: { userId: targetMember.userId },
+        orderBy: { joinedAt: "asc" },
+        select: { managementId: true },
+      });
+
+      await tx.user.update({
+        where: { id: targetMember.userId },
+        data: { activeManagementId: nextMembership?.managementId ?? null },
+      });
+    }
+  });
+
+  return { success: true };
+}
+
+type AcceptInviteResult =
+  | { success: true }
+  | { success: false; message: string };
+
+export async function acceptInvite(code: string): Promise<AcceptInviteResult> {
+  const session = await getSession();
+  if (!session) return { success: false, message: "Anda harus masuk terlebih dahulu." };
+
+  const normalizedCode = code.trim().toLowerCase();
+  if (!normalizedCode) return { success: false, message: "Kode undangan tidak valid." };
+
+  const invitation = await prisma.invitation.findUnique({
+    where: { code: normalizedCode },
+  });
+  if (!invitation) return { success: false, message: "Undangan tidak ditemukan" };
+  if (invitation.status !== "pending") return { success: false, message: "Undangan sudah digunakan" };
+  if (invitation.expiresAt < new Date()) return { success: false, message: "Undangan sudah kadaluarsa" };
 
   const existingMember = await prisma.managementMember.findFirst({
     where: { managementId: invitation.managementId, userId: session.user.id },
   });
-  if (existingMember) throw new Error("Anda sudah menjadi anggota management ini");
+  if (existingMember) return { success: false, message: "Anda sudah menjadi anggota management ini" };
 
   await prisma.$transaction(async (tx) => {
     await tx.managementMember.create({
@@ -255,6 +375,8 @@ export async function acceptInvite(code: string) {
       data: { activeManagementId: invitation.managementId },
     });
   });
+
+  return { success: true };
 }
 
 export async function getInvitationInfo(code: string) {
