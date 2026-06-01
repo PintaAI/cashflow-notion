@@ -28,6 +28,8 @@ import { AnalyticsContentSkeleton } from "@/components/loading-skeletons";
 import { useAnalytics, useCategories } from "@/hooks/use-cashflow-data";
 import type { AnalyticsData } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
+import { useCurrency } from "@/components/providers/currency-provider";
+import { formatCurrencyAmount } from "@/lib/currency";
 
 // Color palette for charts - using oklch values directly for better color support
 const COLORS = [
@@ -109,6 +111,7 @@ function AnalyticsChartsContent({
 }: AnalyticsChartsProps & {
   onFiltersChange: (filters: AnalyticsChartsProps["filters"]) => void;
 }) {
+  const { currency } = useCurrency();
   // Prepare category data for pie chart
   const categoryChartData = React.useMemo(() => {
     return analytics.byCategory.map((item, index) => ({
@@ -169,15 +172,7 @@ function AnalyticsChartsContent({
                 <YAxis
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value) => {
-                    if (value >= 1000000) {
-                      return `${(value / 1000000).toFixed(1)}M`;
-                    }
-                    if (value >= 1000) {
-                      return `${(value / 1000).toFixed(0)}K`;
-                    }
-                    return value;
-                  }}
+                  tickFormatter={(value) => formatCurrencyAmount(value, currency, { compact: true })}
                   className="text-xs"
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
@@ -263,15 +258,7 @@ function AnalyticsChartsContent({
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => {
-                  if (value >= 1000000) {
-                    return `${(value / 1000000).toFixed(1)}M`;
-                  }
-                  if (value >= 1000) {
-                    return `${(value / 1000).toFixed(0)}K`;
-                  }
-                  return value;
-                }}
+                tickFormatter={(value) => formatCurrencyAmount(value, currency, { compact: true })}
                 className="text-xs"
               />
               <ChartTooltip />
@@ -319,13 +306,7 @@ function AnalyticsChartsContent({
                       </div>
                     </td>
                     <td className="text-right py-2 px-2 sm:px-4 font-medium text-xs sm:text-sm">
-                      {new Intl.NumberFormat("id-ID", {
-                        style: "currency",
-                        currency: "IDR",
-                        minimumFractionDigits: 0,
-                        notation: "compact",
-                        compactDisplay: "short",
-                      }).format(item.total)}
+                      {formatCurrencyAmount(item.total, currency, { compact: true })}
                     </td>
                     <td className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">{item.count}</td>
                     <td className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">{item.percentage.toFixed(1)}%</td>

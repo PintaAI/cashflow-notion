@@ -29,6 +29,8 @@ import {
 } from "@/hooks/use-cashflow-data"
 import { getCategoryConfig } from "@/lib/categories"
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/components/providers/currency-provider"
+import { formatCurrencyAmount } from "@/lib/currency"
 
 export function QuickFillManager() {
   const quickFillsQuery = useQuickFills()
@@ -36,6 +38,7 @@ export function QuickFillManager() {
   const createQuickFill = useCreateQuickFill()
   const updateQuickFill = useUpdateQuickFill()
   const deleteQuickFill = useDeleteQuickFill()
+  const { currency, toIdr, toDisplay } = useCurrency()
 
   const [name, setName] = useState("")
   const [nominal, setNominal] = useState("")
@@ -55,7 +58,7 @@ export function QuickFillManager() {
     try {
       await createQuickFill.mutateAsync({
         name: trimmedName,
-        nominal: Number(nominal),
+        nominal: Math.round(toIdr(Number(nominal))),
         categoryId: categoryId === "none" ? null : categoryId,
       })
       setName("")
@@ -73,7 +76,7 @@ export function QuickFillManager() {
     }
     setEditingId(preset.id)
     setEditName(preset.name)
-    setEditNominal(String(preset.nominal))
+    setEditNominal(String(Math.round(toDisplay(preset.nominal))))
     setEditCategoryId(preset.categoryId ?? "none")
     setError(null)
   }
@@ -88,7 +91,7 @@ export function QuickFillManager() {
       await updateQuickFill.mutateAsync({
         id: editingId,
         name: trimmedName,
-        nominal: Number(editNominal),
+        nominal: Math.round(toIdr(Number(editNominal))),
         categoryId: editCategoryId === "none" ? null : editCategoryId,
       })
       setEditingId(null)
@@ -266,7 +269,7 @@ export function QuickFillManager() {
                   >
                     <span className="text-sm font-medium truncate">{preset.name}</span>
                     <span className="text-sm text-muted-foreground shrink-0">
-                      Rp {preset.nominal.toLocaleString("id-ID")}
+                      {formatCurrencyAmount(toDisplay(preset.nominal), currency)}
                     </span>
                     {config && (
                       <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0", config.bgColor, config.color)}>

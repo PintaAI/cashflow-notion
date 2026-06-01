@@ -13,7 +13,7 @@ import {
   getCalendarEntries,
 } from "@/lib/db";
 import type { CashflowEntry, CashflowSummary, IOType, CategoryType, CalendarDayData } from "@/lib/db";
-import { getCurrentManagementId } from "@/lib/management";
+import { getCurrentManagementId, getSession } from "@/lib/management";
 import { checkBudgetAlerts } from "@/lib/budget-alerts";
 import { prisma } from "@/lib/db";
 
@@ -108,7 +108,8 @@ export async function addEntry(data: {
   io?: IOType;
 }): Promise<CashflowEntry> {
   const managementId = await getCurrentManagementId();
-  const entry = await createEntry({ ...data, managementId });
+  const session = await getSession();
+  const entry = await createEntry({ ...data, managementId, userId: session?.user.id });
 
   if (data.io === "Expenses" && data.category) {
     const cat = await prisma.category.findFirst({ where: { name: data.category, managementId } });

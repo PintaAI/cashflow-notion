@@ -33,6 +33,8 @@ import {
 import type { RecurringEntryData } from "@/lib/db"
 import type { RecurringFrequency, IOType } from "@/lib/db"
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/components/providers/currency-provider"
+import { formatCurrencyAmount } from "@/lib/currency"
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: "Harian",
@@ -43,14 +45,14 @@ const FREQUENCY_LABELS: Record<string, string> = {
 
 const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
 
-function formatCurrency(value: number): string {
-  return `Rp ${Math.round(value).toLocaleString("id-ID")}`
+function formatCurrency(value: number, format: (amountIdr: number, opts?: { compact?: boolean }) => string): string {
+  return format(value)
 }
 
 function formatNominalInput(value: string): string {
   const num = Number(value.replace(/[^0-9]/g, ""))
   if (isNaN(num) || num === 0) return ""
-  return num.toLocaleString("id-ID")
+  return num.toLocaleString()
 }
 
 function getFrequencyDetail(entry: RecurringEntryData): string {
@@ -85,8 +87,9 @@ function RecurringForm({
   isPending: boolean
   categories: string[]
 }) {
+  const { toIdr, toDisplay } = useCurrency()
   const [name, setName] = useState(initial?.name ?? "")
-  const [nominal, setNominal] = useState(initial ? String(Math.round(initial.nominal)) : "")
+  const [nominal, setNominal] = useState(initial ? String(Math.round(toDisplay(initial.nominal))) : "")
   const [io, setIo] = useState<IOType>(initial?.io ?? "Expenses")
   const [category, setCategory] = useState(initial?.categoryName ?? "")
   const [frequency, setFrequency] = useState<RecurringFrequency>((initial?.frequency as RecurringFrequency) ?? "monthly")
@@ -105,7 +108,7 @@ function RecurringForm({
 
     onSave({
       name: name.trim(),
-      nominal: numNominal,
+      nominal: Math.round(toIdr(numNominal)),
       categoryId: selectedCatId,
       io,
       frequency,
@@ -284,6 +287,7 @@ export function RecurringManager() {
   const deleteRecurring = useDeleteRecurringEntry()
   const runGeneration = useRunRecurringGeneration()
   const categoriesQuery = useCategories()
+  const { format } = useCurrency()
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -420,7 +424,7 @@ export function RecurringManager() {
                         "text-[10px] px-1.5 py-0.5 rounded-full",
                         entry.io === "Income" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                       )}>
-                        {entry.io === "Income" ? "+" : "-"}{formatCurrency(entry.nominal)}
+                        {entry.io === "Income" ? "+" : "-"}{formatCurrency(entry.nominal, format)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">

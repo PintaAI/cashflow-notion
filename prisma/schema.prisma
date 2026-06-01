@@ -20,12 +20,16 @@ model User {
   emailVerified Boolean   @default(false)
   image         String?
   mcpApiKey     String?   @unique
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  currency            String    @default("IDR")
+  activeManagementId  String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   sessions    Session[]
   accounts    Account[]
   memberships ManagementMember[]
+  createdEntries Entry[]          @relation("EntryCreator")
+  auditSnapshots AuditSnapshot[]
   oauthAuthCodes OAuthAuthorizationCode[]
   oauthTokens    OAuthToken[]
   oauthConsents  OAuthConsent[]
@@ -90,6 +94,7 @@ model Management {
   invitations    Invitation[]
   overallBudgets OverallBudget[]
   recurringEntries RecurringEntry[]
+  auditSnapshots AuditSnapshot[]
 }
 
 model ManagementMember {
@@ -182,23 +187,44 @@ model QuickFill {
 }
 
 model Entry {
-  id           String    @id @default(uuid())
-  notionId     String?   @unique
-  name         String
-  nominal      Float
-  categoryId   String?
-  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  date         String?
-  io           IOType?
-  managementId String?
-  management   Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
-  createdAt    DateTime  @default(now())
+  id               String    @id @default(uuid())
+  notionId         String?   @unique
+  name             String
+  nominal          Float
+  categoryId       String?
+  category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  date             String?
+  io               IOType?
+  managementId     String?
+  management       Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  createdById      String?
+  createdBy        User?     @relation("EntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  isReconciliation Boolean   @default(false)
+  createdAt        DateTime  @default(now())
 
   @@index([date, createdAt, id])
   @@index([io, date])
   @@index([categoryId])
   @@index([createdAt])
   @@index([managementId])
+  @@index([createdById])
+}
+
+model AuditSnapshot {
+  id               String   @id @default(uuid())
+  managementId     String
+  management       Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  date             String
+  expectedBalance  Float
+  actualBalance    Float
+  difference       Float
+  adjustmentEntryId String?
+  note             String?
+  createdById      String
+  createdBy        User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  @@index([managementId, date])
 }
 
 model OAuthClient {

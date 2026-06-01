@@ -23,6 +23,8 @@ import {
 } from "@/hooks/use-cashflow-data"
 import { getCategoryConfig, CATEGORY_ICON_NAMES, CATEGORY_COLORS, categoryIconRegistry } from "@/lib/categories"
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/components/providers/currency-provider"
+import { formatCurrencyAmount } from "@/lib/currency"
 
 const colorHexMap: Record<string, string> = {
   default: "#64748b",
@@ -48,6 +50,7 @@ export function CategoryManager() {
   const createCategory = useCreateCategory()
   const deleteCategory = useDeleteCategory()
   const updateCategory = useUpdateCategory()
+  const { toIdr, toDisplay, currency } = useCurrency()
   const [newCategoryName, setNewCategoryName] = useState("")
   const [selectedIcon, setSelectedIcon] = useState("More01Icon")
   const [selectedColor, setSelectedColor] = useState("default")
@@ -80,10 +83,10 @@ export function CategoryManager() {
         color: selectedColor,
         icon: selectedIcon,
         budgets: {
-          budgetDaily: newBudgetDaily ? Number(newBudgetDaily.replace(/[^0-9]/g, "")) : null,
-          budgetWeekly: newBudgetWeekly ? Number(newBudgetWeekly.replace(/[^0-9]/g, "")) : null,
-          budgetMonthly: newBudgetMonthly ? Number(newBudgetMonthly.replace(/[^0-9]/g, "")) : null,
-          budgetYearly: newBudgetYearly ? Number(newBudgetYearly.replace(/[^0-9]/g, "")) : null,
+          budgetDaily: newBudgetDaily ? Math.round(toIdr(Number(newBudgetDaily.replace(/[^0-9]/g, "")))) : null,
+          budgetWeekly: newBudgetWeekly ? Math.round(toIdr(Number(newBudgetWeekly.replace(/[^0-9]/g, "")))) : null,
+          budgetMonthly: newBudgetMonthly ? Math.round(toIdr(Number(newBudgetMonthly.replace(/[^0-9]/g, "")))) : null,
+          budgetYearly: newBudgetYearly ? Math.round(toIdr(Number(newBudgetYearly.replace(/[^0-9]/g, "")))) : null,
         },
       })
       setNewCategoryName("")
@@ -108,10 +111,10 @@ export function CategoryManager() {
     setEditName(category.name)
     setEditIcon(category.icon ?? "More01Icon")
     setEditColor(category.color ?? "default")
-    setEditBudgetDaily(category.budgetDaily != null ? String(category.budgetDaily) : "")
-    setEditBudgetWeekly(category.budgetWeekly != null ? String(category.budgetWeekly) : "")
-    setEditBudgetMonthly(category.budgetMonthly != null ? String(category.budgetMonthly) : "")
-    setEditBudgetYearly(category.budgetYearly != null ? String(category.budgetYearly) : "")
+    setEditBudgetDaily(category.budgetDaily != null ? String(Math.round(toDisplay(category.budgetDaily))) : "")
+    setEditBudgetWeekly(category.budgetWeekly != null ? String(Math.round(toDisplay(category.budgetWeekly))) : "")
+    setEditBudgetMonthly(category.budgetMonthly != null ? String(Math.round(toDisplay(category.budgetMonthly))) : "")
+    setEditBudgetYearly(category.budgetYearly != null ? String(Math.round(toDisplay(category.budgetYearly))) : "")
     setError(null)
   }
 
@@ -127,10 +130,10 @@ export function CategoryManager() {
         name: trimmedName,
         color: editColor,
         icon: editIcon,
-        budgetDaily: editBudgetDaily ? Number(editBudgetDaily.replace(/[^0-9]/g, "")) : null,
-        budgetWeekly: editBudgetWeekly ? Number(editBudgetWeekly.replace(/[^0-9]/g, "")) : null,
-        budgetMonthly: editBudgetMonthly ? Number(editBudgetMonthly.replace(/[^0-9]/g, "")) : null,
-        budgetYearly: editBudgetYearly ? Number(editBudgetYearly.replace(/[^0-9]/g, "")) : null,
+        budgetDaily: editBudgetDaily ? Math.round(toIdr(Number(editBudgetDaily.replace(/[^0-9]/g, "")))) : null,
+        budgetWeekly: editBudgetWeekly ? Math.round(toIdr(Number(editBudgetWeekly.replace(/[^0-9]/g, "")))) : null,
+        budgetMonthly: editBudgetMonthly ? Math.round(toIdr(Number(editBudgetMonthly.replace(/[^0-9]/g, "")))) : null,
+        budgetYearly: editBudgetYearly ? Math.round(toIdr(Number(editBudgetYearly.replace(/[^0-9]/g, "")))) : null,
       })
       setEditingId(null)
     } catch (err) {
@@ -487,7 +490,7 @@ export function CategoryManager() {
                     {(category.budgetDaily || category.budgetWeekly || category.budgetMonthly || category.budgetYearly) && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
                         <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-2.5" />
-                        {category.budgetYearly ? `Rp ${Math.round(category.budgetYearly / 1_000_000)}jt/thn` : category.budgetMonthly ? `Rp ${Math.round(category.budgetMonthly / 1000)}k/bln` : category.budgetWeekly ? `Rp ${Math.round(category.budgetWeekly / 1000)}k/mgg` : `Rp ${Math.round(category.budgetDaily! / 1000)}k/hr`}
+                        {category.budgetYearly ? formatCurrencyAmount(toDisplay(category.budgetYearly), currency, { compact: true }) + "/thn" : category.budgetMonthly ? formatCurrencyAmount(toDisplay(category.budgetMonthly), currency, { compact: true }) + "/bln" : category.budgetWeekly ? formatCurrencyAmount(toDisplay(category.budgetWeekly), currency, { compact: true }) + "/mgg" : formatCurrencyAmount(toDisplay(category.budgetDaily!), currency, { compact: true }) + "/hr"}
                       </span>
                     )}
                   </button>

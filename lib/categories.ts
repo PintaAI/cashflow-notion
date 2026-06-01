@@ -1,5 +1,6 @@
 import {
   Alert01Icon,
+  Audit01Icon,
   Briefcase01Icon,
   Bus01Icon,
   Coffee01Icon,
@@ -45,6 +46,7 @@ const colorToTailwind: Record<string, { color: string; bgColor: string }> = {
 
 export const categoryIconRegistry: Record<string, typeof More01Icon> = {
   Alert01Icon,
+  Audit01Icon,
   Briefcase01Icon,
   Bus01Icon,
   Coffee01Icon,
@@ -96,6 +98,7 @@ const knownCategoryIcons: Record<string, typeof More01Icon> = {
   Tagihan: Invoice01Icon,
   Hiburan: GameController01Icon,
   Kesehatan: HealthIcon,
+  Penyesuaian: Audit01Icon,
   Lainnya: More01Icon,
   Gift: GiftIcon,
   Work: Briefcase01Icon,

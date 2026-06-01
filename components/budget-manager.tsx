@@ -8,21 +8,16 @@ import { Input } from "@/components/ui/input"
 import { useBudgetStatus, useSaveOverallBudget, useRemoveOverallBudget } from "@/hooks/use-cashflow-data"
 import type { BudgetPeriod, BudgetStatusItem } from "@/lib/db"
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/components/providers/currency-provider"
 
-function formatCurrency(value: number): string {
-  if (value >= 1_000_000) {
-    return `Rp ${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}jt`
-  }
-  if (value >= 1_000) {
-    return `Rp ${(value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 0)}k`
-  }
-  return `Rp ${Math.round(value).toLocaleString("id-ID")}`
+function formatCurrency(value: number, format: (amountIdr: number, opts?: { compact?: boolean }) => string): string {
+  return format(value, { compact: true })
 }
 
 function formatBudgetValue(value: string): string {
   const num = Number(value.replace(/[^0-9]/g, ""))
   if (isNaN(num) || num === 0) return ""
-  return num.toLocaleString("id-ID")
+  return num.toLocaleString()
 }
 
 function ProgressBar({ percentage, isWarning, isOverBudget }: { percentage: number; isWarning: boolean; isOverBudget: boolean }) {
@@ -53,16 +48,17 @@ function OverallBudgetRow({
   const [amount, setAmount] = useState("")
   const saveBudget = useSaveOverallBudget()
   const removeBudget = useRemoveOverallBudget()
+  const { format, toIdr, toDisplay, option } = useCurrency()
 
   const startEdit = () => {
-    setAmount(status ? String(Math.round(status.budgetAmount)) : "")
+    setAmount(status ? String(Math.round(toDisplay(status.budgetAmount))) : "")
     setIsEditing(true)
   }
 
   const handleSave = async () => {
     const num = Number(amount.replace(/[^0-9]/g, ""))
     if (!num || num <= 0) return
-    await saveBudget.mutateAsync({ period, amount: num })
+    await saveBudget.mutateAsync({ period, amount: Math.round(toIdr(num)) })
     setIsEditing(false)
   }
 
@@ -76,7 +72,7 @@ function OverallBudgetRow({
       <div className="flex items-center gap-2 py-2">
         <span className="text-sm font-medium w-20 shrink-0">{label}</span>
         <Input
-          placeholder="Rp"
+          placeholder={option.symbol}
           value={amount}
           onChange={(e) => setAmount(formatBudgetValue(e.target.value))}
           className="h-8 text-xs flex-1"
@@ -124,8 +120,8 @@ function OverallBudgetRow({
         <>
           <ProgressBar percentage={status.percentage} isWarning={status.isWarning} isOverBudget={status.isOverBudget} />
           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>{formatCurrency(status.spent)} / {formatCurrency(status.budgetAmount)}</span>
-            <span>sisa {formatCurrency(status.remaining)}</span>
+            <span>{formatCurrency(status.spent, format)} / {formatCurrency(status.budgetAmount, format)}</span>
+            <span>sisa {formatCurrency(status.remaining, format)}</span>
           </div>
         </>
       )}
@@ -136,6 +132,7 @@ function OverallBudgetRow({
 export function BudgetManager() {
   const budgetStatusQuery = useBudgetStatus()
   const allStatuses = budgetStatusQuery.data ?? []
+  const { format } = useCurrency()
 
   const getStatus = (period: BudgetPeriod) =>
     allStatuses.find((s) => s.type === "overall" && s.period === period)
@@ -155,7 +152,7 @@ export function BudgetManager() {
             .filter((s) => s.isWarning || s.isOverBudget)
             .map((s) => (
               <p key={`${s.type}-${s.id}-${s.period}`} className="text-[11px] text-yellow-700/80 dark:text-yellow-400/80">
-                {s.type === "overall" ? "Total" : s.name} ({s.period}): {s.percentage}% — {formatCurrency(s.spent)} / {formatCurrency(s.budgetAmount)}
+                {s.type === "overall" ? "Total" : s.name} ({s.period}): {s.percentage}% — {formatCurrency(s.spent, format)} / {formatCurrency(s.budgetAmount, format)}
               </p>
             ))}
         </div>

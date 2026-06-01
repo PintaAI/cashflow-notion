@@ -30,6 +30,12 @@ import {
   removeRecurringEntry,
   runRecurringGeneration,
 } from "@/app/actions/recurring";
+import {
+  fetchBalance,
+  fetchAuditHistory,
+  fetchLatestAudit,
+  performAudit,
+} from "@/app/actions/audit";
 import type { BudgetPeriod, RecurringFrequency, IOType } from "@/lib/db";
 
 export const cashflowQueryKeys = {
@@ -43,6 +49,9 @@ export const cashflowQueryKeys = {
   quickFills: ["cashflow-quick-fills"] as const,
   budgetStatus: ["cashflow-budget-status"] as const,
   recurring: ["cashflow-recurring"] as const,
+  balance: ["cashflow-balance"] as const,
+  auditHistory: ["cashflow-audit-history"] as const,
+  latestAudit: ["cashflow-latest-audit"] as const,
   calendarEntries: (year: number, month: number) => ["cashflow-calendar", year, month] as const,
 };
 
@@ -281,6 +290,42 @@ export function useRunRecurringGeneration() {
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+    },
+  });
+}
+
+export function useBalance() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.balance,
+    queryFn: fetchBalance,
+  });
+}
+
+export function useAuditHistory() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.auditHistory,
+    queryFn: fetchAuditHistory,
+  });
+}
+
+export function useLatestAudit() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.latestAudit,
+    queryFn: fetchLatestAudit,
+  });
+}
+
+export function usePerformAudit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: performAudit,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.balance });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.auditHistory });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.latestAudit });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
     },
   });
 }

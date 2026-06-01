@@ -1,4 +1,5 @@
 import {
+  Audit01Icon,
   CalculatorIcon,
   MoneyReceiveIcon,
   MoneySendIcon,
@@ -10,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function StatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4 mb-4 sm:mb-6">
+    <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4 mb-4">
       <div className="rounded-lg border p-2 sm:p-4 shadow-sm">
         <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
           <HugeiconsIcon
@@ -185,5 +186,21 @@ export function AnalyticsContentSkeleton() {
         </div>
       </div>
     </>
+  );
+}
+
+export function AuditStatusSkeleton() {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2">
+      <div className="flex items-center gap-2">
+        <HugeiconsIcon
+          icon={Audit01Icon}
+          strokeWidth={2}
+          className="size-3.5 shrink-0 text-muted-foreground"
+        />
+        <Skeleton className="h-3 w-32" />
+      </div>
+      <Skeleton className="h-5 w-16" />
+    </div>
   );
 }

@@ -60,8 +60,10 @@ import {
 } from "@/lib/cashflow-query-cache";
 import { beginCashflowPending, useCashflowPending } from "@/lib/cashflow-pending";
 import { cashflowQueryKeys, useCategories } from "@/hooks/use-cashflow-data";
+import { useCurrency } from "@/components/providers/currency-provider";
 
-const columns: ColumnDef<CashflowEntry>[] = [
+function getColumns(format: (amountIdr: number, opts?: { compact?: boolean }) => string): ColumnDef<CashflowEntry>[] {
+  return [
   {
     id: "select",
     header: ({ table }) => (
@@ -126,21 +128,9 @@ const columns: ColumnDef<CashflowEntry>[] = [
       const io = row.getValue("io") as IOType | null;
       const isIncome = io === "Income";
 
-      const abs = Math.abs(amount);
-      let formatted: string;
-      if (abs >= 1_000_000) {
-        const val = abs / 1_000_000;
-        formatted = `Rp${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
-      } else if (abs >= 1_000) {
-        const val = abs / 1_000;
-        formatted = `Rp${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })}k`;
-      } else {
-        formatted = `Rp${abs.toLocaleString("id-ID")}`;
-      }
-
       return (
         <div className={`text-right font-medium ${isIncome ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500"}`}>
-          {formatted}
+          {format(amount, { compact: true })}
         </div>
       );
     },
@@ -248,7 +238,7 @@ const columns: ColumnDef<CashflowEntry>[] = [
       return value === "all" || row.getValue(id) === value;
     },
   },
-];
+]; }
 
 const ioOptions: IOType[] = ["Income", "Expenses"];
 
@@ -262,6 +252,7 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "date", desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
+  const { format } = useCurrency();
   
   // Separate state for I/O filter to drive the query
   const [ioQueryFilter, setIoQueryFilter] = React.useState<string>("all");
@@ -337,6 +328,8 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
     if (!data) return [];
     return data.pages.flatMap((page) => page.entries);
   }, [data]);
+
+  const columns = React.useMemo(() => getColumns(format), [format]);
 
   const table = useReactTable({
     data: entries,

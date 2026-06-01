@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import confetti from "canvas-confetti"
@@ -27,7 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { addEntry, editEntry } from "@/app/actions/cashflow"
 import type { CashflowEntry, CategoryType, IOType } from "@/lib/db"
 import { getCategoryConfig } from "@/lib/categories"
-import { useCategories, useCategoriesWithDetails, useQuickFills } from "@/hooks/use-cashflow-data"
+import { useCategoriesWithDetails, useQuickFills } from "@/hooks/use-cashflow-data"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Calendar03Icon,
@@ -41,6 +41,8 @@ import {
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 import { CameraCapture } from "@/components/camera-capture"
+import { useCurrency } from "@/components/providers/currency-provider"
+import { formatCurrencyAmount } from "@/lib/currency"
 
 type CashflowFormDrawerProps = {
   mode: "create" | "edit"
@@ -63,6 +65,7 @@ export function CashflowFormDrawer({
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isEdit = mode === "edit"
+  const { currency, toIdr, toDisplay, denominations, option } = useCurrency()
 
   const [internalOpen, setInternalOpen] = useState(false)
   const open = externalOpen ?? internalOpen
@@ -72,14 +75,21 @@ export function CashflowFormDrawer({
   const [isExtracting, setIsExtracting] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const [name, setName] = useState(() => isEdit ? (entry?.name ?? "") : "")
-  const [nominal, setNominal] = useState(() => isEdit && entry ? String(entry.nominal) : "")
+  const [nominal, setNominal] = useState("")
   const [category, setCategory] = useState<CategoryType>(() => isEdit ? (entry?.category ?? "") : "")
   const [date, setDate] = useState<Date | undefined>(() => isEdit && entry?.date ? new Date(entry.date) : new Date())
   const [io, setIo] = useState<IOType>(() => isEdit ? (entry?.io ?? "Expenses") : "Expenses")
 
+  useEffect(() => {
+    if (isEdit && entry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initialization from async conversion
+      setNominal(String(Math.round(toDisplay(entry.nominal))))
+    }
+  }, [isEdit, entry, toDisplay])
+
   const formatNominal = (value: string) => {
     if (!value) return ""
-    return `Rp,${Number(value).toLocaleString("id-ID")}`
+    return formatCurrencyAmount(Number(value), currency, { locale: option.locale })
   }
 
   const categoriesQuery = useCategoriesWithDetails()
@@ -119,7 +129,7 @@ export function CashflowFormDrawer({
 
       if (result.success && result.data) {
         if (result.data.name) setName(result.data.name)
-        if (result.data.amount) setNominal(String(result.data.amount))
+        if (result.data.amount) setNominal(String(Math.round(toDisplay(Number(result.data.amount)))))
         if (result.data.date) {
           const parsedDate = new Date(result.data.date)
           if (!isNaN(parsedDate.getTime())) setDate(parsedDate)
@@ -159,7 +169,7 @@ export function CashflowFormDrawer({
 
       if (result.success && result.data) {
         if (result.data.name) setName(result.data.name)
-        if (result.data.amount) setNominal(String(result.data.amount))
+        if (result.data.amount) setNominal(String(Math.round(toDisplay(Number(result.data.amount)))))
         if (result.data.date) {
           const parsedDate = new Date(result.data.date)
           if (!isNaN(parsedDate.getTime())) setDate(parsedDate)
@@ -183,10 +193,12 @@ export function CashflowFormDrawer({
 
     setIsSubmitting(true)
     try {
+      const nominalIdr = Math.round(toIdr(Number(nominal)))
+
       if (isEdit && entry) {
         await editEntry(entry.id, {
           name: name.trim(),
-          nominal: Number(nominal),
+          nominal: nominalIdr,
           category: category || undefined,
           date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
@@ -194,7 +206,7 @@ export function CashflowFormDrawer({
       } else {
         await addEntry({
           name: name.trim(),
-          nominal: Number(nominal),
+          nominal: nominalIdr,
           category: category || undefined,
           date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
@@ -310,7 +322,7 @@ export function CashflowFormDrawer({
                   type="button"
                   onClick={() => {
                     setName(preset.name)
-                    setNominal(String(preset.nominal))
+                    setNominal(String(Math.round(toDisplay(preset.nominal))))
                     if (preset.category) setCategory(preset.category)
                   }}
                   className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
@@ -330,34 +342,37 @@ export function CashflowFormDrawer({
               id="nominal"
               type="text"
               inputMode="numeric"
-              placeholder="Rp,- 0"
+              placeholder={`${option.symbol} 0`}
               value={formatNominal(nominal)}
               onChange={(e) => setNominal(e.target.value.replace(/\D/g, ""))}
               className="h-12 text-base"
               required
             />
             <div className="flex flex-wrap gap-1.5">
-              {[
-                { value: 1000, label: "1k", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" },
-                { value: 2000, label: "2k", color: "bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200" },
-                { value: 5000, label: "5k", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-                { value: 10000, label: "10k", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
-                { value: 20000, label: "20k", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-                { value: 50000, label: "50k", color: "bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200" },
-                { value: 100000, label: "100k", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-              ].map((btn) => (
-                <button
-                  key={btn.value}
-                  type="button"
-                  onClick={() => setNominal(String((Number(nominal) || 0) + btn.value))}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95",
-                    btn.color
-                  )}
-                >
-                  {btn.label}
-                </button>
-              ))}
+              {denominations.map((denom, i) => {
+                const colors = [
+                  "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+                  "bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
+                  "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+                  "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+                  "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+                  "bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200",
+                  "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+                ]
+                return (
+                  <button
+                    key={denom}
+                    type="button"
+                    onClick={() => setNominal(String((Number(nominal) || 0) + denom))}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95",
+                      colors[i % colors.length]
+                    )}
+                  >
+                    {formatCurrencyAmount(denom, currency, { compact: denom >= 1000 })}
+                  </button>
+                )
+              })}
             </div>
           </div>
 

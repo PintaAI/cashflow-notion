@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { CurrencyProvider } from "@/components/providers/currency-provider";
 import { PullToRefreshWrapper } from "@/components/pull-to-refresh-wrapper";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
@@ -62,9 +63,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            <PullToRefreshWrapper>
-              {children}
-            </PullToRefreshWrapper>
+            <CurrencyProvider>
+              <PullToRefreshWrapper>
+                {children}
+              </PullToRefreshWrapper>
+            </CurrencyProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

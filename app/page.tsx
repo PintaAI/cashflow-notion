@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, Analytics01Icon, BellDotIcon, Calendar03Icon, File01Icon, FlashIcon, Key01Icon, Logout01Icon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon, Table01Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, Analytics01Icon, ArrowDown01Icon, BellDotIcon, Calendar03Icon, CurrencyIcon, Edit02Icon, File01Icon, FlashIcon, Logout01Icon, PercentIcon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon, Table01Icon } from "@hugeicons/core-free-icons";
 import { useSession, signOut } from "@/lib/auth-client";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { CashflowTable } from "@/components/cashflow-table";
 import { CashflowCalendar } from "@/components/cashflow-calendar";
+import { AuditDrawer } from "@/components/audit-drawer";
+import { AuditStatusBar } from "@/components/audit-status-bar";
 
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
@@ -30,10 +33,27 @@ import { useBudgetStatus } from "@/hooks/use-cashflow-data";
 import { useRunRecurringGeneration } from "@/hooks/use-cashflow-data";
 import type { ActivityOverview } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
-import { getCurrentManagement, createInvite } from "@/app/actions/management";
+import {
+  getCurrentManagement,
+  createInvite,
+  getUserManagements,
+  switchManagement,
+  renameManagement,
+  createManagement,
+  type ManagementWithMembers,
+} from "@/app/actions/management";
 import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
 import type { UserOAuthConnection } from "@/lib/oauth/server";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
+import { useCurrency } from "@/components/providers/currency-provider"
+import { SUPPORTED_CURRENCIES } from "@/lib/currency"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -307,6 +327,12 @@ function HomeTab() {
   const activity = activityQuery.data ?? getEmptyActivityOverview();
   const today = formatDateKey(new Date());
   const runGeneration = useRunRecurringGeneration();
+  const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  useEffect(() => {
+    getUserManagements().then(setManagements);
+  }, []);
 
   useEffect(() => {
     const key = `recurring-generated-${today}`;
@@ -316,9 +342,68 @@ function HomeTab() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const active = managements.find((m) => m.isActive);
+  const hasMultiple = managements.length > 1;
+
+  async function handleSwitch(id: string) {
+    setSwitcherOpen(false);
+    try {
+      await switchManagement(id);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   return (
     <>
-      <PageHeader icon={Wallet01Icon} title="Cashflow Tracker" />
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <div className="flex items-center gap-2.5 relative">
+          <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary sm:size-9">
+            <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2.2} className="size-4.5 sm:size-5" />
+          </span>
+          {hasMultiple ? (
+            <button
+              type="button"
+              onClick={() => setSwitcherOpen(!switcherOpen)}
+              className="flex items-center gap-1 text-xl font-bold tracking-tight sm:text-2xl hover:text-primary transition-colors"
+            >
+              <span className="truncate max-w-[200px] sm:max-w-[300px]">{active?.name ?? "Cashflow"}</span>
+              <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className={cn("size-4 shrink-0 text-muted-foreground transition-transform", switcherOpen && "rotate-180")} />
+            </button>
+          ) : (
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{active?.name ?? "Cashflow"}</h1>
+          )}
+          {switcherOpen && hasMultiple && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setSwitcherOpen(false)} />
+              <div className="absolute left-0 top-full z-50 mt-2 w-56 rounded-lg border bg-popover p-1 shadow-md">
+                {managements.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => handleSwitch(m.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent transition-colors",
+                      m.isActive && "bg-accent"
+                    )}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium">{m.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {m.memberCount} anggota · {m.role === "owner" ? "Pemilik" : "Anggota"}
+                      </p>
+                    </div>
+                    {m.isActive && (
+                      <span className="size-1.5 rounded-full bg-primary shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
       <BudgetWarningCard />
@@ -371,22 +456,37 @@ function CatatanTab() {
 }
 
 function ManagementSettings() {
-  const [management, setManagement] = useState<{
-    management: {
-      id: string;
-      name: string;
-      members: { id: string; role: string; user: { id: string; name: string | null; email: string; image: string | null } }[];
-    };
-    role: string;
-  } | null>(null);
+  const [management, setManagement] = useState<ManagementWithMembers | null>(null);
+  const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
   const [inviteCode, setInviteCode] = useState("");
   const [inviteLink, setInviteLink] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
+  function load() {
     getCurrentManagement().then((m) => {
-      if (m) setManagement(m);
+      if (m) {
+        setManagement(m);
+        setNameValue(m.management.name);
+      }
     });
-  }, []);
+    getUserManagements().then(setManagements);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function handleSwitch(id: string) {
+    try {
+      await switchManagement(id);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   async function handleGenerateInvite() {
     try {
@@ -398,15 +498,138 @@ function ManagementSettings() {
     }
   }
 
+  async function handleSaveName() {
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === management?.management.name) {
+      setEditingName(false);
+      setNameValue(management?.management.name ?? "");
+      return;
+    }
+    setNameSaving(true);
+    try {
+      await renameManagement(trimmed);
+      setManagement((prev) =>
+        prev ? { ...prev, management: { ...prev.management, name: trimmed } } : prev
+      );
+    } catch (err) {
+      setNameValue(management?.management.name ?? "");
+      console.error(err);
+    } finally {
+      setNameSaving(false);
+      setEditingName(false);
+    }
+  }
+
+  async function handleCreate() {
+    const trimmed = createName.trim();
+    if (!trimmed) return;
+    setCreating(true);
+    try {
+      await createManagement(trimmed);
+      setCreateOpen(false);
+      setCreateName("");
+      load();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   if (!management) return null;
+
+  const isOwner = management.role === "owner";
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        <p className="text-sm font-medium">Management</p>
-        <p className="text-sm text-muted-foreground">{management.management.name}</p>
-        <p className="text-xs text-muted-foreground">Role: {management.role === "owner" ? "Pemilik" : "Anggota"}</p>
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setCreateOpen(!createOpen)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-solid transition-colors"
+        >
+          + Buat Dompet Baru
+        </button>
+        {createOpen && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Nama dompet"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+              disabled={creating}
+              className="flex-1 rounded-md border bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-ring"
+            />
+            <Button size="sm" onClick={handleCreate} disabled={creating || !createName.trim()}>
+              {creating ? "..." : "Buat"}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {managements.length > 0 && (
+        <div className="space-y-1.5">
+          {managements.map((m) => (
+            <div
+              key={m.id}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border p-2 transition-colors",
+                m.isActive
+                  ? "border-primary bg-primary/5"
+                  : "hover:bg-muted/50 cursor-pointer"
+              )}
+              onClick={() => {
+                if (!m.isActive) handleSwitch(m.id);
+              }}
+            >
+              <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className={cn("size-4 shrink-0", m.isActive ? "text-primary" : "text-muted-foreground")} />
+              <div className="flex-1 min-w-0">
+                {editingName && m.isActive && isOwner ? (
+                  <input
+                    type="text"
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveName();
+                      if (e.key === "Escape") {
+                        setEditingName(false);
+                        setNameValue(management.management.name);
+                      }
+                    }}
+                    onBlur={handleSaveName}
+                    disabled={nameSaving}
+                    className="w-full bg-transparent text-sm font-medium outline-none"
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <p className={cn("text-sm font-medium truncate", m.isActive && "text-primary")}>{m.name}</p>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  {m.memberCount} anggota · {m.role === "owner" ? "Pemilik" : "Anggota"}
+                </p>
+              </div>
+              {m.isActive && isOwner && !editingName && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNameValue(management.management.name);
+                    setEditingName(true);
+                  }}
+                  className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                >
+                  <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-3" />
+                </button>
+              )}
+              {m.isActive && (
+                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">Aktif</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-1">
         <p className="text-sm font-medium">Anggota</p>
@@ -414,7 +637,7 @@ function ManagementSettings() {
           {management.management.members.map((member) => (
             <div key={member.id} className="flex items-center gap-2 border border-border rounded p-2">
               {member.user.image ? (
-                <img src={member.user.image} alt="" className="h-6 w-6 rounded-full" />
+                <Image src={member.user.image} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover" unoptimized />
               ) : (
                 <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground shrink-0">
                   {member.user.name?.[0]?.toUpperCase() ?? member.user.email[0].toUpperCase()}
@@ -429,7 +652,7 @@ function ManagementSettings() {
         </div>
       </div>
 
-      {management.role === "owner" && (
+      {isOwner && (
         <div className="space-y-2">
           <Button size="sm" onClick={handleGenerateInvite}>
             Buat Undangan
@@ -473,7 +696,7 @@ function McpKeySettings() {
         />
         <p className="text-xs text-muted-foreground">
           Saat menghubungkan dengan AI client (ChatGPT, Cursor, dll), masukkan URL ini
-          dan pilih "OAuth" sebagai metode autentikasi.
+          dan pilih &quot;OAuth&quot; sebagai metode autentikasi.
         </p>
 
         {loadingConnections ? (
@@ -555,6 +778,8 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 function ProfileTab() {
   const { data: session } = useSession();
+  const { currency, setCurrency, loading } = useCurrency();
+  const [auditDrawerOpen, setAuditDrawerOpen] = useState(false);
 
   return (
     <>
@@ -575,11 +800,39 @@ function ProfileTab() {
       )}
 
       <Accordion type="single" collapsible className="space-y-2 sm:space-y-3">
+        <AccordionItem value="currency">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={CurrencyIcon} strokeWidth={2} className="size-4" />
+              Mata Uang
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Pilih mata uang untuk tampilan. Semua data tetap disimpan dalam IDR.
+              </p>
+              <Select value={currency} onValueChange={setCurrency} disabled={loading}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>
+                      {c.symbol} {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="management">
           <AccordionTrigger>
             <span className="flex items-center gap-2">
-              <HugeiconsIcon icon={UserCircleIcon} strokeWidth={2} className="size-4" />
-              Management
+              <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-4" />
+              Dompet
             </span>
           </AccordionTrigger>
           <AccordionContent>
@@ -614,7 +867,7 @@ function ProfileTab() {
         <AccordionItem value="budget">
           <AccordionTrigger>
             <span className="flex items-center gap-2">
-              <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-4" />
+              <HugeiconsIcon icon={PercentIcon} strokeWidth={2} className="size-4" />
               Budget
             </span>
           </AccordionTrigger>
@@ -660,6 +913,10 @@ function ProfileTab() {
         </AccordionItem>
       </Accordion>
 
+      <div className="mt-4 mb-4">
+        <AuditStatusBar onAuditClick={() => setAuditDrawerOpen(true)} />
+      </div>
+
       <Button
         className="mt-6 w-full bg-red-600 hover:bg-red-700 text-white"
         onClick={async () => {
@@ -670,6 +927,7 @@ function ProfileTab() {
         <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} className="size-4 mr-2" />
         Keluar
       </Button>
+      <AuditDrawer open={auditDrawerOpen} onOpenChange={setAuditDrawerOpen} />
     </>
   );
 }

@@ -34,7 +34,7 @@ export default function InvitePage() {
     try {
       await acceptInvite(code);
       setStatus("done");
-      setMessage("Berhasil bergabung! Data Anda telah digabungkan.");
+      setMessage("Berhasil bergabung! Anda sekarang memiliki akses ke management ini.");
     } catch (err) {
       setStatus("error");
       setMessage(err instanceof Error ? err.message : "Gagal menerima undangan.");
@@ -59,7 +59,7 @@ export default function InvitePage() {
             </h1>
             <p className="text-sm text-muted-foreground">
               Anda diundang untuk bergabung ke management bersama.
-              Data management pribadi Anda akan digabungkan.
+              Management pribadi Anda tetap tersimpan dan bisa diakses kapan saja.
             </p>
             <Button className="w-full" onClick={handleAccept}>
               Terima Undangan

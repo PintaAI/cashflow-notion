@@ -26,6 +26,25 @@ const handler = createMcpHandler(
   },
 );
 
+async function resolveActiveManagementId(userId: string): Promise<string | undefined> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { activeManagementId: true },
+  });
+
+  if (user?.activeManagementId) {
+    const membership = await prisma.managementMember.findFirst({
+      where: { userId, managementId: user.activeManagementId },
+    });
+    if (membership) return membership.managementId;
+  }
+
+  const membership = await prisma.managementMember.findFirst({
+    where: { userId },
+  });
+  return membership?.managementId;
+}
+
 async function verifyToken(
   request: Request,
   bearerToken?: string,
@@ -67,10 +86,8 @@ async function verifyToken(
 
   if (!userId) return undefined;
 
-  const membership = await prisma.managementMember.findFirst({
-    where: { userId },
-  });
-  if (!membership) return undefined;
+  const managementId = await resolveActiveManagementId(userId);
+  if (!managementId) return undefined;
 
   return {
     token: bearerToken || "",
@@ -86,46 +103,45 @@ const authHandler = withMcpAuth(handler, verifyToken, {
 });
 
 async function resolveManagementId(req: Request): Promise<string | undefined> {
+  const url = new URL(req.url);
+  const queryManagementId = url.searchParams.get("management_id");
   const authHeader = req.headers.get("authorization");
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+
+  let userId: string | undefined;
 
   if (bearerToken) {
     if (isOAuthAccessToken(bearerToken)) {
       const tokenInfo = await verifyAccessToken(bearerToken);
-      if (tokenInfo) {
-        const membership = await prisma.managementMember.findFirst({
-          where: { userId: tokenInfo.userId },
-        });
-        if (membership) return membership.managementId;
-      }
+      if (tokenInfo) userId = tokenInfo.userId;
     } else {
       const user = await prisma.user.findUnique({
         where: { mcpApiKey: bearerToken },
       });
-      if (user) {
-        const membership = await prisma.managementMember.findFirst({
-          where: { userId: user.id },
-        });
-        if (membership) return membership.managementId;
-      }
+      if (user) userId = user.id;
     }
   }
 
-  const url = new URL(req.url);
-  const queryToken = url.searchParams.get("api_key");
-  if (queryToken) {
-    const user = await prisma.user.findUnique({
-      where: { mcpApiKey: queryToken },
-    });
-    if (user) {
-      const membership = await prisma.managementMember.findFirst({
-        where: { userId: user.id },
+  if (!userId) {
+    const queryToken = url.searchParams.get("api_key");
+    if (queryToken) {
+      const user = await prisma.user.findUnique({
+        where: { mcpApiKey: queryToken },
       });
-      if (membership) return membership.managementId;
+      if (user) userId = user.id;
     }
   }
 
-  return undefined;
+  if (!userId) return undefined;
+
+  if (queryManagementId) {
+    const membership = await prisma.managementMember.findFirst({
+      where: { userId, managementId: queryManagementId },
+    });
+    if (membership) return membership.managementId;
+  }
+
+  return resolveActiveManagementId(userId);
 }
 
 async function scopedHandler(req: Request) {

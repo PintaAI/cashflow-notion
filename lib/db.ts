@@ -404,6 +404,7 @@ export async function createEntry(data: {
   date?: string;
   io?: IOType;
   managementId: string;
+  userId?: string;
 }): Promise<CashflowEntry> {
   const category = await findCategory(data.category, data.managementId);
   if (data.category && !category) {
@@ -418,6 +419,7 @@ export async function createEntry(data: {
       date: data.date ?? null,
       io: data.io ?? null,
       managementId: data.managementId,
+      createdById: data.userId ?? null,
     },
     include: { category: true },
   });
@@ -467,6 +469,7 @@ const DEFAULT_CATEGORIES = [
   { name: "Tagihan", color: "red", icon: "Invoice01Icon" },
   { name: "Hiburan", color: "purple", icon: "GameController01Icon" },
   { name: "Kesehatan", color: "pink", icon: "HealthIcon" },
+  { name: "Penyesuaian", color: "gray", icon: "Audit01Icon" },
   { name: "Lainnya", color: "gray", icon: "More01Icon" },
 ];
 
@@ -1093,4 +1096,135 @@ export async function generateRecurringEntries(managementId: string): Promise<nu
   }
 
   return generated;
+}
+
+export interface AuditSnapshotData {
+  id: string;
+  date: string;
+  expectedBalance: number;
+  actualBalance: number;
+  difference: number;
+  adjusted: boolean;
+  note: string | null;
+  createdAt: Date;
+}
+
+export async function getBalanceAsOf(managementId: string): Promise<number> {
+  const [incomeAgg, expensesAgg] = await Promise.all([
+    prisma.entry.aggregate({ where: { managementId, io: "Income" }, _sum: { nominal: true } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Expenses" }, _sum: { nominal: true } }),
+  ]);
+
+  const totalIncome = incomeAgg._sum.nominal ?? 0;
+  const totalExpenses = expensesAgg._sum.nominal ?? 0;
+
+  return totalIncome - totalExpenses;
+}
+
+async function getAdjustmentCategoryId(managementId: string): Promise<string> {
+  const existing = await prisma.category.findFirst({
+    where: { name: "Penyesuaian", managementId },
+  });
+  if (existing) return existing.id;
+
+  const created = await prisma.category.create({
+    data: { name: "Penyesuaian", color: "gray", icon: "Audit01Icon", managementId },
+  });
+  return created.id;
+}
+
+export async function createAuditSnapshot(params: {
+  managementId: string;
+  userId: string;
+  actualBalance: number;
+  note?: string;
+  autoAdjust: boolean;
+}): Promise<AuditSnapshotData> {
+  const today = formatDate(new Date());
+  const expectedBalance = await getBalanceAsOf(params.managementId);
+  const difference = params.actualBalance - expectedBalance;
+
+  let adjustmentEntryId: string | null = null;
+
+  if (params.autoAdjust && Math.abs(difference) > 0.01) {
+    const categoryId = await getAdjustmentCategoryId(params.managementId);
+    const io: IOType = difference > 0 ? "Income" : "Expenses";
+
+    const entry = await prisma.entry.create({
+      data: {
+        name: `Penyesuaian audit ${today}`,
+        nominal: Math.abs(difference),
+        categoryId,
+        date: today,
+        io,
+        isReconciliation: true,
+        managementId: params.managementId,
+        createdById: params.userId,
+      },
+    });
+    adjustmentEntryId = entry.id;
+  }
+
+  const snapshot = await prisma.auditSnapshot.create({
+    data: {
+      managementId: params.managementId,
+      date: today,
+      expectedBalance,
+      actualBalance: params.actualBalance,
+      difference,
+      adjustmentEntryId,
+      note: params.note ?? null,
+      createdById: params.userId,
+    },
+  });
+
+  return {
+    id: snapshot.id,
+    date: snapshot.date,
+    expectedBalance: snapshot.expectedBalance,
+    actualBalance: snapshot.actualBalance,
+    difference: snapshot.difference,
+    adjusted: adjustmentEntryId !== null,
+    note: snapshot.note,
+    createdAt: snapshot.createdAt,
+  };
+}
+
+export async function getAuditHistory(managementId: string, limit = 5): Promise<AuditSnapshotData[]> {
+  const snapshots = await prisma.auditSnapshot.findMany({
+    where: { managementId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
+  return snapshots.map((s) => ({
+    id: s.id,
+    date: s.date,
+    expectedBalance: s.expectedBalance,
+    actualBalance: s.actualBalance,
+    difference: s.difference,
+    adjusted: s.adjustmentEntryId !== null,
+    note: s.note,
+    createdAt: s.createdAt,
+  }));
+}
+
+export async function getLatestAuditSnapshot(managementId: string): Promise<AuditSnapshotData | null> {
+  const snapshot = await prisma.auditSnapshot.findFirst({
+    where: { managementId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!snapshot) return null;
+
+  return {
+    id: snapshot.id,
+    date: snapshot.date,
+    expectedBalance: snapshot.expectedBalance,
+    actualBalance: snapshot.actualBalance,
+    difference: snapshot.difference,
+    adjusted: snapshot.adjustmentEntryId !== null,
+    note: snapshot.note,
+    createdAt: snapshot.createdAt,
+  };
 }

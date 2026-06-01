@@ -18,22 +18,14 @@ import { getCategoryConfig } from "@/lib/categories";
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { useCalendarEntries, useCategories } from "@/hooks/use-cashflow-data";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/providers/currency-provider";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function formatCompactAmount(amount: number): string {
-  const abs = Math.abs(amount);
-  if (abs >= 1_000_000) {
-    const val = abs / 1_000_000;
-    return `Rp${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })}jt`;
-  }
-  if (abs >= 1_000) {
-    const val = abs / 1_000;
-    return `Rp${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })}k`;
-  }
-  return `Rp${abs.toLocaleString("id-ID")}`;
+function formatCompactAmount(amount: number, format: (amountIdr: number, opts?: { compact?: boolean }) => string): string {
+  return format(amount, { compact: true });
 }
 
 function CalendarDayContent({
@@ -47,6 +39,7 @@ function CalendarDayContent({
   calendarData: Record<string, { entries: CashflowEntry[]; income: number; expenses: number }>;
   locale?: Intl.LocalesArgument;
 }) {
+  const { format } = useCurrency();
   const dateKey = formatDateKey(day.date);
   const dayData = calendarData[dateKey];
   const hasEntries = Boolean(dayData && dayData.entries.length > 0);
@@ -75,7 +68,7 @@ function CalendarDayContent({
       </span>
       {hasEntries && (
         <span className={cn("text-[10px] md:text-xs font-medium leading-none truncate", net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500")}>
-          {net >= 0 ? "+" : "-"}{formatCompactAmount(net)}
+          {net >= 0 ? "+" : "-"}{formatCompactAmount(net, format)}
         </span>
       )}
     </button>
@@ -114,6 +107,7 @@ export function CashflowCalendar() {
   const [ioFilter, setIoFilter] = React.useState<string>("all");
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
   const [editingEntry, setEditingEntry] = React.useState<CashflowEntry | null>(null);
+  const { format } = useCurrency();
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -194,19 +188,19 @@ export function CashflowCalendar() {
         <span>
           <span className="text-muted-foreground">Net: </span>
           <span className="font-medium">
-            {formatCompactAmount(monthlyTotals.net)}
+            {formatCompactAmount(monthlyTotals.net, format)}
           </span>
         </span>
         <span>
           <span className="text-muted-foreground">Income: </span>
           <span className="font-medium text-green-600 dark:text-green-400">
-            +{formatCompactAmount(monthlyTotals.income)}
+            +{formatCompactAmount(monthlyTotals.income, format)}
           </span>
         </span>
         <span>
           <span className="text-muted-foreground">Expenses: </span>
           <span className="font-medium text-red-600 dark:text-red-400">
-            -{formatCompactAmount(monthlyTotals.expenses)}
+            -{formatCompactAmount(monthlyTotals.expenses, format)}
           </span>
         </span>
       </div>
@@ -310,7 +304,7 @@ export function CashflowCalendar() {
                     "text-sm font-semibold tabular-nums shrink-0",
                     isIncome ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500",
                   )}>
-                    {isIncome ? "+" : "-"}{formatCompactAmount(entry.nominal)}
+                    {isIncome ? "+" : "-"}{formatCompactAmount(entry.nominal, format)}
                   </span>
                 </button>
               );
