@@ -1,63 +1,57 @@
 import {
   Audit01Icon,
-  CalculatorIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
   MoneyReceiveIcon,
   MoneySendIcon,
-  Wallet01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function StatsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4 mb-4">
-      <div className="rounded-lg border p-2 sm:p-4 shadow-sm">
-        <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-          <HugeiconsIcon
-            icon={CalculatorIcon}
-            size={16}
-            className="text-muted-foreground sm:w-5 sm:h-5"
-          />
-          <div className="text-xs sm:text-sm font-medium text-muted-foreground">Tercatat</div>
-        </div>
-        <Skeleton className="h-6 sm:h-8 w-12 sm:w-16 mt-2" />
-      </div>
+    <div className="space-y-3 mb-4">
+      <div>
+        <div className="py-3 sm:py-4">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground tracking-wide uppercase">
+                Balance
+              </span>
+              <Skeleton className="h-4 w-4 rounded" />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <HugeiconsIcon
+                icon={MoneyReceiveIcon}
+                size={14}
+                className="text-green-600"
+              />
+              <span className="hidden sm:inline">Income</span>
+              <Skeleton className="h-4 w-10" />
+              <span className="text-muted-foreground/40 mx-0.5">|</span>
+              <HugeiconsIcon
+                icon={MoneySendIcon}
+                size={14}
+                className="text-red-600"
+              />
+              <span className="hidden sm:inline">Expense</span>
+              <Skeleton className="h-4 w-10" />
+            </div>
+          </div>
 
-      <div className="rounded-lg border p-2 sm:p-4 shadow-sm">
-        <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-          <HugeiconsIcon
-            icon={MoneyReceiveIcon}
-            size={16}
-            className="text-green-600 sm:w-5 sm:h-5"
-          />
-          <div className="text-xs sm:text-sm font-medium text-muted-foreground">Income</div>
+          <div className="flex items-end justify-between">
+            <Skeleton className="h-7 sm:h-8 md:h-9 w-28 sm:w-36" />
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-muted-foreground/50">
+                <Skeleton className="h-4 w-8 inline-block align-middle" />{" "}
+                <span>entries</span>
+              </div>
+              <Skeleton className="h-5 w-14 rounded-full" />
+            </div>
+          </div>
         </div>
-        <Skeleton className="h-6 sm:h-8 w-20 sm:w-28 mt-2" />
-      </div>
-
-      <div className="rounded-lg border p-2 sm:p-4 shadow-sm">
-        <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-          <HugeiconsIcon
-            icon={MoneySendIcon}
-            size={16}
-            className="text-red-600 sm:w-5 sm:h-5"
-          />
-          <div className="text-xs sm:text-sm font-medium text-muted-foreground">Expenses</div>
-        </div>
-        <Skeleton className="h-6 sm:h-8 w-20 sm:w-28 mt-2" />
-      </div>
-
-      <div className="rounded-lg border p-2 sm:p-4 shadow-sm">
-        <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-          <HugeiconsIcon
-            icon={Wallet01Icon}
-            size={16}
-            className="text-muted-foreground sm:w-5 sm:h-5"
-          />
-          <div className="text-xs sm:text-sm font-medium text-muted-foreground">Balance</div>
-        </div>
-        <Skeleton className="h-6 sm:h-8 w-20 sm:w-28 mt-2" />
       </div>
     </div>
   );
@@ -147,42 +141,71 @@ export function AnalyticsContentSkeleton() {
     <>
       <StatsSkeleton />
 
-      <div className="rounded-lg border p-3 sm:p-4 mb-4 sm:mb-6">
-        <Skeleton className="h-6 w-20 mb-3 sm:mb-4" />
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="space-y-1.5 sm:space-y-2">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-9 sm:h-10 w-full" />
+      <div className="mt-4">
+        <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-2">
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Previous month" disabled>
+            <HugeiconsIcon icon={ArrowLeftIcon} strokeWidth={2} className="size-4" />
+          </Button>
+          <div className="flex justify-center">
+            <Skeleton className="h-5 w-32 sm:w-40" />
+          </div>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Next month" disabled>
+            <HugeiconsIcon icon={ArrowRightIcon} strokeWidth={2} className="size-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 mb-4 flex items-center justify-between gap-3 sm:mb-6">
+        <h2 className="text-base font-semibold sm:text-lg">Filters</h2>
+        <Skeleton className="h-9 w-36 rounded-md sm:w-48" />
+      </div>
+
+      <div className="mb-4 rounded-lg border p-3 sm:mb-6 sm:p-4">
+        <h2 className="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Monthly Trend</h2>
+        <div className="flex h-[250px] w-full items-end gap-2 rounded-md sm:h-[300px]">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="flex h-full flex-1 items-end gap-1">
+              <Skeleton className="w-full rounded-t" style={{ height: `${34 + ((i * 17) % 54)}%` }} />
+              <Skeleton className="w-full rounded-t" style={{ height: `${28 + ((i * 23) % 58)}%` }} />
             </div>
           ))}
         </div>
-        <div className="flex gap-2 mt-3 sm:mt-4">
-          <Skeleton className="h-8 w-16" />
-          <Skeleton className="h-8 w-16" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 mb-4 sm:mb-6">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="rounded-lg border p-3 sm:p-4">
-            <Skeleton className="h-6 w-36 mb-3 sm:mb-4" />
-            <Skeleton className="h-[250px] sm:h-[300px] w-full" />
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-lg border p-3 sm:p-4 mb-4 sm:mb-6">
-        <Skeleton className="h-6 w-32 mb-3 sm:mb-4" />
-        <Skeleton className="h-[250px] sm:h-[300px] w-full" />
       </div>
 
       <div className="rounded-lg border p-3 sm:p-4">
-        <Skeleton className="h-6 w-40 mb-3 sm:mb-4" />
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-8 w-full" />
-          ))}
+        <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+          <h2 className="text-base font-semibold sm:text-lg">Category</h2>
+          <div className="flex w-fit items-center rounded-lg border p-0.5">
+            <button
+              type="button"
+              disabled
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              Breakdown
+            </button>
+            <button
+              type="button"
+              disabled
+              className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground"
+            >
+              Details
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-center">
+          <div className="mx-auto flex h-[220px] w-full max-w-[280px] items-center justify-center sm:h-[260px] lg:h-[320px] lg:max-w-none">
+            <Skeleton className="size-[176px] rounded-full sm:size-[210px] lg:size-[250px]" />
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex min-w-0 items-center gap-1.5">
+                <Skeleton className="size-2 shrink-0 rounded-full" />
+                <Skeleton className="h-3 flex-1" />
+                <Skeleton className="hidden h-3 w-12 lg:block" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </>

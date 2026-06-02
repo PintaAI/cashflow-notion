@@ -20,6 +20,7 @@ export interface URLAnalyticsFilter {
 
 export interface CategoryAnalytics {
   category: string;
+  color?: string;
   total: number;
   count: number;
   percentage: number;
@@ -135,6 +136,7 @@ type SummaryRow = {
 
 type CategoryRow = {
   category: string;
+  color: string | null;
   total: number | string | null;
   count: number | bigint;
 };
@@ -180,11 +182,11 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId:
 
   const [categoryRows, monthRows, dayRows] = await Promise.all([
     prisma.$queryRaw<CategoryRow[]>`
-      SELECT c."name" AS "category", COALESCE(SUM(e."nominal"), 0) AS "total", COUNT(*) AS "count"
+      SELECT c."name" AS "category", c."color" AS "color", COALESCE(SUM(e."nominal"), 0) AS "total", COUNT(*) AS "count"
       FROM "Entry" e
       INNER JOIN "Category" c ON c."id" = e."categoryId"
       ${whereSql}
-      GROUP BY c."name"
+      GROUP BY c."name", c."color"
       ORDER BY "total" DESC
     `,
     prisma.$queryRaw<PeriodRow[]>`
@@ -233,6 +235,7 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId:
         const total = toNumber(data.total);
         return {
           category: data.category,
+          color: data.color ?? undefined,
           total,
           count: toNumber(data.count),
           percentage: totalForPercentage > 0 ? (total / totalForPercentage) * 100 : 0,

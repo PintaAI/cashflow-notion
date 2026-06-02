@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowLeftIcon, ArrowRightIcon } from "@hugeicons/core-free-icons";
 import {
   Bar,
   BarChart,
@@ -10,11 +12,10 @@ import {
   Pie,
   PieChart,
   Cell,
-  Line,
-  LineChart,
 } from "recharts";
 
 import { Stats } from "@/components/stats";
+import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
   ChartTooltip,
@@ -30,6 +31,7 @@ import type { AnalyticsData } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { cn } from "@/lib/utils";
 
 // Color palette for charts - using oklch values directly for better color support
 const COLORS = [
@@ -46,6 +48,77 @@ const COLORS = [
   "oklch(0.476 0.114 61.907)",   // Dark brown
   "oklch(0.696 0.17 200.5)",     // Teal variant
 ];
+
+const CATEGORY_CHART_COLORS: Record<string, string> = {
+  default: "#64748b",
+  gray: "#6b7280",
+  brown: "#b45309",
+  orange: "#f97316",
+  yellow: "#eab308",
+  green: "#22c55e",
+  blue: "#3b82f6",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+  red: "#ef4444",
+};
+
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseDateKey(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function getMonthFilters(date: Date): Pick<AnalyticsChartsProps["filters"], "from" | "to"> {
+  return {
+    from: toDateKey(startOfMonth(date)),
+    to: toDateKey(endOfMonth(date)),
+  };
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function isWholeMonth(from: Date, to: Date): boolean {
+  return toDateKey(from) === toDateKey(startOfMonth(from)) && toDateKey(to) === toDateKey(endOfMonth(from));
+}
+
+function getPeriodLabel(filters: AnalyticsChartsProps["filters"]): string {
+  if (filters.allTime) return "All time";
+  if (!filters.from || !filters.to) return "This month";
+
+  const from = parseDateKey(filters.from);
+  const to = parseDateKey(filters.to);
+
+  if (isWholeMonth(from, to)) {
+    return from.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  }
+
+  return `${formatDate(from)} - ${formatDate(to)}`;
+}
+
+function getCategoryChartColor(categoryColor: string | undefined, fallback: string): string {
+  if (!categoryColor) return fallback;
+  if (categoryColor.startsWith("#") || categoryColor.startsWith("oklch") || categoryColor.startsWith("rgb")) {
+    return categoryColor;
+  }
+  return CATEGORY_CHART_COLORS[categoryColor] ?? fallback;
+}
 
 const chartConfig = {
   income: {
@@ -74,7 +147,7 @@ interface AnalyticsChartsProps {
   categories: string[];
 }
 
-const defaultFilters: AnalyticsChartsProps["filters"] = {};
+const defaultFilters: AnalyticsChartsProps["filters"] = getMonthFilters(new Date());
 
 export function AnalyticsCharts() {
   const [filters, setFilters] = React.useState<AnalyticsChartsProps["filters"]>(defaultFilters);
@@ -103,6 +176,49 @@ export function AnalyticsCharts() {
   );
 }
 
+function AppliedFilterPeriod({
+  filters,
+  onFiltersChange,
+}: {
+  filters: AnalyticsChartsProps["filters"];
+  onFiltersChange: (filters: AnalyticsChartsProps["filters"]) => void;
+}) {
+  function moveMonth(delta: number) {
+    const baseDate = filters.from ? parseDateKey(filters.from) : new Date();
+    const nextMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + delta, 1);
+    const nextFilters: AnalyticsChartsProps["filters"] = {
+      ...filters,
+      ...getMonthFilters(nextMonth),
+    };
+
+    delete nextFilters.allTime;
+    onFiltersChange(nextFilters);
+  }
+
+  return (
+    <div className="mt-4">
+      <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-2">
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Previous month" onClick={() => moveMonth(-1)}>
+          <HugeiconsIcon icon={ArrowLeftIcon} strokeWidth={2} className="size-4" />
+        </Button>
+        <div className="min-w-0 text-center">
+          <p className="truncate text-sm font-semibold capitalize sm:text-base">{getPeriodLabel(filters)}</p>
+          {(filters.io || filters.category) && (
+            <div className="mt-1 flex min-w-0 flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              {filters.io && <span>{filters.io}</span>}
+              {filters.io && filters.category && <span>•</span>}
+              {filters.category && <span>{filters.category}</span>}
+            </div>
+          )}
+        </div>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Next month" onClick={() => moveMonth(1)}>
+          <HugeiconsIcon icon={ArrowRightIcon} strokeWidth={2} className="size-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsChartsContent({
   analytics,
   filters,
@@ -112,11 +228,13 @@ function AnalyticsChartsContent({
   onFiltersChange: (filters: AnalyticsChartsProps["filters"]) => void;
 }) {
   const { currency } = useCurrency();
+  const [categoryView, setCategoryView] = React.useState<"chart" | "details">("chart");
+
   // Prepare category data for pie chart
   const categoryChartData = React.useMemo(() => {
     return analytics.byCategory.map((item, index) => ({
       ...item,
-      fill: COLORS[index % COLORS.length],
+      fill: getCategoryChartColor(item.color, COLORS[index % COLORS.length]),
     }));
   }, [analytics.byCategory]);
 
@@ -126,7 +244,7 @@ function AnalyticsChartsContent({
     analytics.byCategory.forEach((item, index) => {
       config[item.category] = {
         label: item.category,
-        color: COLORS[index % COLORS.length],
+        color: getCategoryChartColor(item.color, COLORS[index % COLORS.length]),
       };
     });
     return config;
@@ -144,115 +262,27 @@ function AnalyticsChartsContent({
         }}
       />
 
-      {/* Filter Section */}
-      <div className="rounded-lg border mt-4 p-3 sm:p-4 mb-4 sm:mb-6">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-base sm:text-lg font-semibold">Filters</h2>
-          <AnalyticsFilter filters={filters} categories={categories} onFiltersChange={onFiltersChange} />
-        </div>
+      <AppliedFilterPeriod filters={filters} onFiltersChange={onFiltersChange} />
+
+      {/* Filter Row */}
+      <div className="mt-4 mb-4 flex items-center justify-between gap-3 sm:mb-6">
+        <h2 className="text-base font-semibold sm:text-lg">Filters</h2>
+        <AnalyticsFilter filters={filters} categories={categories} onFiltersChange={onFiltersChange} />
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 mb-4 sm:mb-6">
-        {/* Monthly Trend Chart */}
-        <div className="rounded-lg border p-3 sm:p-4">
-          <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Monthly Trend</h2>
-          {analytics.byMonth.length > 0 ? (
-            <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px] w-full">
-              <BarChart data={analytics.byMonth} accessibilityLayer>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="monthLabel"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                  tickFormatter={(value) => value.slice(0, 6)}
-                  className="text-xs"
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => formatCurrencyAmount(value, currency, { compact: true })}
-                  className="text-xs"
-                />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Bar
-                  dataKey="income"
-                  name="Income"
-                  fill="var(--color-income)"
-                  radius={4}
-                />
-                <Bar
-                  dataKey="expenses"
-                  name="Expenses"
-                  fill="var(--color-expenses)"
-                  radius={4}
-                />
-              </BarChart>
-            </ChartContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[250px] sm:h-[300px] text-muted-foreground text-sm">
-              No data available for the selected filters
-            </div>
-          )}
-        </div>
-
-        {/* Category Breakdown Chart */}
-        <div className="rounded-lg border p-3 sm:p-4">
-          <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Category Breakdown</h2>
-          {categoryChartData.length > 0 ? (
-            <ChartContainer
-              config={dynamicCategoryChartConfig as ChartConfig}
-              className="h-[250px] sm:h-[300px] w-full"
-            >
-              <PieChart>
-                <Pie
-                  data={categoryChartData}
-                  dataKey="total"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={70}
-                  className="sm:outerRadius-100"
-                  label={({ payload }) => {
-                    if (payload && 'category' in payload && 'percentage' in payload) {
-                      return `${payload.category} (${payload.percentage.toFixed(1)}%)`;
-                    }
-                    return null;
-                  }}
-                >
-                  {categoryChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <ChartTooltip />
-              </PieChart>
-            </ChartContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[250px] sm:h-[300px] text-muted-foreground text-sm">
-              No category data available
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Daily Trend Chart */}
-      <div className="rounded-lg border p-3 sm:p-4 mb-4 sm:mb-6">
-        <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Daily Net Flow</h2>
-        {analytics.byDay.length > 0 ? (
-          <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px] w-full">
-            <LineChart data={analytics.byDay} accessibilityLayer>
-              <CartesianGrid strokeDasharray="3 3" />
+      {/* Monthly Trend Chart */}
+      <div className="mb-4 rounded-lg border p-3 sm:mb-6 sm:p-4">
+        <h2 className="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Monthly Trend</h2>
+        {analytics.byMonth.length > 0 ? (
+          <ChartContainer config={chartConfig} className="h-[250px] w-full sm:h-[300px]">
+            <BarChart data={analytics.byMonth} accessibilityLayer>
+              <CartesianGrid vertical={false} />
               <XAxis
-                dataKey="date"
+                dataKey="monthLabel"
                 tickLine={false}
                 tickMargin={10}
                 axisLine={false}
-                tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return `${date.getDate()}/${date.getMonth() + 1}`;
-                }}
+                tickFormatter={(value) => value.slice(0, 6)}
                 className="text-xs"
               />
               <YAxis
@@ -261,66 +291,147 @@ function AnalyticsChartsContent({
                 tickFormatter={(value) => formatCurrencyAmount(value, currency, { compact: true })}
                 className="text-xs"
               />
-              <ChartTooltip />
-              <Line
-                type="monotone"
-                dataKey="net"
-                name="Net"
-                stroke="var(--color-net)"
-                strokeWidth={2}
-                dot={false}
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Bar
+                dataKey="income"
+                name="Income"
+                fill="var(--color-income)"
+                radius={4}
               />
-            </LineChart>
+              <Bar
+                dataKey="expenses"
+                name="Expenses"
+                fill="var(--color-expenses)"
+                radius={4}
+              />
+            </BarChart>
           </ChartContainer>
         ) : (
-          <div className="flex items-center justify-center h-[250px] sm:h-[300px] text-muted-foreground text-sm">
-            No daily data available for the selected filters
+          <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground sm:h-[300px]">
+            No data available for the selected filters
           </div>
         )}
       </div>
 
-      {/* Category Details Table */}
+      {/* Category */}
       <div className="rounded-lg border p-3 sm:p-4">
-        <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Category Details</h2>
-        {analytics.byCategory.length > 0 ? (
+        <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+          <h2 className="text-base font-semibold sm:text-lg">Category</h2>
+          <div className="flex w-fit items-center rounded-lg border p-0.5">
+            <button
+              type="button"
+              onClick={() => setCategoryView("chart")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                categoryView === "chart"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Breakdown
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryView("details")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                categoryView === "details"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Details
+            </button>
+          </div>
+        </div>
+
+        {categoryView === "chart" ? (
+          categoryChartData.length > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-center">
+              <ChartContainer
+                config={dynamicCategoryChartConfig as ChartConfig}
+                className="mx-auto h-[220px] w-full max-w-[280px] sm:h-[260px] lg:h-[320px] lg:max-w-none"
+              >
+                <PieChart>
+                  <Pie
+                    data={categoryChartData}
+                    dataKey="total"
+                    nameKey="category"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={96}
+                    paddingAngle={2}
+                  >
+                    {categoryChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip />
+                </PieChart>
+              </ChartContainer>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 lg:grid-cols-1">
+                {categoryChartData.map((item) => (
+                  <div key={item.category} className="flex min-w-0 items-center gap-1.5 text-xs">
+                    <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: item.fill }} />
+                    <span className="min-w-0 flex-1 truncate font-medium">{item.category}</span>
+                    <span className="hidden text-muted-foreground lg:inline">
+                      {formatCurrencyAmount(item.total, currency, { compact: true })}
+                    </span>
+                    <span className="hidden w-10 text-right text-muted-foreground lg:inline-block">
+                      {item.percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+              No category data available
+            </div>
+          )
+        ) : analytics.byCategory.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2 px-2 sm:px-4 text-xs sm:text-sm">Category</th>
-                  <th className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">Total</th>
-                  <th className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">Count</th>
-                  <th className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">%</th>
+                  <th className="px-2 py-2 text-left text-xs sm:px-4 sm:text-sm">Category</th>
+                  <th className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">Total</th>
+                  <th className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">Count</th>
+                  <th className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">%</th>
                 </tr>
               </thead>
               <tbody>
                 {analytics.byCategory.map((item, index) => (
-                  <tr key={item.category} className="border-b">
-                    <td className="py-2 px-2 sm:px-4">
+                  <tr key={item.category} className="border-b last:border-b-0">
+                    <td className="px-2 py-2 sm:px-4">
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <div
-                          className="w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          className="size-2 shrink-0 rounded-full sm:size-3"
+                          style={{ backgroundColor: getCategoryChartColor(item.color, COLORS[index % COLORS.length]) }}
                         />
-                        <span className="text-xs sm:text-sm truncate">{item.category}</span>
+                        <span className="truncate text-xs sm:text-sm">{item.category}</span>
                       </div>
                     </td>
-                    <td className="text-right py-2 px-2 sm:px-4 font-medium text-xs sm:text-sm">
+                    <td className="px-2 py-2 text-right text-xs font-medium sm:px-4 sm:text-sm">
                       {formatCurrencyAmount(item.total, currency, { compact: true })}
                     </td>
-                    <td className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">{item.count}</td>
-                    <td className="text-right py-2 px-2 sm:px-4 text-xs sm:text-sm">{item.percentage.toFixed(1)}%</td>
+                    <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">{item.count}</td>
+                    <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">{item.percentage.toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
             No category data available
           </div>
         )}
       </div>
+
     </>
   );
 }

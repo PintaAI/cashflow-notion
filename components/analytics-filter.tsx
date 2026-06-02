@@ -21,14 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import type { IOType, CategoryType } from "@/lib/db";
 
 // Types
@@ -235,7 +228,11 @@ export function AnalyticsFilter({ filters, categories, onFiltersChange }: Analyt
   };
 
   // Apply filters
-  const canApply = draft.allTime || (draft.range.from && draft.range.to);
+  const canApply = Boolean(
+    draft.allTime ||
+      (draft.range.from && draft.range.to) ||
+      (!draft.range.from && !draft.range.to)
+  );
 
   const applyFilters = () => {
     if (!canApply) return;
@@ -266,13 +263,14 @@ export function AnalyticsFilter({ filters, categories, onFiltersChange }: Analyt
 
   // Reset draft
   const resetDraft = () => {
+    const range = { from: startOfMonth(new Date()), to: endOfMonth(new Date()) };
     setDraft({
-      range: { from: undefined, to: undefined },
+      range,
       io: "all",
       category: "all",
       allTime: false,
     });
-    setCalendarMonth(new Date());
+    setCalendarMonth(range.from);
   };
 
   // Active preset
@@ -297,109 +295,114 @@ export function AnalyticsFilter({ filters, categories, onFiltersChange }: Analyt
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
+        <Button variant="outline" size="sm" className="max-w-[220px] justify-start gap-1.5 sm:max-w-none">
           <HugeiconsIcon icon={FilterIcon} strokeWidth={2} className="size-4" />
-          {getDisplayText()}
+          <span className="truncate">{getDisplayText()}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto min-w-80 gap-4 p-4">
-        <PopoverHeader>
-          <PopoverTitle>Filter Analytics</PopoverTitle>
+      <PopoverContent align="end" className="w-[calc(100vw-2rem)] max-w-[26rem] gap-0 overflow-hidden p-0">
+        <PopoverHeader className="border-b px-4 py-3">
+          <PopoverTitle>Filter analytics</PopoverTitle>
           <PopoverDescription>Select period and filters.</PopoverDescription>
         </PopoverHeader>
 
-        {/* Presets */}
-        <section className="space-y-2">
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <HugeiconsIcon icon={Calendar01Icon} strokeWidth={2} className="size-3" /> Preset period
-          </p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full justify-between">
-                {activePreset ? presetOptions.find(p => p.key === activePreset)?.label : "Select preset"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuLabel>Quick presets</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+        <div className="space-y-4 p-4">
+          {/* Presets */}
+          <section className="space-y-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+              <HugeiconsIcon icon={Calendar01Icon} strokeWidth={2} className="size-3" /> Preset period
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {presetOptions.map((preset) => (
-                <DropdownMenuItem
+                <Button
                   key={preset.key}
+                  type="button"
+                  variant={activePreset === preset.key ? "secondary" : "outline"}
+                  size="sm"
                   onClick={() => selectPreset(preset)}
-                  className={activePreset === preset.key ? "bg-accent" : ""}
+                  className={cn("justify-center", activePreset === preset.key && "border-border")}
                 >
                   {preset.label}
-                </DropdownMenuItem>
+                </Button>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </section>
+            </div>
+          </section>
 
-        {/* Custom Range Calendar */}
-        <section className="space-y-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Custom range</p>
-          <Calendar
-            key={calendarKey}
-            mode="range"
-            selected={draft.allTime ? undefined : (draft.range.from || draft.range.to ? draft.range : undefined)}
-            onDayClick={selectRangeDate}
-            month={calendarMonth}
-            onMonthChange={setCalendarMonth}
-            numberOfMonths={1}
-            className="rounded-md border"
-          />
-          <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            {draft.allTime
-              ? "All data from the beginning."
-              : draft.range.from && draft.range.to
-                ? `${formatDate(draft.range.from)} - ${formatDate(draft.range.to)}`
-                : draft.range.from
-                  ? `${formatDate(draft.range.from)} - select end date`
-                  : "Select start and end dates."}
-          </p>
-        </section>
+          {/* Custom Range Calendar */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Custom range</p>
+              <span className="text-xs text-muted-foreground">
+                {draft.allTime ? "All time" : "Manual"}
+              </span>
+            </div>
+            <div className="flex justify-center rounded-md border bg-background p-1">
+              <Calendar
+                key={calendarKey}
+                mode="range"
+                selected={draft.allTime ? undefined : (draft.range.from || draft.range.to ? draft.range : undefined)}
+                onDayClick={selectRangeDate}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
+                numberOfMonths={1}
+                className="border-0 p-0"
+              />
+            </div>
+            <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {draft.allTime
+                ? "All data from the beginning."
+                : draft.range.from && draft.range.to
+                  ? `${formatDate(draft.range.from)} - ${formatDate(draft.range.to)}`
+                  : draft.range.from
+                    ? `${formatDate(draft.range.from)} - select end date`
+                    : "Select start and end dates."}
+            </p>
+          </section>
 
-        {/* Type Filter */}
-        <section className="space-y-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Type</p>
-          <Select
-            value={draft.io}
-            onValueChange={(v) => setDraft((c) => ({ ...c, io: v as IOType | "all" }))}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="Income">Income</SelectItem>
-              <SelectItem value="Expenses">Expenses</SelectItem>
-            </SelectContent>
-          </Select>
-        </section>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {/* Type Filter */}
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Type</p>
+              <Select
+                value={draft.io}
+                onValueChange={(v) => setDraft((c) => ({ ...c, io: v as IOType | "all" }))}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  <SelectItem value="Income">Income</SelectItem>
+                  <SelectItem value="Expenses">Expenses</SelectItem>
+                </SelectContent>
+              </Select>
+            </section>
 
-        {/* Category Filter */}
-        <section className="space-y-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Category</p>
-          <Select
-            value={draft.category}
-            onValueChange={(v) => setDraft((c) => ({ ...c, category: v as CategoryType | "all" }))}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </section>
+            {/* Category Filter */}
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Category</p>
+              <Select
+                value={draft.category}
+                onValueChange={(v) => setDraft((c) => ({ ...c, category: v as CategoryType | "all" }))}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </section>
+          </div>
+        </div>
 
         {/* Footer Actions */}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+        <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
           <Button variant="ghost" size="sm" onClick={resetDraft}>
             Reset
           </Button>

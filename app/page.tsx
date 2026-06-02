@@ -466,6 +466,7 @@ function ManagementSettings() {
   const [invitations, setInvitations] = useState<ManagementInvitation[]>([]);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
@@ -519,6 +520,16 @@ function ManagementSettings() {
       console.error(err);
     } finally {
       setDeletingInviteId(null);
+    }
+  }
+
+  async function handleCopyInvite(invitationId: string, inviteLink: string) {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopiedInviteId(invitationId);
+      window.setTimeout(() => setCopiedInviteId(null), 1500);
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -743,7 +754,18 @@ function ManagementSettings() {
                         {deletingInviteId === invitation.id ? "Menghapus..." : "Hapus"}
                       </Button>
                     </div>
-                    <pre className="bg-muted p-2 rounded text-xs break-all">{inviteLink}</pre>
+                    <div className="flex min-w-0 items-center gap-2 rounded bg-muted p-2">
+                      <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                        {inviteLink}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCopyInvite(invitation.id, inviteLink)}
+                      >
+                        {copiedInviteId === invitation.id ? "Tersalin" : "Copy"}
+                      </Button>
+                    </div>
                     <p className="text-[10px] text-muted-foreground">
                       Dibuat {new Date(invitation.createdAt).toLocaleDateString("id-ID")} · Berlaku sampai {new Date(invitation.expiresAt).toLocaleDateString("id-ID")}
                     </p>
