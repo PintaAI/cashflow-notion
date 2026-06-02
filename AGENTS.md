@@ -86,7 +86,7 @@ bun run generate-icons   # Generate PWA icons from cashflow.png
 ## Deployment
 
 - **Platform:** Vercel (`prj_hlxQdzS32S2PqfresgQVt8W13Wu2`)
-- **Trigger:** Pushing to `origin/main` auto-deploys
+- **Trigger:** Pushing to `origin/master` auto-deploys
 - **Vercel CLI:** Logged in and available (`vercel` commands work)
 - **Cron:** `CRON_SECRET`-authorized call to `/api/notifications/daily` at 8 PM Jakarta
 
@@ -96,7 +96,7 @@ When the user says "commit", do ALL of these:
 
 1. Stage all changes (`git add -A`)
 2. Commit with a concise, descriptive message in English
-3. Push to `origin/main` — this triggers Vercel deploy
+3. Push to `origin/master` — this triggers Vercel deploy
 
 ## Environment
 
