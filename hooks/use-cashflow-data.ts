@@ -36,6 +36,7 @@ import {
   fetchLatestAudit,
   performAudit,
 } from "@/app/actions/audit";
+import { getCurrentManagement } from "@/app/actions/management";
 import type { BudgetPeriod, RecurringFrequency, IOType } from "@/lib/db";
 
 export const cashflowQueryKeys = {
@@ -52,6 +53,7 @@ export const cashflowQueryKeys = {
   balance: ["cashflow-balance"] as const,
   auditHistory: ["cashflow-audit-history"] as const,
   latestAudit: ["cashflow-latest-audit"] as const,
+  managementMembers: ["cashflow-management-members"] as const,
   calendarEntries: (year: number, month: number) => ["cashflow-calendar", year, month] as const,
 };
 
@@ -90,6 +92,16 @@ export function useCategories() {
     queryKey: cashflowQueryKeys.categories,
     queryFn: fetchCategories,
     staleTime: CATEGORY_STALE_TIME,
+  });
+}
+
+export function useManagementMembers() {
+  return useQuery({
+    queryKey: cashflowQueryKeys.managementMembers,
+    queryFn: async () => {
+      const management = await getCurrentManagement();
+      return management?.management.members ?? [];
+    },
   });
 }
 

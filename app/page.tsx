@@ -55,6 +55,7 @@ import type { UserOAuthConnection } from "@/lib/oauth/server";
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/components/providers/currency-provider"
 import { SUPPORTED_CURRENCIES } from "@/lib/currency"
+import { getProfileImageSrc } from "@/lib/profile-image";
 import {
   Select,
   SelectContent,
@@ -898,15 +899,6 @@ function CopyField({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
-}
-
-function getProfileImageSrc(image: string | null | undefined) {
-  if (!image) return null;
-  if (image.startsWith("profiles/")) {
-    return `/api/profile-photo?pathname=${encodeURIComponent(image)}`;
-  }
-
-  return image;
 }
 
 type EditableProfileUser = {

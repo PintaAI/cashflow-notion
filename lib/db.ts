@@ -29,6 +29,13 @@ export interface CashflowEntry {
   category: CategoryType | null;
   date: string | null;
   io: IOType | null;
+  createdById: string | null;
+  createdBy: {
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+  } | null;
 }
 
 export interface CategorySpend {
@@ -103,9 +110,24 @@ export interface BudgetStatusItem {
   isOverBudget: boolean;
 }
 
-type EntryWithCategory = Prisma.EntryGetPayload<{
-  include: { category: true };
-}>;
+type EntryWithCategory = Prisma.EntryGetPayload<{ include: { category: true } }>;
+
+type EntryForMapping = EntryWithCategory & {
+  createdById: string | null;
+  createdBy?: {
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+  } | null;
+};
+
+const entryCreatorSelect = {
+  id: true,
+  name: true,
+  email: true,
+  image: true,
+} satisfies Prisma.UserSelect;
 
 export type EntryWhereInput = Prisma.EntryWhereInput;
 
@@ -127,7 +149,7 @@ function toNumber(value: number | string | bigint | null | undefined): number {
   return Number(value);
 }
 
-function toEntry(entry: EntryWithCategory): CashflowEntry {
+function toEntry(entry: EntryForMapping): CashflowEntry {
   return {
     id: entry.id,
     name: entry.name,
@@ -135,6 +157,8 @@ function toEntry(entry: EntryWithCategory): CashflowEntry {
     category: entry.category?.name ?? null,
     date: entry.date,
     io: entry.io,
+    createdById: entry.createdById,
+    createdBy: entry.createdBy ?? null,
   };
 }
 
@@ -163,10 +187,12 @@ export function buildEntryWhere(filter: {
   date?: string;
   startDate?: string;
   endDate?: string;
+  createdById?: string | null;
 } = {}): EntryWhereInput {
   return {
     ...(filter.io ? { io: filter.io } : {}),
     ...(filter.category ? { category: { is: { name: filter.category } } } : {}),
+    ...(filter.createdById !== undefined ? { createdById: filter.createdById } : {}),
     ...(filter.date
       ? { date: filter.date }
       : filter.startDate || filter.endDate
@@ -183,7 +209,7 @@ export function buildEntryWhere(filter: {
 export async function getAllEntries(managementId: string): Promise<CashflowEntry[]> {
   const entries = await prisma.entry.findMany({
     where: { managementId },
-    include: { category: true },
+    include: { category: true, createdBy: { select: entryCreatorSelect } },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
 
@@ -355,18 +381,19 @@ export async function getEntriesFiltered(options?: {
   skip?: number;
   io?: IOType;
   date?: string;
+  createdById?: string | null;
   managementId: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
   const pageSize = options?.pageSize || 20;
   const skip = options?.skip || 0;
   const where = {
     managementId: options!.managementId,
-    ...buildEntryWhere({ io: options?.io, date: options?.date }),
+    ...buildEntryWhere({ io: options?.io, date: options?.date, createdById: options?.createdById }),
   };
 
   const entries = await prisma.entry.findMany({
     where,
-    include: { category: true },
+    include: { category: true, createdBy: { select: entryCreatorSelect } },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     skip,
     take: pageSize + 1,
@@ -421,7 +448,7 @@ export async function createEntry(data: {
       managementId: data.managementId,
       createdById: data.userId ?? null,
     },
-    include: { category: true },
+    include: { category: true, createdBy: { select: entryCreatorSelect } },
   });
 
   return toEntry(entry);
@@ -436,11 +463,22 @@ export async function updateEntry(
     date: string;
     io: IOType;
     managementId: string;
+    createdById: string | null;
   }>
 ): Promise<CashflowEntry> {
   const category = data.category === undefined ? undefined : await findCategory(data.category, data.managementId || "");
   if (data.category && !category) {
     throw new Error(`Category "${data.category}" not found`);
+  }
+
+  if (data.createdById) {
+    const member = await prisma.managementMember.findFirst({
+      where: { managementId: data.managementId, userId: data.createdById },
+      select: { id: true },
+    });
+    if (!member) {
+      throw new Error("Selected creator is not a member of this management");
+    }
   }
 
   const entry = await prisma.entry.update({
@@ -451,8 +489,9 @@ export async function updateEntry(
       ...(data.category !== undefined ? { categoryId: category?.id ?? null } : {}),
       ...(data.date !== undefined ? { date: data.date } : {}),
       ...(data.io !== undefined ? { io: data.io } : {}),
+      ...(data.createdById !== undefined ? { createdById: data.createdById } : {}),
     },
-    include: { category: true },
+    include: { category: true, createdBy: { select: entryCreatorSelect } },
   });
 
   return toEntry(entry);

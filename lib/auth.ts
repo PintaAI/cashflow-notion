@@ -16,6 +16,12 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  account: {
+    accountLinking: {
+      trustedProviders: ["google"],
+      requireLocalEmailVerified: false,
+    },
+  },
   plugins: [nextCookies()],
   socialProviders: {
     google: {

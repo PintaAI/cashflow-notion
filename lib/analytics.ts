@@ -42,6 +42,16 @@ export interface DailyAnalytics {
   net: number;
 }
 
+export interface CreatorAnalytics {
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  totalIncome: number;
+  totalExpenses: number;
+  entryCount: number;
+}
+
 export interface ActivityDay {
   date: string;
   count: number;
@@ -64,6 +74,7 @@ export interface AnalyticsData {
   byCategory: CategoryAnalytics[];
   byMonth: MonthlyAnalytics[];
   byDay: DailyAnalytics[];
+  byCreator: CreatorAnalytics[];
   filteredBy: AnalyticsFilter;
 }
 
@@ -147,6 +158,16 @@ type PeriodRow = {
   total: number | string | null;
 };
 
+type CreatorRow = {
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  totalIncome: number | string | null;
+  totalExpenses: number | string | null;
+  entryCount: number | bigint;
+};
+
 type ActivityRow = {
   date: Date | string;
   count: number | bigint;
@@ -180,7 +201,7 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId:
     entryCount: toNumber(summaryRow.entryCount),
   };
 
-  const [categoryRows, monthRows, dayRows] = await Promise.all([
+  const [categoryRows, monthRows, dayRows, creatorRows] = await Promise.all([
     prisma.$queryRaw<CategoryRow[]>`
       SELECT c."name" AS "category", c."color" AS "color", COALESCE(SUM(e."nominal"), 0) AS "total", COUNT(*) AS "count"
       FROM "Entry" e
@@ -206,6 +227,22 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId:
       AND e."date" IS NOT NULL
       GROUP BY e."date", e."io"
       ORDER BY e."date" ASC
+    `,
+    prisma.$queryRaw<CreatorRow[]>`
+      SELECT
+        e."createdById" AS "userId",
+        u."name" AS "name",
+        u."email" AS "email",
+        u."image" AS "image",
+        COALESCE(SUM(e."nominal") FILTER (WHERE e."io"::text = 'Income'), 0) AS "totalIncome",
+        COALESCE(SUM(e."nominal") FILTER (WHERE e."io"::text = 'Expenses'), 0) AS "totalExpenses",
+        COUNT(*) AS "entryCount"
+      FROM "Entry" e
+      LEFT JOIN "Category" c ON c."id" = e."categoryId"
+      LEFT JOIN "User" u ON u."id" = e."createdById"
+      ${whereSql}
+      GROUP BY e."createdById", u."name", u."email", u."image"
+      ORDER BY "totalExpenses" DESC, "totalIncome" DESC, "entryCount" DESC
     `,
   ]);
 
@@ -263,6 +300,15 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId:
         net: data.income - data.expenses,
       }))
       .sort((a, b) => a.date.localeCompare(b.date)),
+    byCreator: creatorRows.map((row) => ({
+      userId: row.userId,
+      name: row.name,
+      email: row.email,
+      image: row.image,
+      totalIncome: toNumber(row.totalIncome),
+      totalExpenses: toNumber(row.totalExpenses),
+      entryCount: toNumber(row.entryCount),
+    })),
     filteredBy: filter,
   };
 }

@@ -27,7 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { addEntry, editEntry } from "@/app/actions/cashflow"
 import type { CashflowEntry, CategoryType, IOType } from "@/lib/db"
 import { getCategoryConfig } from "@/lib/categories"
-import { useCategoriesWithDetails, useQuickFills } from "@/hooks/use-cashflow-data"
+import { cashflowQueryKeys, useCategoriesWithDetails, useManagementMembers, useQuickFills } from "@/hooks/use-cashflow-data"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Calendar03Icon,
@@ -42,6 +42,7 @@ import {
 import { cn } from "@/lib/utils"
 import { CameraCapture } from "@/components/camera-capture"
 import { useCurrency } from "@/components/providers/currency-provider"
+import { UserAvatar, getUserDisplayName } from "@/components/user-avatar"
 import { formatCurrencyAmount } from "@/lib/currency"
 
 type CashflowFormDrawerProps = {
@@ -79,11 +80,17 @@ export function CashflowFormDrawer({
   const [category, setCategory] = useState<CategoryType>(() => isEdit ? (entry?.category ?? "") : "")
   const [date, setDate] = useState<Date | undefined>(() => isEdit && entry?.date ? new Date(entry.date) : new Date())
   const [io, setIo] = useState<IOType>(() => isEdit ? (entry?.io ?? "Expenses") : "Expenses")
+  const [createdById, setCreatedById] = useState(() => isEdit ? (entry?.createdById ?? "unknown") : "unknown")
 
   useEffect(() => {
     if (isEdit && entry) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- initialization from async conversion
+      setName(entry.name)
       setNominal(String(Math.round(toDisplay(entry.nominal))))
+      setCategory(entry.category ?? "")
+      setDate(entry.date ? new Date(entry.date) : new Date())
+      setIo(entry.io ?? "Expenses")
+      setCreatedById(entry.createdById ?? "unknown")
     }
   }, [isEdit, entry, toDisplay])
 
@@ -96,6 +103,18 @@ export function CashflowFormDrawer({
   const expenseCategories = categoriesQuery.data ?? []
   const quickFillsQuery = useQuickFills()
   const quickFills = quickFillsQuery.data ?? []
+  const membersQuery = useManagementMembers()
+  const memberOptions = membersQuery.data ?? []
+  const selectedCreator = createdById === "unknown"
+    ? null
+    : memberOptions.find((member) => member.user.id === createdById)?.user
+      ?? (entry?.createdById === createdById ? entry.createdBy : null)
+  const creatorLabel = selectedCreator ? getUserDisplayName(selectedCreator) : "Unknown/System"
+  const currentCreatorIsMissing = Boolean(
+    entry?.createdById
+      && entry.createdBy
+      && !memberOptions.some((member) => member.user.id === entry.createdById)
+  )
 
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -196,13 +215,26 @@ export function CashflowFormDrawer({
       const nominalIdr = Math.round(toIdr(Number(nominal)))
 
       if (isEdit && entry) {
-        await editEntry(entry.id, {
+        const payload: {
+          name: string
+          nominal: number
+          category?: CategoryType
+          date?: string
+          io: IOType
+          createdById?: string | null
+        } = {
           name: name.trim(),
           nominal: nominalIdr,
           category: category || undefined,
           date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
           io,
-        })
+        }
+
+        if (createdById !== (entry.createdById ?? "unknown")) {
+          payload.createdById = createdById === "unknown" ? null : createdById
+        }
+
+        await editEntry(entry.id, payload)
       } else {
         await addEntry({
           name: name.trim(),
@@ -221,6 +253,8 @@ export function CashflowFormDrawer({
       setIo("Expenses")
       setOpen(false)
       queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] })
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary })
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot })
       router.refresh()
       onSuccess?.()
     } catch (error) {
@@ -263,6 +297,36 @@ export function CashflowFormDrawer({
         </DrawerHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto">
+          {isEdit && (
+            <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <UserAvatar user={selectedCreator} size={28} className="size-7 text-xs" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground">Dibuat oleh</p>
+                  <p className="truncate text-sm font-medium">{creatorLabel}</p>
+                </div>
+              </div>
+              <Select value={createdById} onValueChange={setCreatedById}>
+                <SelectTrigger className="h-10 w-full bg-background text-sm">
+                  <SelectValue placeholder="Pilih pembuat" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentCreatorIsMissing && entry?.createdBy && (
+                    <SelectItem value={entry.createdBy.id}>
+                      {getUserDisplayName(entry.createdBy)}
+                    </SelectItem>
+                  )}
+                  {memberOptions.map((member) => (
+                    <SelectItem key={member.user.id} value={member.user.id}>
+                      {getUserDisplayName(member.user)}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="unknown">Unknown/System</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* I/O Type Toggle */}
           <div className="grid grid-cols-2 gap-2">
             <button

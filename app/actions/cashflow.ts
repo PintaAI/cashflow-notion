@@ -48,6 +48,7 @@ export async function fetchEntriesFiltered(options?: {
   skip?: number;
   io?: IOType;
   date?: string;
+  createdById?: string | null;
 }): Promise<{
   entries: CashflowEntry[];
   nextCursor: string | null;
@@ -59,6 +60,7 @@ export async function fetchEntriesFiltered(options?: {
     skip: options?.skip ?? 0,
     io: options?.io,
     date: options?.date,
+    createdById: options?.createdById,
     managementId,
   });
 }
@@ -129,6 +131,7 @@ export async function editEntry(
     category: CategoryType;
     date: string;
     io: IOType;
+    createdById: string | null;
   }>
 ): Promise<CashflowEntry> {
   const managementId = await getCurrentManagementId();

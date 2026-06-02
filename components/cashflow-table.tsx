@@ -22,6 +22,7 @@ import {
   ArrowUpDownIcon,
   Delete03Icon,
   Loading03Icon,
+  UserCircleIcon,
 } from "@hugeicons/core-free-icons";
 
 import {
@@ -52,6 +53,7 @@ import type { CashflowEntry, IOType, CategoryType } from "@/lib/db";
 import { getCategoryConfig } from "@/lib/categories";
 import { fetchEntriesFiltered, removeEntry } from "@/app/actions/cashflow";
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
+import { UserAvatar, getUserDisplayName } from "@/components/user-avatar";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   removeEntriesFromCashflowCache,
@@ -59,7 +61,7 @@ import {
   snapshotCashflowEntries,
 } from "@/lib/cashflow-query-cache";
 import { beginCashflowPending, useCashflowPending } from "@/lib/cashflow-pending";
-import { cashflowQueryKeys, useCategories } from "@/hooks/use-cashflow-data";
+import { cashflowQueryKeys, useCategories, useManagementMembers } from "@/hooks/use-cashflow-data";
 import { useCurrency } from "@/components/providers/currency-provider";
 
 function getColumns(format: (amountIdr: number, opts?: { compact?: boolean }) => string): ColumnDef<CashflowEntry>[] {
@@ -171,6 +173,27 @@ function getColumns(format: (amountIdr: number, opts?: { compact?: boolean }) =>
     },
   },
   {
+    accessorKey: "createdBy",
+    header: () => (
+      <div className="flex items-center gap-1.5 text-left">
+        <HugeiconsIcon icon={UserCircleIcon} size={16} className="text-muted-foreground shrink-0" />
+        <span className="truncate">Ditambah oleh</span>
+      </div>
+    ),
+    cell: ({ row }) => {
+      const createdBy = row.original.createdBy;
+      const label = createdBy ? getUserDisplayName(createdBy) : "Unknown";
+
+      return (
+        <div className="flex max-w-[140px] items-center gap-1.5">
+          <UserAvatar user={createdBy} size={18} className="size-[18px] text-[9px]" />
+          <span className="truncate text-xs text-muted-foreground">{label}</span>
+        </div>
+      );
+    },
+    enableSorting: false,
+  },
+  {
     accessorKey: "date",
     header: ({ column }) => (
       <button
@@ -256,6 +279,7 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
   
   // Separate state for I/O filter to drive the query
   const [ioQueryFilter, setIoQueryFilter] = React.useState<string>("all");
+  const [creatorQueryFilter, setCreatorQueryFilter] = React.useState<string>("all");
 
   // State for the edit drawer
   const [editingEntry, setEditingEntry] = React.useState<CashflowEntry | null>(null);
@@ -264,7 +288,9 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
   const queryClient = useQueryClient();
   const pendingCashflow = useCashflowPending();
   const categoriesQuery = useCategories();
+  const membersQuery = useManagementMembers();
   const categoryOptions = categoriesQuery.data ?? [];
+  const memberOptions = membersQuery.data ?? [];
 
   // Bulk delete handler
   const handleBulkDelete = React.useCallback(async () => {
@@ -306,12 +332,13 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ["cashflow-entries", ioQueryFilter, dateFilter],
+    queryKey: ["cashflow-entries", ioQueryFilter, creatorQueryFilter, dateFilter],
     queryFn: async ({ pageParam = 0 }) => {
       const result = await fetchEntriesFiltered({
         pageSize: PAGE_SIZE,
         skip: pageParam as number,
         io: ioQueryFilter === "all" ? undefined : (ioQueryFilter as IOType),
+        createdById: creatorQueryFilter === "all" ? undefined : creatorQueryFilter === "unknown" ? null : creatorQueryFilter,
         date: dateFilter,
       });
       return result;
@@ -468,6 +495,25 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
                         {option}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Creator Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Ditambah oleh</label>
+                <Select value={creatorQueryFilter} onValueChange={setCreatorQueryFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Creator" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {memberOptions.map((member) => (
+                      <SelectItem key={member.user.id} value={member.user.id}>
+                        {getUserDisplayName(member.user)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="unknown">Unknown/System</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

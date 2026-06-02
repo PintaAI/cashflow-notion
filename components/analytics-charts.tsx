@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeftIcon, ArrowRightIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeftIcon, ArrowRightIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 import {
   Bar,
   BarChart,
@@ -15,7 +15,15 @@ import {
 } from "recharts";
 
 import { Stats } from "@/components/stats";
+import { CreatorBreakdown } from "@/components/creator-breakdown";
 import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   ChartContainer,
   ChartTooltip,
@@ -27,7 +35,7 @@ import {
 import { AnalyticsFilter } from "@/components/analytics-filter";
 import { AnalyticsContentSkeleton } from "@/components/loading-skeletons";
 import { useAnalytics, useCategories } from "@/hooks/use-cashflow-data";
-import type { AnalyticsData } from "@/lib/analytics";
+import type { AnalyticsData, CategoryAnalytics } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { cn } from "@/lib/utils";
@@ -228,6 +236,7 @@ function AnalyticsChartsContent({
 }) {
   const { format } = useCurrency();
   const [categoryView, setCategoryView] = React.useState<"chart" | "details">("chart");
+  const [selectedCategory, setSelectedCategory] = React.useState<CategoryAnalytics | null>(null);
 
   // Prepare category data for pie chart
   const categoryChartData = React.useMemo(() => {
@@ -260,6 +269,8 @@ function AnalyticsChartsContent({
           balance: analytics.summary.balance,
         }}
       />
+
+      <CreatorBreakdown creators={analytics.byCreator} />
 
       <AppliedFilterPeriod filters={filters} onFiltersChange={onFiltersChange} />
 
@@ -404,7 +415,19 @@ function AnalyticsChartsContent({
               </thead>
               <tbody>
                 {analytics.byCategory.map((item, index) => (
-                  <tr key={item.category} className="border-b last:border-b-0">
+                  <tr
+                    key={item.category}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedCategory(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedCategory(item);
+                      }
+                    }}
+                    className="cursor-pointer border-b transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none last:border-b-0"
+                  >
                     <td className="px-2 py-2 sm:px-4">
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <div
@@ -418,7 +441,12 @@ function AnalyticsChartsContent({
                       {format(item.total, { compact: true })}
                     </td>
                     <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">{item.count}</td>
-                    <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">{item.percentage.toFixed(1)}%</td>
+                    <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        {item.percentage.toFixed(1)}%
+                        <HugeiconsIcon icon={ArrowRightIcon} strokeWidth={2} className="size-3 text-muted-foreground" />
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -431,6 +459,111 @@ function AnalyticsChartsContent({
         )}
       </div>
 
+      {selectedCategory && (
+        <CategoryDetailDrawer
+          open
+          category={selectedCategory}
+          filters={filters}
+          onOpenChange={(open) => {
+            if (!open) setSelectedCategory(null);
+          }}
+        />
+      )}
+
     </>
+  );
+}
+
+function CategoryDetailDrawer({
+  open,
+  category,
+  filters,
+  onOpenChange,
+}: {
+  open: boolean;
+  category: CategoryAnalytics;
+  filters: AnalyticsChartsProps["filters"];
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { format } = useCurrency();
+  const detailQuery = useAnalytics({ ...filters, category: category.category });
+  const detail = detailQuery.data;
+  const total = detail?.summary.totalExpenses ?? category.total;
+  const count = detail?.summary.entryCount ?? category.count;
+  const average = count > 0 ? total / count : 0;
+  const monthlyData = detail?.byMonth.filter((item) => item.expenses > 0).slice(-6) ?? [];
+  const maxMonthlyExpense = Math.max(...monthlyData.map((item) => item.expenses), 0);
+
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{category.category}</DrawerTitle>
+          <DrawerDescription>
+            Detail pengeluaran kategori pada periode filter saat ini
+          </DrawerDescription>
+        </DrawerHeader>
+
+        <div className="space-y-4 px-4 pb-4">
+          {detailQuery.isLoading ? (
+            <div className="flex h-32 items-center justify-center text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
+            </div>
+          ) : detailQuery.isError ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+              Category detail is temporarily unavailable.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="mt-1 text-base font-semibold">{format(total)}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Entries</p>
+                  <p className="mt-1 text-base font-semibold">{count}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Average</p>
+                  <p className="mt-1 text-base font-semibold">{format(average)}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Share</p>
+                  <p className="mt-1 text-base font-semibold">{category.percentage.toFixed(1)}%</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Recent monthly spend</h3>
+                  <span className="text-xs text-muted-foreground">Last 6 months</span>
+                </div>
+                {monthlyData.length > 0 ? (
+                  <div className="space-y-2">
+                    {monthlyData.map((item) => (
+                      <div key={item.month} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-medium">{item.monthLabel}</span>
+                          <span className="text-muted-foreground">{format(item.expenses, { compact: true })}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${maxMonthlyExpense > 0 ? (item.expenses / maxMonthlyExpense) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted-foreground">No monthly data available</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
