@@ -80,7 +80,7 @@ export async function updateProfile(
 
   return {
     status: "success",
-    message: "Profil berhasil diperbarui.",
+    message: imageUrl ? "Profil berhasil diperbarui. Tema dari foto disimpan di perangkat ini." : "Profil berhasil diperbarui.",
     user,
   };
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AiChat01Icon, Analytics01Icon, ArrowDown01Icon, BellDotIcon, Calendar03Icon, CurrencyIcon, Edit02Icon, File01Icon, FlashIcon, Logout01Icon, PercentIcon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon, Table01Icon } from "@hugeicons/core-free-icons";
+import { getPalette, getSwatches } from "colorthief";
 import { useSession, signOut } from "@/lib/auth-client";
 
 import { ActivityHeatmap } from "@/components/activity-heatmap";
@@ -61,6 +63,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { generateThemeFromSwatches, parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
+import { LOCAL_THEME_CHANGED_EVENT, LOCAL_THEMES_KEY, SELECTED_LOCAL_THEME_KEY, type LocalTheme } from "@/components/local-theme-style";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -916,14 +920,106 @@ const initialProfileState: ProfileActionState = {
   message: "",
 };
 
-function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdated: (user: EditableProfileUser) => void }) {
+function getLocalThemes(): LocalTheme[] {
+  try {
+    const rawThemes = window.localStorage.getItem(LOCAL_THEMES_KEY);
+    if (!rawThemes) return [];
+    const parsed = JSON.parse(rawThemes);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTheme(theme: LocalTheme) {
+  const nextThemes = [theme, ...getLocalThemes().filter((item) => item.id !== theme.id)].slice(0, 5);
+  window.localStorage.setItem(LOCAL_THEMES_KEY, JSON.stringify(nextThemes));
+  window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, theme.id);
+  window.dispatchEvent(new Event(LOCAL_THEME_CHANGED_EVENT));
+}
+
+function subscribeLocalThemes(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(LOCAL_THEME_CHANGED_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(LOCAL_THEME_CHANGED_EVENT, onStoreChange);
+  };
+}
+
+function getLocalThemesSnapshot() {
+  return window.localStorage.getItem(LOCAL_THEMES_KEY) ?? "[]";
+}
+
+function getSelectedLocalThemeSnapshot() {
+  return window.localStorage.getItem(SELECTED_LOCAL_THEME_KEY) ?? "";
+}
+
+function getEmptyLocalThemesSnapshot() {
+  return "[]";
+}
+
+function getEmptySelectedLocalThemeSnapshot() {
+  return "";
+}
+
+function parseLocalThemesSnapshot(snapshot: string): LocalTheme[] {
+  try {
+    const parsed = JSON.parse(snapshot);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdated: (user: EditableProfileUser, generatedTheme: GeneratedThemeColors | null) => void }) {
   const [state, setState] = useState<ProfileActionState>(initialProfileState);
   const [pending, setPending] = useState(false);
   const [objectPreviewUrl, setObjectPreviewUrl] = useState<string | null>(null);
+  const [generatedTheme, setGeneratedTheme] = useState<GeneratedThemeColors | null>(null);
+  const [themeMessage, setThemeMessage] = useState("");
+
+  async function extractThemeFromImageUrl(url: string) {
+    const image = new window.Image();
+    image.decoding = "async";
+    image.src = url;
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Failed to load profile image preview"));
+    });
+
+    const swatches = await getSwatches(image, {
+      colorCount: 12,
+      quality: 5,
+      colorSpace: "oklch",
+      minSaturation: 0.08,
+    });
+    const palette = await getPalette(image, {
+      colorCount: 8,
+      quality: 5,
+      colorSpace: "oklch",
+      minSaturation: 0.08,
+    });
+    const semanticSwatches = [
+      swatches.Vibrant,
+      swatches.Muted,
+      swatches.LightVibrant,
+      swatches.DarkVibrant,
+      swatches.LightMuted,
+      swatches.DarkMuted,
+    ].flatMap((swatch) => swatch?.color.hex() ?? []);
+    const paletteSwatches = palette?.map((color) => color.hex()) ?? [];
+
+    return generateThemeFromSwatches([...semanticSwatches, ...paletteSwatches]);
+  }
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
+      setGeneratedTheme(null);
+      setThemeMessage("");
       setObjectPreviewUrl((current) => {
         if (current) URL.revokeObjectURL(current);
         return null;
@@ -931,10 +1027,23 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
       return;
     }
 
+    const nextPreviewUrl = URL.createObjectURL(file);
+    setGeneratedTheme(null);
+    setThemeMessage("Membuat tema dari foto...");
     setObjectPreviewUrl((current) => {
       if (current) URL.revokeObjectURL(current);
-      return URL.createObjectURL(file);
+      return nextPreviewUrl;
     });
+
+    extractThemeFromImageUrl(nextPreviewUrl)
+      .then((theme) => {
+        setGeneratedTheme(theme);
+        setThemeMessage(theme ? "Tema dari foto siap disimpan." : "Palet warna foto tidak cukup kuat untuk membuat tema.");
+      })
+      .catch(() => {
+        setGeneratedTheme(null);
+        setThemeMessage("Gagal membuat tema dari foto.");
+      });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -946,11 +1055,13 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
       setState(result);
 
       if (result.status === "success" && result.user) {
-        onUpdated(result.user);
+        onUpdated(result.user, generatedTheme);
         setObjectPreviewUrl((current) => {
           if (current) URL.revokeObjectURL(current);
           return null;
         });
+        setGeneratedTheme(null);
+        setThemeMessage("");
       }
     } finally {
       setPending(false);
@@ -973,6 +1084,7 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
           <p className="text-sm font-medium">Foto profil</p>
           <Input name="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageChange} />
           <p className="text-xs text-muted-foreground">JPG, PNG, WebP, atau GIF. Maksimal 5 MB.</p>
+          {themeMessage && <p className="text-xs text-muted-foreground" aria-live="polite">{themeMessage}</p>}
         </div>
       </div>
 
@@ -999,7 +1111,87 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
   );
 }
 
+function ThemeSettings() {
+  const themesSnapshot = useSyncExternalStore(subscribeLocalThemes, getLocalThemesSnapshot, getEmptyLocalThemesSnapshot);
+  const selectedThemeSnapshot = useSyncExternalStore(subscribeLocalThemes, getSelectedLocalThemeSnapshot, getEmptySelectedLocalThemeSnapshot);
+  const themes = parseLocalThemesSnapshot(themesSnapshot);
+  const selectedThemeId = selectedThemeSnapshot || null;
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function handleThemeChange(value: string) {
+    const nextThemeId = value === "default" ? null : value;
+    setMessage("");
+
+    startTransition(() => {
+      if (nextThemeId) {
+        window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, nextThemeId);
+      } else {
+        window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
+      }
+      window.dispatchEvent(new Event(LOCAL_THEME_CHANGED_EVENT));
+      setMessage("Tema berhasil diterapkan di perangkat ini.");
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">
+          Tema baru dibuat otomatis dari warna foto profil saat Anda mengunggah foto baru. Maksimal 5 tema disimpan di perangkat ini; tema tertua akan dihapus saat melewati batas.
+        </p>
+      </div>
+
+      <Select value={selectedThemeId ?? "default"} onValueChange={handleThemeChange} disabled={isPending}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Pilih tema" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="default">Tema bawaan</SelectItem>
+          {themes.map((theme) => (
+            <SelectItem key={theme.id} value={theme.id}>{theme.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {themes.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {themes.map((theme) => (
+            <button
+              key={theme.id}
+              type="button"
+              onClick={() => handleThemeChange(theme.id)}
+              className={cn(
+                "rounded-lg border p-3 text-left transition-colors hover:bg-accent/60",
+                selectedThemeId === theme.id && "border-primary bg-primary/5"
+              )}
+              disabled={isPending}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium">{theme.name}</p>
+                {selectedThemeId === theme.id && <span className="text-xs text-primary">Aktif</span>}
+              </div>
+              <div className="flex overflow-hidden rounded-md border">
+                {(parseThemeColors(theme.colors)?.swatches ?? []).map((swatch) => (
+                  <span key={swatch} className="h-8 flex-1" style={{ backgroundColor: swatch }} />
+                ))}
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+          Belum ada tema tersimpan. Unggah foto profil untuk membuat tema dari palet warna foto.
+        </p>
+      )}
+
+      {message && <p className="text-xs text-muted-foreground" aria-live="polite">{message}</p>}
+    </div>
+  );
+}
+
 function ProfileTab() {
+  const router = useRouter();
   const { data: session } = useSession();
   const { currency, setCurrency, loading } = useCurrency();
   const [auditDrawerOpen, setAuditDrawerOpen] = useState(false);
@@ -1043,10 +1235,36 @@ function ProfileTab() {
               </span>
             </AccordionTrigger>
             <AccordionContent>
-              <ProfileEditor user={visibleProfileUser} onUpdated={setProfileUser} />
+              <ProfileEditor
+                user={visibleProfileUser}
+                onUpdated={(user, generatedTheme) => {
+                  setProfileUser(user);
+                  if (generatedTheme) {
+                    saveLocalTheme({
+                      id: crypto.randomUUID(),
+                      name: `Profile theme ${new Date().toLocaleDateString("id-ID")}`,
+                      colors: generatedTheme,
+                      createdAt: new Date().toISOString(),
+                    });
+                  }
+                  router.refresh();
+                }}
+              />
             </AccordionContent>
           </AccordionItem>
         )}
+
+        <AccordionItem value="theme">
+          <AccordionTrigger>
+            <span className="flex items-center gap-2">
+              <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-4" />
+              Tema
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <ThemeSettings />
+          </AccordionContent>
+        </AccordionItem>
 
         <AccordionItem value="currency">
           <AccordionTrigger>

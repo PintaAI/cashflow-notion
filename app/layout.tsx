@@ -6,6 +6,7 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
 import { PullToRefreshWrapper } from "@/components/pull-to-refresh-wrapper";
+import { LocalThemeStyle } from "@/components/local-theme-style";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
 
@@ -56,6 +57,7 @@ export default function RootLayout({
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-mono", jetbrainsMono.variable)}
     >
       <body className="min-h-full flex flex-col">
+        <LocalThemeStyle />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
