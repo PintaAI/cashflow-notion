@@ -102,7 +102,7 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   resourceMetadataPath: "/.well-known/oauth-protected-resource",
 });
 
-async function resolveManagementId(req: Request): Promise<string | undefined> {
+async function resolveManagementId(req: Request): Promise<{ managementId: string; userId: string } | undefined> {
   const url = new URL(req.url);
   const queryManagementId = url.searchParams.get("management_id");
   const authHeader = req.headers.get("authorization");
@@ -138,16 +138,18 @@ async function resolveManagementId(req: Request): Promise<string | undefined> {
     const membership = await prisma.managementMember.findFirst({
       where: { userId, managementId: queryManagementId },
     });
-    if (membership) return membership.managementId;
+    if (membership) return { managementId: membership.managementId, userId };
   }
 
-  return resolveActiveManagementId(userId);
+  const activeId = await resolveActiveManagementId(userId);
+  if (!activeId) return undefined;
+  return { managementId: activeId, userId };
 }
 
 async function scopedHandler(req: Request) {
-  const managementId = await resolveManagementId(req);
-  if (managementId) {
-    return managementContext.run(managementId, () => authHandler(req));
+  const ctx = await resolveManagementId(req);
+  if (ctx) {
+    return managementContext.run(ctx, () => authHandler(req));
   }
   return authHandler(req);
 }

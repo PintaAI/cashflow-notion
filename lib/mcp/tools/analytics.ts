@@ -1,9 +1,95 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { fetchActivityOverview, fetchAnalytics } from "@/lib/analytics";
-import { getSummary } from "@/lib/db";
-import { isValidDate, ok, toolError, getManagementId } from "@/lib/mcp/tools/utils";
+import { fetchActivityOverview, fetchAnalytics, type AnalyticsData } from "@/lib/analytics";
+import type { CashflowSummary } from "@/lib/db";
+import { getSummary, prisma } from "@/lib/db";
+import { convertFromIdr } from "@/lib/currency";
+import { getAllRates } from "@/lib/exchange-rates";
+import { isValidDate, ok, toolError, getManagementId, getUserId } from "@/lib/mcp/tools/utils";
+
+async function getUserCurrencyContext(): Promise<{ currency: string; rate: number }> {
+  const userId = getUserId();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { currency: true },
+  });
+  const currency = user?.currency ?? "IDR";
+  if (currency === "IDR") return { currency, rate: 1 };
+
+  const rates = await getAllRates();
+  return { currency, rate: rates[currency] ?? 1 };
+}
+
+function convertSummary(summary: CashflowSummary, ctx: { currency: string; rate: number }): CashflowSummary {
+  if (ctx.rate === 1) return summary;
+
+  const conv = (v: number) => convertFromIdr(v, ctx.currency, ctx.rate);
+
+  return {
+    ...summary,
+    totalIncome: conv(summary.totalIncome),
+    totalExpenses: conv(summary.totalExpenses),
+    balance: conv(summary.balance),
+    byCategory: Object.fromEntries(
+      Object.entries(summary.byCategory).map(([k, v]) => [k, conv(v)]),
+    ),
+    byIO: Object.fromEntries(
+      Object.entries(summary.byIO).map(([k, v]) => [k, conv(v)]),
+    ),
+    currentWeek: {
+      ...summary.currentWeek,
+      income: conv(summary.currentWeek.income),
+      expenses: conv(summary.currentWeek.expenses),
+    },
+    currentMonth: {
+      ...summary.currentMonth,
+      income: conv(summary.currentMonth.income),
+      expenses: conv(summary.currentMonth.expenses),
+    },
+    topExpenseCategories: summary.topExpenseCategories.map((c) => ({
+      ...c,
+      total: conv(c.total),
+    })),
+    weeklyBreakdown: summary.weeklyBreakdown.map((w) => ({
+      ...w,
+      income: conv(w.income),
+      expenses: conv(w.expenses),
+    })),
+  };
+}
+
+function convertAnalytics(data: AnalyticsData, ctx: { currency: string; rate: number }): AnalyticsData {
+  if (ctx.rate === 1) return data;
+
+  const conv = (v: number) => convertFromIdr(v, ctx.currency, ctx.rate);
+
+  return {
+    ...data,
+    summary: {
+      ...data.summary,
+      totalIncome: conv(data.summary.totalIncome),
+      totalExpenses: conv(data.summary.totalExpenses),
+      balance: conv(data.summary.balance),
+    },
+    byCategory: data.byCategory.map((c) => ({
+      ...c,
+      total: conv(c.total),
+    })),
+    byMonth: data.byMonth.map((m) => ({
+      ...m,
+      income: conv(m.income),
+      expenses: conv(m.expenses),
+      net: conv(m.net),
+    })),
+    byDay: data.byDay.map((d) => ({
+      ...d,
+      income: conv(d.income),
+      expenses: conv(d.expenses),
+      net: conv(d.net),
+    })),
+  };
+}
 
 export function registerAnalyticsTools(server: McpServer) {
   server.registerTool(
@@ -14,8 +100,9 @@ export function registerAnalyticsTools(server: McpServer) {
     },
     async () => {
       try {
+        const ctx = await getUserCurrencyContext();
         const summary = await getSummary(getManagementId());
-        return ok("Fetched cashflow summary.", summary);
+        return ok("Fetched cashflow summary.", convertSummary(summary, ctx));
       } catch (error) {
         return toolError(error);
       }
@@ -39,8 +126,9 @@ export function registerAnalyticsTools(server: McpServer) {
         if (startDate && !isValidDate(startDate)) throw new Error("startDate must be a valid YYYY-MM-DD value");
         if (endDate && !isValidDate(endDate)) throw new Error("endDate must be a valid YYYY-MM-DD value");
 
+        const ctx = await getUserCurrencyContext();
         const analytics = await fetchAnalytics({ io, category, startDate, endDate }, getManagementId());
-        return ok("Fetched cashflow analytics.", analytics);
+        return ok("Fetched cashflow analytics.", convertAnalytics(analytics, ctx));
       } catch (error) {
         return toolError(error);
       }

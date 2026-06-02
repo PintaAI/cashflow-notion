@@ -30,7 +30,6 @@ import { useAnalytics, useCategories } from "@/hooks/use-cashflow-data";
 import type { AnalyticsData } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 import { useCurrency } from "@/components/providers/currency-provider";
-import { formatCurrencyAmount } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 // Color palette for charts - using oklch values directly for better color support
@@ -227,7 +226,7 @@ function AnalyticsChartsContent({
 }: AnalyticsChartsProps & {
   onFiltersChange: (filters: AnalyticsChartsProps["filters"]) => void;
 }) {
-  const { currency } = useCurrency();
+  const { format } = useCurrency();
   const [categoryView, setCategoryView] = React.useState<"chart" | "details">("chart");
 
   // Prepare category data for pie chart
@@ -288,7 +287,7 @@ function AnalyticsChartsContent({
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => formatCurrencyAmount(value, currency, { compact: true })}
+                tickFormatter={(value) => format(value, { compact: true })}
                 className="text-xs"
               />
               <ChartTooltip content={<ChartTooltipContent />} />
@@ -378,7 +377,7 @@ function AnalyticsChartsContent({
                     <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: item.fill }} />
                     <span className="min-w-0 flex-1 truncate font-medium">{item.category}</span>
                     <span className="hidden text-muted-foreground lg:inline">
-                      {formatCurrencyAmount(item.total, currency, { compact: true })}
+                      {format(item.total, { compact: true })}
                     </span>
                     <span className="hidden w-10 text-right text-muted-foreground lg:inline-block">
                       {item.percentage.toFixed(1)}%
@@ -416,7 +415,7 @@ function AnalyticsChartsContent({
                       </div>
                     </td>
                     <td className="px-2 py-2 text-right text-xs font-medium sm:px-4 sm:text-sm">
-                      {formatCurrencyAmount(item.total, currency, { compact: true })}
+                      {format(item.total, { compact: true })}
                     </td>
                     <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">{item.count}</td>
                     <td className="px-2 py-2 text-right text-xs sm:px-4 sm:text-sm">{item.percentage.toFixed(1)}%</td>
