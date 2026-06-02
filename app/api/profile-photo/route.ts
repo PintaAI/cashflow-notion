@@ -27,7 +27,18 @@ export async function GET(request: Request) {
     access: "private",
   });
 
-  if (!result || result.statusCode === 304 || !result.stream) {
+  if (!result) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  if (result.statusCode === 304) {
+    return new Response(null, {
+      status: 304,
+      headers: { "Cache-Control": "private, max-age=300" },
+    });
+  }
+
+  if (!result.stream) {
     return new Response("Not found", { status: 404 });
   }
 

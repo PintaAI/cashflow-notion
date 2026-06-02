@@ -4,6 +4,7 @@ import { put } from "@vercel/blob";
 import { prisma } from "@/lib/db";
 import { getBlobOptions } from "@/lib/blob";
 import { getSession } from "@/lib/management";
+import { parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
 
 const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_PROFILE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -17,6 +18,31 @@ export type ProfileActionState = {
     image: string | null;
   };
 };
+
+export async function fetchProfileTheme(): Promise<GeneratedThemeColors | null> {
+  const session = await getSession();
+  if (!session) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { profileTheme: true },
+  });
+
+  return parseThemeColors(user?.profileTheme);
+}
+
+export async function saveProfileTheme(theme: unknown): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const colors = parseThemeColors(theme);
+  if (!colors) throw new Error("Invalid profile theme");
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { profileTheme: colors },
+  });
+}
 
 export async function updateProfile(
   _prevState: ProfileActionState,

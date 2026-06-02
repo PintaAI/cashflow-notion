@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -50,7 +50,7 @@ import {
   type ManagementWithMembers,
 } from "@/app/actions/management";
 import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
-import { updateProfile, type ProfileActionState } from "@/app/actions/profile";
+import { fetchProfileTheme, saveProfileTheme, updateProfile, type ProfileActionState } from "@/app/actions/profile";
 import type { UserOAuthConnection } from "@/lib/oauth/server";
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/components/providers/currency-provider"
@@ -979,6 +979,8 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
   const [objectPreviewUrl, setObjectPreviewUrl] = useState<string | null>(null);
   const [generatedTheme, setGeneratedTheme] = useState<GeneratedThemeColors | null>(null);
   const [themeMessage, setThemeMessage] = useState("");
+  const [themeLoading, setThemeLoading] = useState(false);
+  const themeExtractionRef = useRef<Promise<GeneratedThemeColors | null> | null>(null);
 
   async function extractThemeFromImageUrl(url: string) {
     const image = new window.Image();
@@ -1018,6 +1020,8 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
+      themeExtractionRef.current = null;
+      setThemeLoading(false);
       setGeneratedTheme(null);
       setThemeMessage("");
       setObjectPreviewUrl((current) => {
@@ -1030,20 +1034,31 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
     const nextPreviewUrl = URL.createObjectURL(file);
     setGeneratedTheme(null);
     setThemeMessage("Membuat tema dari foto...");
+    setThemeLoading(true);
     setObjectPreviewUrl((current) => {
       if (current) URL.revokeObjectURL(current);
       return nextPreviewUrl;
     });
 
-    extractThemeFromImageUrl(nextPreviewUrl)
+    const extraction = extractThemeFromImageUrl(nextPreviewUrl)
       .then((theme) => {
         setGeneratedTheme(theme);
         setThemeMessage(theme ? "Tema dari foto siap disimpan." : "Palet warna foto tidak cukup kuat untuk membuat tema.");
+        return theme;
       })
       .catch(() => {
         setGeneratedTheme(null);
         setThemeMessage("Gagal membuat tema dari foto.");
+        return null;
+      })
+      .finally(() => {
+        if (themeExtractionRef.current === extraction) {
+          setThemeLoading(false);
+          themeExtractionRef.current = null;
+        }
       });
+
+    themeExtractionRef.current = extraction;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1051,11 +1066,19 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
     setPending(true);
 
     try {
+      let readyTheme = generatedTheme;
+      const extraction = themeExtractionRef.current;
+      if (extraction) {
+        setThemeLoading(true);
+        readyTheme = await extraction;
+        setThemeLoading(false);
+      }
+
       const result = await updateProfile(state, new FormData(event.currentTarget));
       setState(result);
 
       if (result.status === "success" && result.user) {
-        onUpdated(result.user, generatedTheme);
+        onUpdated(result.user, readyTheme);
         setObjectPreviewUrl((current) => {
           if (current) URL.revokeObjectURL(current);
           return null;
@@ -1104,8 +1127,8 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
         </p>
       )}
 
-      <Button type="submit" disabled={pending}>
-        {pending ? "Menyimpan..." : "Simpan Profil"}
+      <Button type="submit" disabled={pending || themeLoading}>
+        {pending ? "Menyimpan..." : themeLoading ? "Menganalisis foto..." : "Simpan Profil"}
       </Button>
     </form>
   );
@@ -1203,6 +1226,30 @@ function ProfileTab() {
   } : null;
   const visibleProfileUser = profileUser ?? sessionUser;
 
+  useEffect(() => {
+    if (!session?.user) return;
+
+    let cancelled = false;
+    fetchProfileTheme()
+      .then((theme) => {
+        if (cancelled || !theme || getLocalThemes().length > 0) return;
+
+        saveLocalTheme({
+          id: crypto.randomUUID(),
+          name: "Profile theme",
+          colors: theme,
+          createdAt: new Date().toISOString(),
+        });
+      })
+      .catch(() => {
+        // Local themes remain the source of truth when remote sync is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
   return (
     <>
       <PageHeader icon={UserCircleIcon} title="Setting">
@@ -1246,6 +1293,7 @@ function ProfileTab() {
                       colors: generatedTheme,
                       createdAt: new Date().toISOString(),
                     });
+                    void saveProfileTheme(generatedTheme).catch(() => {});
                   }
                   router.refresh();
                 }}
