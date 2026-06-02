@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AiChat01Icon, Analytics01Icon, ArrowDown01Icon, BellDotIcon, Calendar03Icon, CurrencyIcon, Edit02Icon, File01Icon, FlashIcon, Logout01Icon, PercentIcon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon, Table01Icon } from "@hugeicons/core-free-icons";
@@ -47,6 +48,7 @@ import {
   type ManagementWithMembers,
 } from "@/app/actions/management";
 import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
+import { updateProfile, type ProfileActionState } from "@/app/actions/profile";
 import type { UserOAuthConnection } from "@/lib/oauth/server";
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/components/providers/currency-provider"
@@ -58,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -692,10 +695,13 @@ function ManagementSettings() {
       <div className="space-y-1">
         <p className="text-sm font-medium">Anggota</p>
         <div className="space-y-1.5">
-          {management.management.members.map((member) => (
+          {management.management.members.map((member) => {
+            const memberImageSrc = getProfileImageSrc(member.user.image);
+
+            return (
             <div key={member.id} className="flex items-center gap-2 border border-border rounded p-2">
-              {member.user.image ? (
-                <Image src={member.user.image} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover" unoptimized />
+              {memberImageSrc ? (
+                <Image src={memberImageSrc} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover" unoptimized />
               ) : (
                 <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground shrink-0">
                   {member.user.name?.[0]?.toUpperCase() ?? member.user.email[0].toUpperCase()}
@@ -716,7 +722,8 @@ function ManagementSettings() {
                 </Button>
               )}
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
 
@@ -889,10 +896,120 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+function getProfileImageSrc(image: string | null | undefined) {
+  if (!image) return null;
+  if (image.startsWith("profiles/")) {
+    return `/api/profile-photo?pathname=${encodeURIComponent(image)}`;
+  }
+
+  return image;
+}
+
+type EditableProfileUser = {
+  name: string;
+  email: string;
+  image: string | null;
+};
+
+const initialProfileState: ProfileActionState = {
+  status: "idle",
+  message: "",
+};
+
+function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdated: (user: EditableProfileUser) => void }) {
+  const [state, setState] = useState<ProfileActionState>(initialProfileState);
+  const [pending, setPending] = useState(false);
+  const [objectPreviewUrl, setObjectPreviewUrl] = useState<string | null>(null);
+
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setObjectPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return null;
+      });
+      return;
+    }
+
+    setObjectPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+
+    try {
+      const result = await updateProfile(state, new FormData(event.currentTarget));
+      setState(result);
+
+      if (result.status === "success" && result.user) {
+        onUpdated(result.user);
+        setObjectPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return null;
+        });
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const previewUrl = objectPreviewUrl ?? getProfileImageSrc(user.image);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-center gap-4">
+        {previewUrl ? (
+          <Image src={previewUrl} alt="Foto profil" width={64} height={64} className="size-16 rounded-full object-cover" unoptimized />
+        ) : (
+          <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-xl font-semibold text-primary">
+            {user.name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+        )}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="text-sm font-medium">Foto profil</p>
+          <Input name="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageChange} />
+          <p className="text-xs text-muted-foreground">JPG, PNG, WebP, atau GIF. Maksimal 5 MB.</p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="profile-name" className="text-sm font-medium">Nama</label>
+        <Input id="profile-name" name="name" defaultValue={user.name} minLength={2} maxLength={80} required />
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="profile-email" className="text-sm font-medium">Email</label>
+        <Input id="profile-email" value={user.email} disabled />
+      </div>
+
+      {state.message && (
+        <p className={cn("text-xs", state.status === "error" ? "text-red-500" : "text-emerald-600")} aria-live="polite">
+          {state.message}
+        </p>
+      )}
+
+      <Button type="submit" disabled={pending}>
+        {pending ? "Menyimpan..." : "Simpan Profil"}
+      </Button>
+    </form>
+  );
+}
+
 function ProfileTab() {
   const { data: session } = useSession();
   const { currency, setCurrency, loading } = useCurrency();
   const [auditDrawerOpen, setAuditDrawerOpen] = useState(false);
+  const [profileUser, setProfileUser] = useState<EditableProfileUser | null>(null);
+  const sessionUser = session?.user ? {
+    name: session.user.name,
+    email: session.user.email,
+    image: session.user.image ?? null,
+  } : null;
+  const visibleProfileUser = profileUser ?? sessionUser;
 
   return (
     <>
@@ -900,19 +1017,37 @@ function ProfileTab() {
         <ThemeToggle />
       </PageHeader>
 
-      {session?.user && (
+      {visibleProfileUser && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border p-3">
-          <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-            {session.user.name?.charAt(0)?.toUpperCase() || "U"}
-          </div>
+          {getProfileImageSrc(visibleProfileUser.image) ? (
+            <Image src={getProfileImageSrc(visibleProfileUser.image)!} alt="Foto profil" width={36} height={36} className="size-9 rounded-full object-cover" unoptimized />
+          ) : (
+            <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+              {visibleProfileUser.name?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{session.user.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+            <p className="text-sm font-medium truncate">{visibleProfileUser.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{visibleProfileUser.email}</p>
           </div>
         </div>
       )}
 
       <Accordion type="single" collapsible className="space-y-2 sm:space-y-3">
+        {visibleProfileUser && (
+          <AccordionItem value="profile">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                <HugeiconsIcon icon={UserCircleIcon} strokeWidth={2} className="size-4" />
+                Profil
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <ProfileEditor user={visibleProfileUser} onUpdated={setProfileUser} />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         <AccordionItem value="currency">
           <AccordionTrigger>
             <span className="flex items-center gap-2">
