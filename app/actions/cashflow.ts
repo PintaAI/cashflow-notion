@@ -97,6 +97,31 @@ export async function fetchExpensesEntries(options?: {
   });
 }
 
+export async function fetchCategoryEntries(category: string, filters?: {
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<CashflowEntry[]> {
+  const managementId = await getCurrentManagementId();
+  const endDate = filters?.to
+    ? (() => {
+        const [y, m, d] = filters.to.split("-").map(Number);
+        const next = new Date(y, m - 1, d);
+        next.setDate(next.getDate() + 1);
+        return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+      })()
+    : undefined;
+  const result = await getEntriesFiltered({
+    pageSize: filters?.limit ?? 50,
+    skip: 0,
+    category,
+    startDate: filters?.from,
+    endDate,
+    managementId,
+  });
+  return result.entries;
+}
+
 export async function fetchTotalCount(): Promise<number> {
   const managementId = await getCurrentManagementId();
   return countEntries(managementId);

@@ -13,6 +13,15 @@ import {
   PopoverTitle,
   PopoverDescription,
 } from "@/components/ui/popover";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTrigger,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+} from "@/components/ui/drawer";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Select,
@@ -22,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { IOType, CategoryType } from "@/lib/db";
 
 // Types
@@ -292,6 +302,146 @@ export function AnalyticsFilter({ filters, categories, onFiltersChange }: Analyt
     return "Filter period";
   };
 
+  const isMobile = useIsMobile();
+
+  const filterBody = (
+    <>
+      {/* Presets */}
+      <section className="space-y-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+          <HugeiconsIcon icon={Calendar01Icon} strokeWidth={2} className="size-3" /> Preset period
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {presetOptions.map((preset) => (
+            <Button
+              key={preset.key}
+              type="button"
+              variant={activePreset === preset.key ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => selectPreset(preset)}
+              className={cn("justify-center", activePreset === preset.key && "border-border")}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      </section>
+
+      {/* Custom Range Calendar */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Custom range</p>
+          <span className="text-xs text-muted-foreground">
+            {draft.allTime ? "All time" : "Manual"}
+          </span>
+        </div>
+        <div className="flex justify-center rounded-md border bg-background p-1">
+          <Calendar
+            key={calendarKey}
+            mode="range"
+            selected={draft.allTime ? undefined : (draft.range.from || draft.range.to ? draft.range : undefined)}
+            onDayClick={selectRangeDate}
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            numberOfMonths={1}
+            className="border-0 p-0"
+          />
+        </div>
+        <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {draft.allTime
+            ? "All data from the beginning."
+            : draft.range.from && draft.range.to
+              ? `${formatDate(draft.range.from)} - ${formatDate(draft.range.to)}`
+              : draft.range.from
+                ? `${formatDate(draft.range.from)} - select end date`
+                : "Select start and end dates."}
+        </p>
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {/* Type Filter */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Type</p>
+          <Select
+            value={draft.io}
+            onValueChange={(v) => setDraft((c) => ({ ...c, io: v as IOType | "all" }))}
+          >
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="Income">Income</SelectItem>
+              <SelectItem value="Expenses">Expenses</SelectItem>
+            </SelectContent>
+          </Select>
+        </section>
+
+        {/* Category Filter */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Category</p>
+          <Select
+            value={draft.category}
+            onValueChange={(v) => setDraft((c) => ({ ...c, category: v as CategoryType | "all" }))}
+          >
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </section>
+      </div>
+    </>
+  );
+
+  const filterFooter = (
+    <>
+      <Button variant="ghost" size="sm" onClick={resetDraft}>
+        Reset
+      </Button>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={applyFilters} disabled={!canApply}>
+          Apply
+        </Button>
+      </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={handleOpenChange}>
+        <DrawerTrigger asChild>
+          <Button variant="outline" size="sm" className="max-w-[220px] justify-start gap-1.5 sm:max-w-none">
+            <HugeiconsIcon icon={FilterIcon} strokeWidth={2} className="size-4" />
+            <span className="truncate">{getDisplayText()}</span>
+          </Button>
+        </DrawerTrigger>
+        <DrawerContent className="mx-auto max-h-[90vh] max-w-md data-[vaul-drawer-direction=bottom]:rounded-t-2xl">
+          <DrawerHeader>
+            <DrawerTitle>Filter analytics</DrawerTitle>
+            <DrawerDescription>Select period and filters.</DrawerDescription>
+          </DrawerHeader>
+          <div className="space-y-4 overflow-y-auto px-4 pb-4">
+            {filterBody}
+          </div>
+          <DrawerFooter className="flex-row items-center justify-between border-t">
+            {filterFooter}
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -307,113 +457,12 @@ export function AnalyticsFilter({ filters, categories, onFiltersChange }: Analyt
         </PopoverHeader>
 
         <div className="space-y-4 p-4">
-          {/* Presets */}
-          <section className="space-y-2">
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-              <HugeiconsIcon icon={Calendar01Icon} strokeWidth={2} className="size-3" /> Preset period
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {presetOptions.map((preset) => (
-                <Button
-                  key={preset.key}
-                  type="button"
-                  variant={activePreset === preset.key ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => selectPreset(preset)}
-                  className={cn("justify-center", activePreset === preset.key && "border-border")}
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
-          </section>
-
-          {/* Custom Range Calendar */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Custom range</p>
-              <span className="text-xs text-muted-foreground">
-                {draft.allTime ? "All time" : "Manual"}
-              </span>
-            </div>
-            <div className="flex justify-center rounded-md border bg-background p-1">
-              <Calendar
-                key={calendarKey}
-                mode="range"
-                selected={draft.allTime ? undefined : (draft.range.from || draft.range.to ? draft.range : undefined)}
-                onDayClick={selectRangeDate}
-                month={calendarMonth}
-                onMonthChange={setCalendarMonth}
-                numberOfMonths={1}
-                className="border-0 p-0"
-              />
-            </div>
-            <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              {draft.allTime
-                ? "All data from the beginning."
-                : draft.range.from && draft.range.to
-                  ? `${formatDate(draft.range.from)} - ${formatDate(draft.range.to)}`
-                  : draft.range.from
-                    ? `${formatDate(draft.range.from)} - select end date`
-                    : "Select start and end dates."}
-            </p>
-          </section>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            {/* Type Filter */}
-            <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Type</p>
-              <Select
-                value={draft.io}
-                onValueChange={(v) => setDraft((c) => ({ ...c, io: v as IOType | "all" }))}
-              >
-                <SelectTrigger className="h-9 w-full">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="Income">Income</SelectItem>
-                  <SelectItem value="Expenses">Expenses</SelectItem>
-                </SelectContent>
-              </Select>
-            </section>
-
-            {/* Category Filter */}
-            <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Category</p>
-              <Select
-                value={draft.category}
-                onValueChange={(v) => setDraft((c) => ({ ...c, category: v as CategoryType | "all" }))}
-              >
-                <SelectTrigger className="h-9 w-full">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </section>
-          </div>
+          {filterBody}
         </div>
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={resetDraft}>
-            Reset
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={applyFilters} disabled={!canApply}>
-              Apply
-            </Button>
-          </div>
+          {filterFooter}
         </div>
       </PopoverContent>
     </Popover>

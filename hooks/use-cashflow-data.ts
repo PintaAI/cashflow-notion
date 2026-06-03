@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { fetchSummary, fetchCalendarEntries } from "@/app/actions/cashflow";
+import { fetchSummary, fetchCalendarEntries, fetchCategoryEntries } from "@/app/actions/cashflow";
 import { fetchActivityOverview, fetchAnalyticsFromURL } from "@/app/actions/analytics";
 import type { URLAnalyticsFilter } from "@/lib/analytics";
 import {
@@ -55,6 +55,7 @@ export const cashflowQueryKeys = {
   latestAudit: ["cashflow-latest-audit"] as const,
   managementMembers: ["cashflow-management-members"] as const,
   calendarEntries: (year: number, month: number) => ["cashflow-calendar", year, month] as const,
+  categoryEntries: (category: string, from?: string, to?: string) => ["cashflow-category-entries", category, from, to] as const,
 };
 
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
@@ -77,6 +78,14 @@ export function useCalendarEntries(year: number, month: number) {
   return useQuery({
     queryKey: cashflowQueryKeys.calendarEntries(year, month),
     queryFn: () => fetchCalendarEntries(year, month),
+  });
+}
+
+export function useCategoryEntries(category: string, filters?: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: cashflowQueryKeys.categoryEntries(category, filters?.from, filters?.to),
+    queryFn: () => fetchCategoryEntries(category, { from: filters?.from, to: filters?.to }),
+    enabled: Boolean(category),
   });
 }
 

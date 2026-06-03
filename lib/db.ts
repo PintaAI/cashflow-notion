@@ -380,7 +380,10 @@ export async function getEntriesFiltered(options?: {
   pageSize?: number;
   skip?: number;
   io?: IOType;
+  category?: CategoryType;
   date?: string;
+  startDate?: string;
+  endDate?: string;
   createdById?: string | null;
   managementId: string;
 }): Promise<{ entries: CashflowEntry[]; nextCursor: string | null; hasMore: boolean }> {
@@ -388,7 +391,7 @@ export async function getEntriesFiltered(options?: {
   const skip = options?.skip || 0;
   const where = {
     managementId: options!.managementId,
-    ...buildEntryWhere({ io: options?.io, date: options?.date, createdById: options?.createdById }),
+    ...buildEntryWhere({ io: options?.io, category: options?.category, date: options?.date, startDate: options?.startDate, endDate: options?.endDate, createdById: options?.createdById }),
   };
 
   const entries = await prisma.entry.findMany({

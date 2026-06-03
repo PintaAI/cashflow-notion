@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/chart";
 import { AnalyticsFilter } from "@/components/analytics-filter";
 import { AnalyticsContentSkeleton } from "@/components/loading-skeletons";
-import { useAnalytics, useCategories } from "@/hooks/use-cashflow-data";
+import { useAnalytics, useCategories, useCategoryEntries } from "@/hooks/use-cashflow-data";
 import type { AnalyticsData, CategoryAnalytics } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 import { useCurrency } from "@/components/providers/currency-provider";
@@ -487,12 +487,16 @@ function CategoryDetailDrawer({
 }) {
   const { format } = useCurrency();
   const detailQuery = useAnalytics({ ...filters, category: category.category });
+  const entriesQuery = useCategoryEntries(category.category, { from: filters.from, to: filters.to });
   const detail = detailQuery.data;
   const total = detail?.summary.totalExpenses ?? category.total;
   const count = detail?.summary.entryCount ?? category.count;
   const average = count > 0 ? total / count : 0;
   const monthlyData = detail?.byMonth.filter((item) => item.expenses > 0).slice(-6) ?? [];
   const maxMonthlyExpense = Math.max(...monthlyData.map((item) => item.expenses), 0);
+  const entries = entriesQuery.data ?? [];
+  const isLoading = detailQuery.isLoading || entriesQuery.isLoading;
+  const isError = detailQuery.isError || entriesQuery.isError;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -505,11 +509,11 @@ function CategoryDetailDrawer({
         </DrawerHeader>
 
         <div className="space-y-4 px-4 pb-4">
-          {detailQuery.isLoading ? (
+          {isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
               <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
             </div>
-          ) : detailQuery.isError ? (
+          ) : isError ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
               Category detail is temporarily unavailable.
             </div>
@@ -558,6 +562,28 @@ function CategoryDetailDrawer({
                   </div>
                 ) : (
                   <p className="py-6 text-center text-sm text-muted-foreground">No monthly data available</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Transactions</h3>
+                  <span className="text-xs text-muted-foreground">{entries.length} of {count}</span>
+                </div>
+                {entries.length > 0 ? (
+                  <div className="divide-y">
+                    {entries.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium">{entry.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{entry.date}</p>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold tabular-nums">{format(entry.nominal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted-foreground">No transactions found for this period</p>
                 )}
               </div>
             </>
