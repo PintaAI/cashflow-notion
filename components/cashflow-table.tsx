@@ -51,7 +51,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import type { CashflowEntry, IOType, CategoryType } from "@/lib/db";
 import { getCategoryConfig } from "@/lib/categories";
-import { fetchEntriesFiltered, removeEntry } from "@/app/actions/cashflow";
+import { fetchEntriesFiltered, removeEntry, editEntry } from "@/app/actions/cashflow";
 import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
 import { UserAvatar, getUserDisplayName } from "@/components/user-avatar";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,12 +59,18 @@ import {
   removeEntriesFromCashflowCache,
   restoreCashflowEntries,
   snapshotCashflowEntries,
+  updateEntryInCashflowCache,
 } from "@/lib/cashflow-query-cache";
 import { beginCashflowPending, useCashflowPending } from "@/lib/cashflow-pending";
 import { cashflowQueryKeys, useCategories, useManagementMembers } from "@/hooks/use-cashflow-data";
 import { useCurrency } from "@/components/providers/currency-provider";
 
-function getColumns(format: (amountIdr: number, opts?: { compact?: boolean }) => string): ColumnDef<CashflowEntry>[] {
+function getColumns(deps: {
+  format: (amountIdr: number, opts?: { compact?: boolean }) => string;
+  memberOptions: Array<{ id: string; role: string; user: { id: string; name: string | null; email: string; image: string | null } }>;
+  queryClient: ReturnType<typeof useQueryClient>;
+}): ColumnDef<CashflowEntry>[] {
+  const { format, memberOptions, queryClient } = deps;
   return [
   {
     id: "select",
@@ -182,12 +188,47 @@ function getColumns(format: (amountIdr: number, opts?: { compact?: boolean }) =>
     ),
     cell: ({ row }) => {
       const createdBy = row.original.createdBy;
+      const currentId = row.original.createdById ?? "unknown";
       const label = createdBy ? getUserDisplayName(createdBy) : "Unknown";
 
       return (
-        <div className="flex max-w-[140px] items-center gap-1.5">
-          <UserAvatar user={createdBy} size={18} className="size-[18px] text-[9px]" />
-          <span className="truncate text-xs text-muted-foreground">{label}</span>
+        <div className="max-w-[140px]" onClick={(e) => e.stopPropagation()}>
+          <Select value={currentId} onValueChange={(newId) => {
+            const newCreatedBy = newId === "unknown"
+              ? null
+              : memberOptions.find((m) => m.user.id === newId)?.user ?? null;
+
+            const updatedEntry: CashflowEntry = {
+              ...row.original,
+              createdById: newId === "unknown" ? null : newId,
+              createdBy: newCreatedBy,
+            };
+
+            updateEntryInCashflowCache(queryClient, updatedEntry);
+
+            editEntry(row.original.id, {
+              createdById: newId === "unknown" ? null : newId,
+            }).catch((error) => {
+              console.error("Failed to update creator:", error);
+              queryClient.invalidateQueries({ queryKey: ["cashflow-entries"] });
+            });
+          }}>
+            <SelectTrigger className="h-7 gap-1 border-0 bg-transparent p-0 text-xs shadow-none hover:bg-muted/50">
+              <UserAvatar user={createdBy} size={18} className="size-[18px] text-[9px]" />
+              <span className="truncate text-muted-foreground">{label}</span>
+            </SelectTrigger>
+            <SelectContent>
+              {memberOptions.map((member) => (
+                <SelectItem key={member.user.id} value={member.user.id}>
+                  <div className="flex items-center gap-2">
+                    <UserAvatar user={member.user} size={18} className="size-[18px] text-[9px]" />
+                    <span>{getUserDisplayName(member.user)}</span>
+                  </div>
+                </SelectItem>
+              ))}
+              <SelectItem value="unknown">Unknown/System</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       );
     },
@@ -289,8 +330,8 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
   const pendingCashflow = useCashflowPending();
   const categoriesQuery = useCategories();
   const membersQuery = useManagementMembers();
-  const categoryOptions = categoriesQuery.data ?? [];
-  const memberOptions = membersQuery.data ?? [];
+  const categoryOptions = React.useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  const memberOptions = React.useMemo(() => membersQuery.data ?? [], [membersQuery.data]);
 
   // Bulk delete handler
   const handleBulkDelete = React.useCallback(async () => {
@@ -356,7 +397,7 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
     return data.pages.flatMap((page) => page.entries);
   }, [data]);
 
-  const columns = React.useMemo(() => getColumns(format), [format]);
+  const columns = React.useMemo(() => getColumns({ format, memberOptions, queryClient }), [format, memberOptions, queryClient]);
 
   const table = useReactTable({
     data: entries,
