@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/chart";
 import { AnalyticsFilter } from "@/components/analytics-filter";
 import { AnalyticsContentSkeleton } from "@/components/loading-skeletons";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAnalytics, useCategories, useCategoryEntries } from "@/hooks/use-cashflow-data";
 import type { AnalyticsData, CategoryAnalytics } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
@@ -508,7 +509,7 @@ function CategoryDetailDrawer({
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="space-y-4 px-4 pb-4">
+        <div className="max-h-[70vh] overflow-y-auto space-y-4 px-4 pb-4">
           {isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
               <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
@@ -571,17 +572,19 @@ function CategoryDetailDrawer({
                   <span className="text-xs text-muted-foreground">{entries.length} of {count}</span>
                 </div>
                 {entries.length > 0 ? (
-                  <div className="divide-y">
-                    {entries.map((entry) => (
-                      <div key={entry.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium">{entry.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{entry.date}</p>
+                  <ScrollArea className="h-[280px]">
+                    <div className="divide-y">
+                      {entries.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium">{entry.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{entry.date}</p>
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold tabular-nums">{format(entry.nominal)}</span>
                         </div>
-                        <span className="shrink-0 text-xs font-semibold tabular-nums">{format(entry.nominal)}</span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 ) : (
                   <p className="py-6 text-center text-sm text-muted-foreground">No transactions found for this period</p>
                 )}
