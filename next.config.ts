@@ -8,13 +8,18 @@ const withPWA = withPWAInit({
   disable: process.env.NODE_ENV === "development",
 });
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   /* config options here */
   reactCompiler: true,
   // Empty turbopack config to acknowledge Turbopack usage
   // PWA requires webpack, so builds will use webpack
   turbopack: {},
   allowedDevOrigins: ["jennie-linux.tail2268a1.ts.net"],
-};
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "5mb",
+    },
+  },
+} as NextConfig;
 
 export default withPWA(nextConfig);
