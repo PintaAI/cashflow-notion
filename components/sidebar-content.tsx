@@ -7,9 +7,12 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   Analytics01Icon,
+  CurrencyIcon,
   File01Icon,
   Home02Icon,
+  ReceiptDollarIcon,
   Shield01Icon,
+  ToolsIcon,
   UserCircleIcon,
   Wallet01Icon,
 } from "@hugeicons/core-free-icons";
@@ -27,6 +30,11 @@ export const navItems = [
   { value: "summary" as const, label: "Summary", icon: Analytics01Icon },
   { value: "setting" as const, label: "Setting", icon: UserCircleIcon },
 ];
+
+const toolItems = [
+  { value: "converter", label: "Currency Converter", icon: CurrencyIcon },
+  { value: "split-bills", label: "Split Bills", icon: ReceiptDollarIcon },
+] as const;
 
 interface SidebarContentProps {
   onNavigate?: () => void;
@@ -46,6 +54,8 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
       ? ((searchParams.get("tab") as AppTab) || "home")
       : "home";
   const isOnAdmin = pathname === "/admin";
+  const isOnTools = pathname === "/tools";
+  const activeTool = searchParams.get("tool");
 
   return (
     <>
@@ -108,12 +118,51 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
           );
         })}
 
+        <Link
+          href="/tools"
+          onClick={onNavigate}
+          className={cn(
+            "mt-1 flex h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/70",
+            isOnTools && "bg-muted/70 font-medium"
+          )}
+        >
+          <HugeiconsIcon
+            icon={ToolsIcon}
+            strokeWidth={2.1}
+            className="size-4.5"
+          />
+          Tools
+        </Link>
+
+        {toolItems.map((tool) => {
+          const isActiveTool = isOnTools && activeTool === tool.value;
+
+          return (
+            <Link
+              key={tool.value}
+              href={`/tools?tool=${tool.value}`}
+              onClick={onNavigate}
+              className={cn(
+                "ml-4 flex h-9 w-[calc(100%-1rem)] items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                isActiveTool && "bg-muted/70 font-medium text-foreground"
+              )}
+            >
+              <HugeiconsIcon
+                icon={tool.icon}
+                strokeWidth={2.1}
+                className="size-4"
+              />
+              {tool.label}
+            </Link>
+          );
+        })}
+
         {isAdmin && (
           <Link
             href="/admin"
             onClick={onNavigate}
             className={cn(
-              "mt-1 flex h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/70",
+              "flex h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/70",
               isOnAdmin &&
                 "bg-muted/70 font-medium text-amber-600 dark:text-amber-500"
             )}

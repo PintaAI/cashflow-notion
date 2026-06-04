@@ -5,7 +5,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, BellDotIcon, CurrencyIcon, Edit02Icon, FlashIcon, Logout01Icon, PercentIcon, RefreshIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, BellDotIcon, CurrencyIcon, Delete02Icon, Edit02Icon, FlashIcon, Logout01Icon, PercentIcon, RefreshIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { getPalette, getSwatches } from "colorthief";
 
 import { useSession, signOut } from "@/lib/auth-client";
@@ -692,12 +692,12 @@ function parseLocalThemesSnapshot(snapshot: string): LocalTheme[] {
 }
 
 function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdated: (user: EditableProfileUser, generatedTheme: GeneratedThemeColors | null) => void }) {
+  const [name, setName] = useState(user.name);
   const [state, setState] = useState<ProfileActionState>(initialProfileState);
-  const [pending, setPending] = useState(false);
+  const [namePending, setNamePending] = useState(false);
+  const [photoPending, setPhotoPending] = useState(false);
   const [objectPreviewUrl, setObjectPreviewUrl] = useState<string | null>(null);
-  const [generatedTheme, setGeneratedTheme] = useState<GeneratedThemeColors | null>(null);
   const [themeMessage, setThemeMessage] = useState("");
-  const [themeLoading, setThemeLoading] = useState(false);
   const themeExtractionRef = useRef<Promise<GeneratedThemeColors | null> | null>(null);
 
   async function extractThemeFromImageUrl(url: string) {
@@ -716,73 +716,100 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
     if (!file) return;
     const previewUrl = URL.createObjectURL(file);
     setObjectPreviewUrl(previewUrl);
-    setThemeLoading(true);
+    setPhotoPending(true);
     setThemeMessage("Mengekstrak warna...");
+    setState({ status: "idle", message: "" });
+
+    let theme: GeneratedThemeColors | null = null;
     try {
-      const theme = await extractThemeFromImageUrl(previewUrl);
-      if (theme) setGeneratedTheme(theme);
+      themeExtractionRef.current = extractThemeFromImageUrl(previewUrl);
+      theme = await themeExtractionRef.current;
     } catch {
-      setThemeMessage("Gagal mengekstrak warna dari foto.");
+      theme = null;
+    }
+
+    const formData = new FormData();
+    formData.set("name", name.trim() || user.name);
+    formData.set("image", file);
+
+    try {
+      const result = await updateProfile(initialProfileState, formData);
+      setState(result);
+      if (result.status === "success" && result.user) {
+        onUpdated(result.user as EditableProfileUser, theme);
+        setThemeMessage(theme ? "Foto dan tema tersimpan." : "Foto tersimpan.");
+      }
     } finally {
-      setThemeLoading(false);
+      setPhotoPending(false);
+      setObjectPreviewUrl(null);
+      e.currentTarget.value = "";
     }
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setPending(true);
+    setNamePending(true);
     setState({ status: "idle", message: "" });
     const formData = new FormData(e.currentTarget);
     try {
       const result = await updateProfile(initialProfileState, formData);
       setState(result);
       if (result.status === "success" && result.user) {
-        onUpdated(result.user as EditableProfileUser, generatedTheme);
-        setObjectPreviewUrl(null);
-        setGeneratedTheme(null);
+        onUpdated(result.user as EditableProfileUser, null);
       }
     } finally {
-      setPending(false);
+      setNamePending(false);
     }
   }
 
+  const nameChanged = name.trim() !== user.name.trim();
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <Input type="hidden" name="name" value={user.name} />
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Foto profil</p>
-        <div className="flex items-center gap-3">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex flex-col items-center gap-2">
+        <label className="group relative cursor-pointer" aria-label="Ganti foto profil">
           {objectPreviewUrl ? (
-            <Image src={objectPreviewUrl} alt="Preview" width={48} height={48} className="size-12 rounded-full object-cover" unoptimized />
+            <Image src={objectPreviewUrl} alt="Preview" width={88} height={88} className="size-22 rounded-full object-cover" unoptimized />
           ) : getProfileImageSrc(user.image) ? (
-            <Image src={getProfileImageSrc(user.image)!} alt="Foto profil" width={48} height={48} className="size-12 rounded-full object-cover" unoptimized />
+            <Image src={getProfileImageSrc(user.image)!} alt="Foto profil" width={88} height={88} className="size-22 rounded-full object-cover" unoptimized />
           ) : (
-            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+            <div className="flex size-22 items-center justify-center rounded-full bg-primary/10 text-3xl font-semibold text-primary">
               {user.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="cursor-pointer text-xs text-primary hover:underline">
-              {objectPreviewUrl ? "Ganti foto..." : "Unggah foto..."}
-              <input type="file" name="image" accept="image/*" onChange={handleFileUpload} className="hidden" />
-            </label>
-            {themeLoading && <p className="text-xs text-muted-foreground">{themeMessage}</p>}
-            {themeMessage && !themeLoading && <p className="text-xs text-muted-foreground">{themeMessage}</p>}
-          </div>
-          {objectPreviewUrl && !themeLoading && (
-            <button type="button" onClick={() => { setObjectPreviewUrl(null); setGeneratedTheme(null); setThemeMessage(""); }} className="text-xs text-red-500 hover:underline">Batal</button>
-          )}
+          <span className="absolute right-0 bottom-1 flex size-7 items-center justify-center rounded-full border bg-background text-foreground shadow-sm transition-colors group-hover:bg-muted">
+            {photoPending ? (
+              <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="size-3.5 animate-spin" />
+            ) : (
+              <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-3.5" />
+            )}
+          </span>
+          <input type="file" name="image" accept="image/*" onChange={handleFileUpload} className="hidden" disabled={photoPending} />
+        </label>
+        <p className="text-xs text-muted-foreground">
+          {photoPending ? "Menyimpan foto..." : themeMessage || "Klik foto untuk mengganti"}
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Nama</p>
+        <div className="flex gap-2">
+          <Input
+            name="name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            minLength={2}
+            maxLength={80}
+            disabled={namePending || photoPending}
+            className="flex-1"
+          />
+          <Button type="submit" disabled={namePending || photoPending || !nameChanged || name.trim().length < 2}>
+            {namePending ? "..." : "Simpan"}
+          </Button>
         </div>
       </div>
-      {generatedTheme && !themeLoading && objectPreviewUrl && (
-        <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-2">
-          <span className="text-[10px] text-muted-foreground">Tema baru dari foto akan tersimpan</span>
-        </div>
-      )}
+
       {state.message && <p className="text-xs text-muted-foreground" aria-live="polite">{state.message}</p>}
-      <Button type="submit" disabled={pending}>
-        {pending ? "Menyimpan..." : "Simpan"}
-      </Button>
     </form>
   );
 }
@@ -809,6 +836,19 @@ function ThemeSettings() {
     });
   }
 
+  function handleDeleteTheme(themeId: string) {
+    setMessage("");
+    startTransition(() => {
+      const nextThemes = getLocalThemes().filter((theme) => theme.id !== themeId);
+      window.localStorage.setItem(LOCAL_THEMES_KEY, JSON.stringify(nextThemes));
+      if (selectedThemeId === themeId) {
+        window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
+      }
+      window.dispatchEvent(new Event(LOCAL_THEME_CHANGED_EVENT));
+      setMessage("Tema dihapus.");
+    });
+  }
+
   return (
     <div className="space-y-3">
       <div className="space-y-1">
@@ -816,47 +856,78 @@ function ThemeSettings() {
           Tema baru dibuat otomatis dari warna foto profil saat Anda mengunggah foto baru. Maksimal 5 tema disimpan di perangkat ini; tema tertua akan dihapus saat melewati batas.
         </p>
       </div>
-      <Select value={selectedThemeId ?? "default"} onValueChange={handleThemeChange} disabled={isPending}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Pilih tema" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="default">Tema bawaan</SelectItem>
-          {themes.map((theme) => (
-            <SelectItem key={theme.id} value={theme.id}>{theme.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {themes.length > 0 ? (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {themes.map((theme) => (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => handleThemeChange("default")}
+          className={cn(
+            "rounded-lg border p-3 text-left transition-colors hover:bg-accent/60",
+            !selectedThemeId && "border-primary bg-primary/5"
+          )}
+          disabled={isPending}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="truncate text-sm font-medium">Tema bawaan</p>
+            {!selectedThemeId && <span className="text-xs text-primary">Aktif</span>}
+          </div>
+          <div className="flex overflow-hidden rounded-md border">
+            <span className="h-8 flex-1 bg-[#ffffff]" />
+            <span className="h-8 flex-1 bg-[#f4f4f5]" />
+            <span className="h-8 flex-1 bg-[#18181b]" />
+            <span className="h-8 flex-1 bg-[#e4e4e7]" />
+          </div>
+        </button>
+
+        {themes.map((theme) => (
+          <div
+            key={theme.id}
+            className={cn(
+              "rounded-lg border p-3 transition-colors hover:bg-accent/60",
+              selectedThemeId === theme.id && "border-primary bg-primary/5"
+            )}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => handleThemeChange(theme.id)}
+                className="min-w-0 flex-1 text-left"
+                disabled={isPending}
+              >
+                <p className="truncate text-sm font-medium">{theme.name}</p>
+              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                {selectedThemeId === theme.id && <span className="text-xs text-primary">Aktif</span>}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => handleDeleteTheme(theme.id)}
+                  disabled={isPending}
+                  title="Hapus tema"
+                >
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
+                </Button>
+              </div>
+            </div>
             <button
-              key={theme.id}
               type="button"
               onClick={() => handleThemeChange(theme.id)}
-              className={cn(
-                "rounded-lg border p-3 text-left transition-colors hover:bg-accent/60",
-                selectedThemeId === theme.id && "border-primary bg-primary/5"
-              )}
+              className="flex w-full overflow-hidden rounded-md border"
               disabled={isPending}
             >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="truncate text-sm font-medium">{theme.name}</p>
-                {selectedThemeId === theme.id && <span className="text-xs text-primary">Aktif</span>}
-              </div>
-              <div className="flex overflow-hidden rounded-md border">
-                {(parseThemeColors(theme.colors)?.swatches ?? []).map((swatch) => (
-                  <span key={swatch} className="h-8 flex-1" style={{ backgroundColor: swatch }} />
-                ))}
-              </div>
+              {(parseThemeColors(theme.colors)?.swatches ?? []).map((swatch) => (
+                <span key={swatch} className="h-8 flex-1" style={{ backgroundColor: swatch }} />
+              ))}
             </button>
-          ))}
-        </div>
-      ) : (
+          </div>
+        ))}
+      </div>
+      {themes.length === 0 ? (
         <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
           Belum ada tema tersimpan. Unggah foto profil untuk membuat tema dari palet warna foto.
         </p>
-      )}
+      ) : null}
       {message && <p className="text-xs text-muted-foreground" aria-live="polite">{message}</p>}
     </div>
   );

@@ -9,7 +9,7 @@ export type GeneratedThemeColors = {
 type Rgb = { r: number; g: number; b: number; count?: number };
 type Hsl = { h: number; s: number; l: number };
 
-const CSS_VARIABLES = new Set([
+export const CSS_VARIABLE_NAMES = [
   "background",
   "foreground",
   "card",
@@ -42,7 +42,9 @@ const CSS_VARIABLES = new Set([
   "sidebar-accent-foreground",
   "sidebar-border",
   "sidebar-ring",
-]);
+] as const;
+
+const CSS_VARIABLES = new Set<string>(CSS_VARIABLE_NAMES);
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -140,38 +142,38 @@ function buildVariables(primary: Hsl, secondary: Hsl, accent: Hsl): GeneratedThe
   };
 
   const dark = {
-    background: hsl(primary.h, 0.28, 0.11),
+    background: hsl(primary.h, 0.22, 0.035),
     foreground: hsl(primary.h, 0.14, 0.96),
-    card: hsl(primary.h, 0.26, 0.15),
+    card: hsl(primary.h, 0.22, 0.06),
     "card-foreground": hsl(primary.h, 0.14, 0.96),
-    popover: hsl(primary.h, 0.26, 0.15),
+    popover: hsl(primary.h, 0.22, 0.06),
     "popover-foreground": hsl(primary.h, 0.14, 0.96),
-    primary: hsl(primary.h, primary.s, 0.66),
-    "primary-foreground": hsl(primary.h, 0.28, 0.11),
-    secondary: hsl(secondary.h, secondary.s, 0.66),
-    "secondary-foreground": hsl(primary.h, 0.28, 0.11),
-    muted: hsl(primary.h, 0.22, 0.22),
-    "muted-foreground": hsl(primary.h, 0.12, 0.68),
-    accent: hsl(accent.h, accent.s, 0.28),
+    primary: hsl(primary.h, primary.s, 0.46),
+    "primary-foreground": hsl(primary.h, 0.2, 0.035),
+    secondary: hsl(secondary.h, secondary.s, 0.18),
+    "secondary-foreground": hsl(secondary.h, 0.18, 0.9),
+    muted: hsl(primary.h, 0.16, 0.095),
+    "muted-foreground": hsl(primary.h, 0.09, 0.58),
+    accent: hsl(accent.h, accent.s, 0.13),
     "accent-foreground": hsl(accent.h, 0.24, 0.94),
     destructive: "hsl(0 62% 36%)",
     "destructive-foreground": "hsl(0 0% 98%)",
-    border: hsl(primary.h, 0.2, 0.24),
-    input: hsl(primary.h, 0.2, 0.24),
-    ring: hsl(primary.h, primary.s, 0.66),
-    "chart-1": hsl(primary.h, primary.s, 0.66),
-    "chart-2": hsl(secondary.h, secondary.s, 0.66),
-    "chart-3": hsl(accent.h, accent.s, 0.66),
-    "chart-4": hsl((primary.h + 42) % 360, primary.s, 0.62),
-    "chart-5": hsl((secondary.h + 64) % 360, secondary.s, 0.62),
-    sidebar: hsl(primary.h, 0.3, 0.09),
+    border: hsl(primary.h, 0.14, 0.115),
+    input: hsl(primary.h, 0.14, 0.115),
+    ring: hsl(primary.h, primary.s, 0.44),
+    "chart-1": hsl(primary.h, primary.s, 0.46),
+    "chart-2": hsl(secondary.h, secondary.s, 0.4),
+    "chart-3": hsl(accent.h, accent.s, 0.42),
+    "chart-4": hsl((primary.h + 42) % 360, primary.s, 0.38),
+    "chart-5": hsl((secondary.h + 64) % 360, secondary.s, 0.36),
+    sidebar: hsl(primary.h, 0.24, 0.028),
     "sidebar-foreground": hsl(primary.h, 0.14, 0.96),
-    "sidebar-primary": hsl(primary.h, primary.s, 0.66),
-    "sidebar-primary-foreground": hsl(primary.h, 0.3, 0.09),
-    "sidebar-accent": hsl(primary.h, 0.24, 0.18),
+    "sidebar-primary": hsl(primary.h, primary.s, 0.46),
+    "sidebar-primary-foreground": hsl(primary.h, 0.24, 0.028),
+    "sidebar-accent": hsl(primary.h, 0.18, 0.075),
     "sidebar-accent-foreground": hsl(primary.h, 0.14, 0.96),
-    "sidebar-border": hsl(primary.h, 0.24, 0.18),
-    "sidebar-ring": hsl(primary.h, primary.s, 0.66),
+    "sidebar-border": hsl(primary.h, 0.18, 0.075),
+    "sidebar-ring": hsl(primary.h, primary.s, 0.44),
   };
 
   return { light, dark, swatches: [] };

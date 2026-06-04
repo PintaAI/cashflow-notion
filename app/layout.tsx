@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/query-provider";
@@ -7,8 +8,44 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
 import { PullToRefreshWrapper } from "@/components/pull-to-refresh-wrapper";
 import { LocalThemeStyle } from "@/components/local-theme-style";
+import { CSS_VARIABLE_NAMES } from "@/lib/theme-palettes";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
+
+const localThemeScript = `(() => {
+  try {
+    const selectedThemeId = window.localStorage.getItem("cashflow.selectedThemeId");
+    if (!selectedThemeId) return;
+
+    const rawThemes = window.localStorage.getItem("cashflow.themes");
+    if (!rawThemes) return;
+
+    const themes = JSON.parse(rawThemes);
+    if (!Array.isArray(themes)) return;
+
+    const theme = themes.find((item) => item && item.id === selectedThemeId);
+    const colors = theme && theme.colors;
+    if (!colors || typeof colors !== "object" || Array.isArray(colors) || !colors.light || !colors.dark) return;
+
+    const cssVariables = new Set(${JSON.stringify(CSS_VARIABLE_NAMES)});
+    const serialize = (mode) => {
+      if (!mode || typeof mode !== "object" || Array.isArray(mode)) return "";
+      return Object.entries(mode)
+        .filter(([key, value]) => cssVariables.has(key) && typeof value === "string" && /^[#(),.%\\w\\s-]+$/.test(value))
+        .map(([key, value]) => "--" + key + ": " + value + ";")
+        .join("\\n");
+    };
+
+    const light = serialize(colors.light);
+    const dark = serialize(colors.dark);
+    if (!light && !dark) return;
+
+    const style = document.getElementById("user-theme") || document.createElement("style");
+    style.id = "user-theme";
+    style.textContent = ":root {\\n" + light + "\\n}\\n.dark {\\n" + dark + "\\n}";
+    if (!style.parentNode) document.head.appendChild(style);
+  } catch {}
+})();`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,6 +110,11 @@ export default function RootLayout({
           </QueryProvider>
         </ThemeProvider>
       </body>
+      <Script
+        id="cashflow-local-theme"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{ __html: localThemeScript }}
+      />
     </html>
   );
 }

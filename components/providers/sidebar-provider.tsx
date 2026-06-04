@@ -7,7 +7,7 @@ interface SidebarContextValue {
   setIsOpen: (open: boolean) => void;
 }
 
-const SidebarContext = createContext<SidebarContextValue | null>(null);
+export const SidebarContext = createContext<SidebarContextValue | null>(null);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
