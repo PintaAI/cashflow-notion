@@ -14,7 +14,6 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
-      className="h-9 w-9"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
       suppressHydrationWarning
     >

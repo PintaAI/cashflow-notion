@@ -5,23 +5,13 @@ import type { ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react"
-import { AiChat01Icon, Analytics01Icon, ArrowDown01Icon, BellDotIcon, Calendar03Icon, CurrencyIcon, Edit02Icon, File01Icon, FlashIcon, Logout01Icon, PercentIcon, Tag01Icon, UserCircleIcon, Wallet01Icon, Alert02Icon, RefreshIcon, Table01Icon } from "@hugeicons/core-free-icons";
+import { AiChat01Icon, BellDotIcon, CurrencyIcon, Edit02Icon, FlashIcon, Logout01Icon, PercentIcon, RefreshIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { getPalette, getSwatches } from "colorthief";
-import { useSession, signOut } from "@/lib/auth-client";
 
-import { ActivityHeatmap } from "@/components/activity-heatmap";
-import { AnalyticsCharts } from "@/components/analytics-charts";
-import { CashflowTable } from "@/components/cashflow-table";
-import { CashflowCalendar } from "@/components/cashflow-calendar";
+import { useSession, signOut } from "@/lib/auth-client";
 import { AuditDrawer } from "@/components/audit-drawer";
 import { AuditStatusBar } from "@/components/audit-status-bar";
-
-import { CashflowFormDrawer } from "@/components/cashflow-form-drawer";
-import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
-import { MobileBottomNav, type AppTab } from "@/components/mobile-bottom-nav";
 import { PageHeader } from "@/components/page-header";
-import { SidebarNav } from "@/components/sidebar-nav";
-import { Stats, type StatsData } from "@/components/stats";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
 import { QuickFillManager } from "@/components/quick-fill-manager";
@@ -30,12 +20,17 @@ import { RecurringManager } from "@/components/recurring-manager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { useActivityOverview, useSummary } from "@/hooks/use-cashflow-data";
-import { useBudgetStatus } from "@/hooks/use-cashflow-data";
-import { useRunRecurringGeneration } from "@/hooks/use-cashflow-data";
-import type { ActivityOverview } from "@/lib/analytics";
-import type { CashflowSummary } from "@/lib/db";
+import { useCurrency } from "@/components/providers/currency-provider"
+import { SUPPORTED_CURRENCIES } from "@/lib/currency"
+import { getProfileImageSrc } from "@/lib/profile-image";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   getCurrentManagement,
   createInvite,
@@ -50,119 +45,34 @@ import {
   type ManagementWithMembers,
 } from "@/app/actions/management";
 import { listOAuthConnections, revokeOAuthConnection } from "@/app/actions/oauth";
-import { fetchProfileTheme, saveProfileTheme, updateProfile, type ProfileActionState } from "@/app/actions/profile";
+import {
+  fetchProfileTheme,
+  saveProfileTheme,
+  updateProfile,
+  type ProfileActionState,
+} from "@/app/actions/profile";
 import type { UserOAuthConnection } from "@/lib/oauth/server";
 import { cn } from "@/lib/utils"
-import { useCurrency } from "@/components/providers/currency-provider"
-import { SUPPORTED_CURRENCIES } from "@/lib/currency"
-import { getProfileImageSrc } from "@/lib/profile-image";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { generateThemeFromSwatches, parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
-import { LOCAL_THEME_CHANGED_EVENT, LOCAL_THEMES_KEY, SELECTED_LOCAL_THEME_KEY, type LocalTheme } from "@/components/local-theme-style";
-
-function formatDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function getWeekStartEnd(date: Date): { start: Date; end: Date } {
-  const day = date.getDay();
-  const diff = date.getDate() - day;
-  const start = new Date(date.getFullYear(), date.getMonth(), diff);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return { start, end };
-}
-
-function getWeekNumber(date: Date): number {
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  const pastDaysOfMonth = date.getDate() + firstDayOfMonth.getDay() - 1;
-  return Math.ceil(pastDaysOfMonth / 7);
-}
-
-function getEmptySummary(): CashflowSummary {
-  const now = new Date();
-  const { start: weekStart, end: weekEnd } = getWeekStartEnd(now);
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
-
-  return {
-    totalEntries: 0,
-    totalIncome: 0,
-    totalExpenses: 0,
-    balance: 0,
-    byCategory: {},
-    byIO: { Income: 0, Expenses: 0 },
-    currentWeek: {
-      weekNumber: getWeekNumber(now),
-      weekStart: formatDateKey(weekStart),
-      weekEnd: formatDateKey(weekEnd),
-      income: 0,
-      expenses: 0,
-    },
-    currentMonth: {
-      month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-      monthName: monthNames[now.getMonth()],
-      year: now.getFullYear(),
-      income: 0,
-      expenses: 0,
-    },
-    topExpenseCategories: [],
-    weeklyBreakdown: [],
-  };
-}
-
-function getEmptyActivityOverview(daysBack = 182): ActivityOverview {
-  const today = new Date();
-  const days = Array.from({ length: daysBack }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (daysBack - index - 1));
-
-    return {
-      date: formatDateKey(date),
-      count: 0,
-    };
-  });
-
-  return {
-    days,
-    totalEntries: 0,
-    activeDays: 0,
-    currentStreak: 0,
-  };
-}
-
-function toStatsData(summary: CashflowSummary): StatsData {
-  return {
-    totalEntries: summary.totalEntries,
-    totalIncome: summary.totalIncome,
-    totalExpenses: summary.totalExpenses,
-    balance: summary.balance,
-    currentWeek: summary.currentWeek,
-    currentMonth: summary.currentMonth,
-    topExpenseCategories: summary.topExpenseCategories,
-    weeklyBreakdown: summary.weeklyBreakdown,
-  };
-}
+  generateThemeFromSwatches,
+  parseThemeColors,
+  type GeneratedThemeColors,
+} from "@/lib/theme-palettes";
+import {
+  LOCAL_THEME_CHANGED_EVENT,
+  LOCAL_THEMES_KEY,
+  SELECTED_LOCAL_THEME_KEY,
+  type LocalTheme,
+} from "@/components/local-theme-style";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-
   for (let index = 0; index < rawData.length; index += 1) {
     outputArray[index] = rawData.charCodeAt(index);
   }
-
   return outputArray;
 }
 
@@ -175,7 +85,6 @@ function DailyReminderPreference() {
 
   useEffect(() => {
     const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-
     if (!supported) {
       Promise.resolve().then(() => {
         setIsSupported(false);
@@ -183,9 +92,7 @@ function DailyReminderPreference() {
       });
       return;
     }
-
     Promise.resolve().then(() => setIsSupported(true));
-
     navigator.serviceWorker.getRegistration().then((registration) => {
       registration?.pushManager.getSubscription().then((subscription) => {
         setIsEnabled(Boolean(subscription));
@@ -198,41 +105,32 @@ function DailyReminderPreference() {
       setMessage("Notifikasi push belum dikonfigurasi.");
       return;
     }
-
     setIsBusy(true);
     setMessage(null);
-
     try {
       const permission = await Notification.requestPermission();
-
       if (permission !== "granted") {
         setMessage("Izin notifikasi tidak diberikan.");
         return;
       }
-
       let registration = await navigator.serviceWorker.getRegistration();
-
       if (!registration) {
         registration = await navigator.serviceWorker.register("/sw.js");
       }
-
       await navigator.serviceWorker.ready;
       const existingSubscription = await registration.pushManager.getSubscription();
       const subscription = existingSubscription ?? await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
-
       const response = await fetch("/api/notifications/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subscription.toJSON()),
       });
-
       if (!response.ok) {
         throw new Error("Failed to save notification subscription");
       }
-
       setIsEnabled(true);
       setMessage("Aktif jam 20:00 WIB");
     } catch (error) {
@@ -245,21 +143,17 @@ function DailyReminderPreference() {
   async function disableReminder() {
     setIsBusy(true);
     setMessage(null);
-
     try {
       const registration = await navigator.serviceWorker.getRegistration();
       const subscription = await registration?.pushManager.getSubscription();
-
       if (subscription) {
         await fetch("/api/notifications/unsubscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
-
         await subscription.unsubscribe();
       }
-
       setIsEnabled(false);
       setMessage("Pengingat dimatikan");
     } catch (error) {
@@ -296,174 +190,6 @@ function DailyReminderPreference() {
         }}
       />
     </div>
-  );
-}
-
-function BudgetWarningCard() {
-  const budgetStatusQuery = useBudgetStatus();
-  const allStatuses = budgetStatusQuery.data ?? [];
-  const warnings = allStatuses.filter((s) => s.isWarning || s.isOverBudget);
-
-  if (warnings.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3 space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} className="size-3.5 text-yellow-600 dark:text-yellow-400" />
-        <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Budget Warning</span>
-      </div>
-      {warnings.slice(0, 3).map((s) => (
-        <div key={`${s.type}-${s.id}-${s.period}`} className="flex items-center justify-between text-[11px]">
-          <span className="text-yellow-700/80 dark:text-yellow-400/80 truncate">
-            {s.type === "overall" ? "Total" : s.name} ({s.period})
-          </span>
-          <span className={cn(
-            "font-medium shrink-0 ml-2",
-            s.isOverBudget ? "text-red-600 dark:text-red-400" : "text-yellow-600 dark:text-yellow-400"
-          )}>
-            {s.percentage}%
-          </span>
-        </div>
-      ))}
-      {warnings.length > 3 && (
-        <p className="text-[10px] text-yellow-700/60 dark:text-yellow-400/60">+{warnings.length - 3} lainnya</p>
-      )}
-    </div>
-  );
-}
-
-function HomeTab() {
-  const summaryQuery = useSummary();
-  const activityQuery = useActivityOverview();
-  const summary = summaryQuery.data ?? getEmptySummary();
-  const activity = activityQuery.data ?? getEmptyActivityOverview();
-  const today = formatDateKey(new Date());
-  const runGeneration = useRunRecurringGeneration();
-  const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-
-  useEffect(() => {
-    getUserManagements().then(setManagements);
-  }, []);
-
-  useEffect(() => {
-    const key = `recurring-generated-${today}`;
-    if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
-      sessionStorage.setItem(key, "1");
-      runGeneration.mutate();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const active = managements.find((m) => m.isActive);
-  const hasMultiple = managements.length > 1;
-
-  async function handleSwitch(id: string) {
-    setSwitcherOpen(false);
-    try {
-      await switchManagement(id);
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  return (
-    <>
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <div className="flex items-center gap-2.5 relative">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary sm:size-9">
-            <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2.2} className="size-4.5 sm:size-5" />
-          </span>
-          {hasMultiple ? (
-            <button
-              type="button"
-              onClick={() => setSwitcherOpen(!switcherOpen)}
-              className="flex items-center gap-1 text-xl font-bold tracking-tight sm:text-2xl hover:text-primary transition-colors"
-            >
-              <span className="truncate max-w-[200px] sm:max-w-[300px]">{active?.name ?? "Cashflow"}</span>
-              <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className={cn("size-4 shrink-0 text-muted-foreground transition-transform", switcherOpen && "rotate-180")} />
-            </button>
-          ) : (
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{active?.name ?? "Cashflow"}</h1>
-          )}
-          {switcherOpen && hasMultiple && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setSwitcherOpen(false)} />
-              <div className="absolute left-0 top-full z-50 mt-2 w-56 rounded-lg border bg-popover p-1 shadow-md">
-                {managements.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => handleSwitch(m.id)}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent transition-colors",
-                      m.isActive && "bg-accent"
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-xs font-medium">{m.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {m.memberCount} anggota · {m.role === "owner" ? "Pemilik" : "Anggota"}
-                      </p>
-                    </div>
-                    {m.isActive && (
-                      <span className="size-1.5 rounded-full bg-primary shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
-      <BudgetWarningCard />
-      {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} />}
-      <CashflowTable dateFilter={today} />
-    </>
-  );
-}
-
-function CatatanTab() {
-  const [view, setView] = useState<"list" | "calendar">("list");
-
-  return (
-    <>
-      <div className="flex items-center justify-between">
-        <PageHeader icon={File01Icon} title="Catatan" />
-        <div className="flex items-center rounded-lg border p-0.5">
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              view === "list"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <HugeiconsIcon icon={Table01Icon} strokeWidth={2} className="size-3.5" />
-            List
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("calendar")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              view === "calendar"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-3.5" />
-            Kalender
-          </button>
-        </div>
-      </div>
-
-      {view === "list" ? <CashflowTable /> : <CashflowCalendar />}
-    </>
   );
 }
 
@@ -702,7 +428,6 @@ function ManagementSettings() {
         <div className="space-y-1.5">
           {management.management.members.map((member) => {
             const memberImageSrc = getProfileImageSrc(member.user.image);
-
             return (
             <div key={member.id} className="flex items-center gap-2 border border-border rounded p-2">
               {memberImageSrc ? (
@@ -745,7 +470,6 @@ function ManagementSettings() {
               {invitations.map((invitation) => {
                 const isExpired = new Date(invitation.expiresAt) < new Date();
                 const inviteLink = `${origin}/invite?code=${invitation.code}`;
-
                 return (
                   <div key={invitation.id} className="space-y-2 rounded-md border border-border p-2">
                     <div className="flex items-center justify-between gap-2">
@@ -809,35 +533,37 @@ function McpKeySettings() {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
-        <p className="text-sm font-medium">OAuth 2.1</p>
-        <p className="text-xs text-muted-foreground">
-          Gunakan OAuth untuk koneksi yang lebih aman. ChatGPT, Cursor, dan client lainnya
-          akan memandu Anda melalui proses login saat menghubungkan.
+    <div className="space-y-4">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+        <p className="text-xs font-semibold text-primary">Cara menghubungkan</p>
+        <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+          <li>Buka <strong>ChatGPT</strong> → Settings → Apps &amp; Connectors → nyalakan <strong>Developer Mode</strong></li>
+          <li>Buat <strong>App</strong> baru, beri nama (contoh: &quot;Cashflow&quot;)</li>
+          <li>Tempel <strong>MCP Server URL</strong> di bawah, pilih auth <strong>OAuth</strong></li>
+          <li>Login seperti biasa — Anda akan diarahkan ke halaman login Cashflow</li>
+          <li>Kembali ke chat, panggil lewat ikon <strong>+</strong> atau ketik <strong>@Cashflow</strong></li>
+        </ol>
+        <p className="text-[10px] text-muted-foreground border-t border-primary/10 pt-2 mt-1">
+          Untuk <strong>Cursor</strong>: Settings → Features → MCP → paste URL yang sama.<br />
+          Untuk <strong>AI lain</strong> (Claude Desktop, VS Code, Cline, dll): tempel URL yang sama dan pilih OAuth — caranya kurang lebih sama.
         </p>
-        <CopyField
-          label="MCP Server URL"
-          value={`${baseUrl}/api/mcp`}
-        />
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-3">
+        <p className="text-xs font-medium">Salin URL ini</p>
+        <CopyField label="MCP Server URL" value={`${baseUrl}/api/mcp`} />
         <p className="text-xs text-muted-foreground">
-          Saat menghubungkan dengan AI client (ChatGPT, Cursor, dll), masukkan URL ini
-          dan pilih &quot;OAuth&quot; sebagai metode autentikasi.
+          Tempel URL ini ke AI client pilihan Anda, lalu pilih &quot;OAuth&quot; sebagai metode login.
         </p>
 
         {loadingConnections ? (
           <p className="text-xs text-muted-foreground">Memuat koneksi...</p>
         ) : connections.length > 0 ? (
           <div className="space-y-2 pt-2 border-t">
-            <p className="text-xs font-medium">Koneksi Aktif</p>
+            <p className="text-xs font-medium">Terhubung sebagai</p>
             {connections.map((c) => (
               <div key={c.clientId} className="flex items-center justify-between rounded-md border p-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{c.clientName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {c.tokenCount} token{c.tokenCount !== 1 ? "s" : ""} aktif
-                    {c.scopes.length > 0 && ` · ${c.scopes.join(", ")}`}
-                  </p>
-                </div>
+                <p className="text-sm font-medium truncate">{c.clientName}</p>
                 <Button
                   variant="outline"
                   size="xs"
@@ -853,13 +579,14 @@ function McpKeySettings() {
                     }
                   }}
                 >
-                  {revoking === c.clientId ? "..." : "Revoke"}
+                  {revoking === c.clientId ? "..." : "Putuskan"}
                 </Button>
               </div>
             ))}
           </div>
         ) : null}
       </div>
+    </div>
   );
 }
 
@@ -933,7 +660,6 @@ function saveLocalTheme(theme: LocalTheme) {
 function subscribeLocalThemes(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
   window.addEventListener(LOCAL_THEME_CHANGED_EVENT, onStoreChange);
-
   return () => {
     window.removeEventListener("storage", onStoreChange);
     window.removeEventListener(LOCAL_THEME_CHANGED_EVENT, onStoreChange);
@@ -977,150 +703,85 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
   async function extractThemeFromImageUrl(url: string) {
     const image = new window.Image();
     image.decoding = "async";
+    image.crossOrigin = "anonymous";
     image.src = url;
-
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("Failed to load profile image preview"));
-    });
-
-    const swatches = await getSwatches(image, {
-      colorCount: 12,
-      quality: 5,
-      colorSpace: "oklch",
-      minSaturation: 0.08,
-    });
-    const palette = await getPalette(image, {
-      colorCount: 8,
-      quality: 5,
-      colorSpace: "oklch",
-      minSaturation: 0.08,
-    });
-    const semanticSwatches = [
-      swatches.Vibrant,
-      swatches.Muted,
-      swatches.LightVibrant,
-      swatches.DarkVibrant,
-      swatches.LightMuted,
-      swatches.DarkMuted,
-    ].flatMap((swatch) => swatch?.color.hex() ?? []);
-    const paletteSwatches = palette?.map((color) => color.hex()) ?? [];
-
-    return generateThemeFromSwatches([...semanticSwatches, ...paletteSwatches]);
+    await image.decode();
+    const palette = await getPalette(image, { colorCount: 6 });
+    if (!palette) return null;
+    return generateThemeFromSwatches(palette.map((c) => c.hex()));
   }
 
-  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      themeExtractionRef.current = null;
-      setThemeLoading(false);
-      setGeneratedTheme(null);
-      setThemeMessage("");
-      setObjectPreviewUrl((current) => {
-        if (current) URL.revokeObjectURL(current);
-        return null;
-      });
-      return;
-    }
-
-    const nextPreviewUrl = URL.createObjectURL(file);
-    setGeneratedTheme(null);
-    setThemeMessage("Membuat tema dari foto...");
+  async function handleFileUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setObjectPreviewUrl(previewUrl);
     setThemeLoading(true);
-    setObjectPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return nextPreviewUrl;
-    });
-
-    const extraction = extractThemeFromImageUrl(nextPreviewUrl)
-      .then((theme) => {
-        setGeneratedTheme(theme);
-        setThemeMessage(theme ? "Tema dari foto siap disimpan." : "Palet warna foto tidak cukup kuat untuk membuat tema.");
-        return theme;
-      })
-      .catch(() => {
-        setGeneratedTheme(null);
-        setThemeMessage("Gagal membuat tema dari foto.");
-        return null;
-      })
-      .finally(() => {
-        if (themeExtractionRef.current === extraction) {
-          setThemeLoading(false);
-          themeExtractionRef.current = null;
-        }
-      });
-
-    themeExtractionRef.current = extraction;
+    setThemeMessage("Mengekstrak warna...");
+    try {
+      const theme = await extractThemeFromImageUrl(previewUrl);
+      if (theme) setGeneratedTheme(theme);
+    } catch {
+      setThemeMessage("Gagal mengekstrak warna dari foto.");
+    } finally {
+      setThemeLoading(false);
+    }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setPending(true);
-
+    setState({ status: "idle", message: "" });
+    const formData = new FormData(e.currentTarget);
     try {
-      let readyTheme = generatedTheme;
-      const extraction = themeExtractionRef.current;
-      if (extraction) {
-        setThemeLoading(true);
-        readyTheme = await extraction;
-        setThemeLoading(false);
-      }
-
-      const result = await updateProfile(state, new FormData(event.currentTarget));
+      const result = await updateProfile(initialProfileState, formData);
       setState(result);
-
       if (result.status === "success" && result.user) {
-        onUpdated(result.user, readyTheme);
-        setObjectPreviewUrl((current) => {
-          if (current) URL.revokeObjectURL(current);
-          return null;
-        });
+        onUpdated(result.user as EditableProfileUser, generatedTheme);
+        setObjectPreviewUrl(null);
         setGeneratedTheme(null);
-        setThemeMessage("");
       }
     } finally {
       setPending(false);
     }
   }
 
-  const previewUrl = objectPreviewUrl ?? getProfileImageSrc(user.image);
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex items-center gap-4">
-        {previewUrl ? (
-          <Image src={previewUrl} alt="Foto profil" width={64} height={64} className="size-16 rounded-full object-cover" unoptimized />
-        ) : (
-          <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-xl font-semibold text-primary">
-            {user.name?.charAt(0)?.toUpperCase() || "U"}
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <Input type="hidden" name="name" value={user.name} />
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Foto profil</p>
+        <div className="flex items-center gap-3">
+          {objectPreviewUrl ? (
+            <Image src={objectPreviewUrl} alt="Preview" width={48} height={48} className="size-12 rounded-full object-cover" unoptimized />
+          ) : getProfileImageSrc(user.image) ? (
+            <Image src={getProfileImageSrc(user.image)!} alt="Foto profil" width={48} height={48} className="size-12 rounded-full object-cover" unoptimized />
+          ) : (
+            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+              {user.name?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+          )}
+          <div className="space-y-1">
+            <label className="cursor-pointer text-xs text-primary hover:underline">
+              {objectPreviewUrl ? "Ganti foto..." : "Unggah foto..."}
+              <input type="file" name="image" accept="image/*" onChange={handleFileUpload} className="hidden" />
+            </label>
+            {themeLoading && <p className="text-xs text-muted-foreground">{themeMessage}</p>}
+            {themeMessage && !themeLoading && <p className="text-xs text-muted-foreground">{themeMessage}</p>}
           </div>
-        )}
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <p className="text-sm font-medium">Foto profil</p>
-          <Input name="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageChange} />
-          <p className="text-xs text-muted-foreground">JPG, PNG, WebP, atau GIF. Maksimal 5 MB.</p>
-          {themeMessage && <p className="text-xs text-muted-foreground" aria-live="polite">{themeMessage}</p>}
+          {objectPreviewUrl && !themeLoading && (
+            <button type="button" onClick={() => { setObjectPreviewUrl(null); setGeneratedTheme(null); setThemeMessage(""); }} className="text-xs text-red-500 hover:underline">Batal</button>
+          )}
         </div>
       </div>
-
-      <div className="space-y-1.5">
-        <label htmlFor="profile-name" className="text-sm font-medium">Nama</label>
-        <Input id="profile-name" name="name" defaultValue={user.name} minLength={2} maxLength={80} required />
-      </div>
-
-      <div className="space-y-1.5">
-        <label htmlFor="profile-email" className="text-sm font-medium">Email</label>
-        <Input id="profile-email" value={user.email} disabled />
-      </div>
-
-      {state.message && (
-        <p className={cn("text-xs", state.status === "error" ? "text-red-500" : "text-emerald-600")} aria-live="polite">
-          {state.message}
-        </p>
+      {generatedTheme && !themeLoading && objectPreviewUrl && (
+        <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-2">
+          <span className="text-[10px] text-muted-foreground">Tema baru dari foto akan tersimpan</span>
+        </div>
       )}
-
-      <Button type="submit" disabled={pending || themeLoading}>
-        {pending ? "Menyimpan..." : themeLoading ? "Menganalisis foto..." : "Simpan Profil"}
+      {state.message && <p className="text-xs text-muted-foreground" aria-live="polite">{state.message}</p>}
+      <Button type="submit" disabled={pending}>
+        {pending ? "Menyimpan..." : "Simpan"}
       </Button>
     </form>
   );
@@ -1137,7 +798,6 @@ function ThemeSettings() {
   function handleThemeChange(value: string) {
     const nextThemeId = value === "default" ? null : value;
     setMessage("");
-
     startTransition(() => {
       if (nextThemeId) {
         window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, nextThemeId);
@@ -1156,7 +816,6 @@ function ThemeSettings() {
           Tema baru dibuat otomatis dari warna foto profil saat Anda mengunggah foto baru. Maksimal 5 tema disimpan di perangkat ini; tema tertua akan dihapus saat melewati batas.
         </p>
       </div>
-
       <Select value={selectedThemeId ?? "default"} onValueChange={handleThemeChange} disabled={isPending}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Pilih tema" />
@@ -1168,7 +827,6 @@ function ThemeSettings() {
           ))}
         </SelectContent>
       </Select>
-
       {themes.length > 0 ? (
         <div className="grid gap-2 sm:grid-cols-2">
           {themes.map((theme) => (
@@ -1199,13 +857,12 @@ function ThemeSettings() {
           Belum ada tema tersimpan. Unggah foto profil untuk membuat tema dari palet warna foto.
         </p>
       )}
-
       {message && <p className="text-xs text-muted-foreground" aria-live="polite">{message}</p>}
     </div>
   );
 }
 
-function ProfileTab() {
+export function SettingTab() {
   const router = useRouter();
   const { data: session } = useSession();
   const { currency, setCurrency, loading } = useCurrency();
@@ -1220,12 +877,10 @@ function ProfileTab() {
 
   useEffect(() => {
     if (!session?.user) return;
-
     let cancelled = false;
     fetchProfileTheme()
       .then((theme) => {
         if (cancelled || !theme || getLocalThemes().length > 0) return;
-
         saveLocalTheme({
           id: crypto.randomUUID(),
           name: "Profile theme",
@@ -1233,10 +888,7 @@ function ProfileTab() {
           createdAt: new Date().toISOString(),
         });
       })
-      .catch(() => {
-        // Local themes remain the source of truth when remote sync is unavailable.
-      });
-
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -1244,7 +896,7 @@ function ProfileTab() {
 
   return (
     <>
-      <PageHeader icon={UserCircleIcon} title="Setting">
+      <PageHeader title="Setting">
         <ThemeToggle />
       </PageHeader>
 
@@ -1413,7 +1065,7 @@ function ProfileTab() {
               Hubungkan AI
             </span>
           </AccordionTrigger>
-          <AccordionContent>
+          <AccordionContent className="space-y-4">
             <McpKeySettings />
           </AccordionContent>
         </AccordionItem>
@@ -1434,52 +1086,6 @@ function ProfileTab() {
         Keluar
       </Button>
       <AuditDrawer open={auditDrawerOpen} onOpenChange={setAuditDrawerOpen} />
-    </>
-  );
-}
-
-export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<AppTab>(() => {
-    if (typeof window === "undefined") return "home";
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get("tab");
-    return tab === "summary" || tab === "catatan" || tab === "setting" ? tab : "home";
-  });
-  const [addDrawerOpen, setAddDrawerOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const params = new URLSearchParams(window.location.search);
-    return params.get("action") === "add";
-  });
-
-  return (
-    <>
-      <CashflowFormDrawer mode="create" open={addDrawerOpen} onOpenChange={setAddDrawerOpen} />
-      <Tabs orientation="vertical" value={activeTab} onValueChange={(value) => setActiveTab(value as AppTab)}>
-      <div className="flex min-h-dvh w-full">
-        <SidebarNav />
-
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 pb-24 sm:py-8 md:pb-8">
-          <TabsContent value="home" className="mt-0">
-            <HomeTab />
-          </TabsContent>
-
-          <TabsContent value="catatan" className="mt-0">
-            <CatatanTab />
-          </TabsContent>
-
-          <TabsContent value="summary" className="mt-0">
-            <PageHeader icon={Analytics01Icon} title="Summary" />
-            <AnalyticsCharts />
-          </TabsContent>
-
-          <TabsContent value="setting" className="mt-0">
-            <ProfileTab />
-          </TabsContent>
-        </main>
-      </div>
-
-      <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-    </Tabs>
     </>
   );
 }
