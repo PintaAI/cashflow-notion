@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Alert02Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
@@ -133,6 +134,7 @@ function BudgetWarningCard() {
 }
 
 export function HomeTab() {
+  const queryClient = useQueryClient();
   const summaryQuery = useSummary();
   const activityQuery = useActivityOverview();
   const summary = summaryQuery.data ?? getEmptySummary();
@@ -162,7 +164,8 @@ export function HomeTab() {
     setSwitcherOpen(false);
     try {
       await switchManagement(id);
-      window.location.reload();
+      setManagements((prev) => prev.map((m) => ({ ...m, isActive: m.id === id })));
+      await queryClient.invalidateQueries();
     } catch (err) {
       console.error(err);
     }

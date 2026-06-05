@@ -135,6 +135,7 @@ export async function switchManagement(managementId: string) {
     where: { id: session.user.id },
     data: { activeManagementId: managementId },
   });
+  revalidatePath("/", "layout");
 
   return { success: true, managementId };
 }

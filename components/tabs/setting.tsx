@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AiChat01Icon, BellDotIcon, CurrencyIcon, Delete02Icon, Edit02Icon, FlashIcon, Logout01Icon, PercentIcon, RefreshIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { getPalette, getSwatches } from "colorthief";
@@ -196,6 +197,7 @@ function DailyReminderPreference() {
 
 function ManagementSettings() {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [management, setManagement] = useState<ManagementWithMembers | null>(null);
   const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
   const [invitations, setInvitations] = useState<ManagementInvitation[]>([]);
@@ -228,7 +230,19 @@ function ManagementSettings() {
   async function handleSwitch(id: string) {
     try {
       await switchManagement(id);
-      window.location.reload();
+      setEditingName(false);
+      const [currentManagement, userManagements, currentInvitations] = await Promise.all([
+        getCurrentManagement(),
+        getUserManagements(),
+        getManagementInvitations().catch(() => []),
+      ]);
+      if (currentManagement) {
+        setManagement(currentManagement);
+        setNameValue(currentManagement.management.name);
+      }
+      setManagements(userManagements);
+      setInvitations(currentInvitations);
+      await queryClient.invalidateQueries();
     } catch (err) {
       console.error(err);
     }
