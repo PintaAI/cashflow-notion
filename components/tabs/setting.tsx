@@ -11,6 +11,7 @@ import { getPalette, getSwatches } from "colorthief";
 import { useSession, signOut } from "@/lib/auth-client";
 import { AuditDrawer } from "@/components/audit-drawer";
 import { AuditStatusBar } from "@/components/audit-status-bar";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CategoryManager } from "@/components/category-manager";
@@ -711,6 +712,7 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
   const [photoPending, setPhotoPending] = useState(false);
   const [objectPreviewUrl, setObjectPreviewUrl] = useState<string | null>(null);
   const [themeMessage, setThemeMessage] = useState("");
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const themeExtractionRef = useRef<Promise<GeneratedThemeColors | null> | null>(null);
 
   async function extractThemeFromImageUrl(url: string) {
@@ -724,10 +726,15 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
     return generateThemeFromSwatches(palette.map((c) => c.hex()));
   }
 
-  async function handleFileUpload(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
+    e.currentTarget.value = "";
+    setCropFile(file);
+  }
+
+  async function handleCropSave(croppedFile: File) {
+    const previewUrl = URL.createObjectURL(croppedFile);
     setObjectPreviewUrl(previewUrl);
     setPhotoPending(true);
     setThemeMessage("Mengekstrak warna...");
@@ -743,7 +750,7 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
 
     const formData = new FormData();
     formData.set("name", name.trim() || user.name);
-    formData.set("image", file);
+    formData.set("image", croppedFile);
 
     try {
       const result = await updateProfile(initialProfileState, formData);
@@ -755,7 +762,6 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
     } finally {
       setPhotoPending(false);
       setObjectPreviewUrl(null);
-      e.currentTarget.value = "";
     }
   }
 
@@ -798,12 +804,19 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
             )}
             </AvatarBadge>
           </Avatar>
-          <input type="file" name="image" accept="image/*" onChange={handleFileUpload} className="hidden" disabled={photoPending} />
+          <input type="file" name="image" accept="image/*" onChange={handleFileSelect} className="hidden" disabled={photoPending} />
         </label>
         <p className="text-xs text-muted-foreground">
           {photoPending ? "Menyimpan foto..." : themeMessage || "Klik foto untuk mengganti"}
         </p>
       </div>
+
+      <ImageCropDialog
+        open={cropFile !== null}
+        file={cropFile}
+        onClose={() => setCropFile(null)}
+        onSave={handleCropSave}
+      />
 
       <div className="space-y-1">
         <p className="text-xs text-muted-foreground">Nama</p>
