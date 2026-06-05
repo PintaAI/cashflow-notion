@@ -1,38 +1,40 @@
 "use client";
 
 import { Suspense } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   Sheet,
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { SidebarContent, type AppTab } from "@/components/sidebar-content";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { SidebarContent, MobileBottomNav, type AppTab } from "@/components/layout";
+import { ManagementProvider } from "@/components/providers/management-provider";
 import { SidebarProvider, useSidebar } from "@/components/providers/sidebar-provider";
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const params = useParams<{ managementId?: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isOpen, setIsOpen } = useSidebar();
+  const managementPath = params.managementId ? `/dompet/${params.managementId}` : "/";
 
   const currentTab: AppTab =
-    pathname === "/"
+    pathname === managementPath
       ? ((searchParams.get("tab") as AppTab) || "home")
       : "home";
 
   function handleTabChange(tab: AppTab) {
-    const url = tab === "home" ? "/" : `/?tab=${tab}`;
-    if (pathname === "/") {
+    const url = tab === "home" ? managementPath : `${managementPath}?tab=${tab}`;
+    if (pathname === managementPath) {
       router.push(url, { scroll: false });
     } else {
       router.push(url);
     }
   }
 
-  return (
+  const shell = (
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent side="left" showCloseButton={true} className="w-72 p-0">
@@ -56,6 +58,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <MobileBottomNav activeTab={currentTab} onTabChange={handleTabChange} />
     </>
   );
+
+  if (params.managementId) {
+    return <ManagementProvider managementId={params.managementId}>{shell}</ManagementProvider>;
+  }
+
+  return shell;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

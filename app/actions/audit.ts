@@ -7,29 +7,30 @@ import {
   getLatestAuditSnapshot,
   type AuditSnapshotData,
 } from "@/lib/db";
-import { getCurrentManagementId, getSession } from "@/lib/management";
+import { getSession, resolveManagementId } from "@/lib/management";
 
-export async function fetchBalance(): Promise<number> {
-  const managementId = await getCurrentManagementId();
+export async function fetchBalance(managementId?: string): Promise<number> {
+  managementId = await resolveManagementId(managementId);
   return getBalanceAsOf(managementId);
 }
 
-export async function fetchAuditHistory(): Promise<AuditSnapshotData[]> {
-  const managementId = await getCurrentManagementId();
+export async function fetchAuditHistory(managementId?: string): Promise<AuditSnapshotData[]> {
+  managementId = await resolveManagementId(managementId);
   return getAuditHistory(managementId);
 }
 
-export async function fetchLatestAudit(): Promise<AuditSnapshotData | null> {
-  const managementId = await getCurrentManagementId();
+export async function fetchLatestAudit(managementId?: string): Promise<AuditSnapshotData | null> {
+  managementId = await resolveManagementId(managementId);
   return getLatestAuditSnapshot(managementId);
 }
 
 export async function performAudit(params: {
+  managementId?: string;
   actualBalance: number;
   note?: string;
   autoAdjust: boolean;
 }): Promise<AuditSnapshotData> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(params.managementId);
   const session = await getSession();
   if (!session?.user.id) throw new Error("Not authenticated");
 

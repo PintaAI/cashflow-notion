@@ -1,5 +1,5 @@
-import { ActivityHeatmapSkeleton, CashflowTableSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
-import { PageHeader } from "@/components/page-header";
+import { ActivityHeatmapSkeleton, CashflowTableSkeleton, StatsSkeleton } from "@/components/utils";
+import { PageHeader } from "@/components/layout";
 
 export default function Loading() {
   return (

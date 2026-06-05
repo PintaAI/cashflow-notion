@@ -11,30 +11,30 @@ import {
   type AnalyticsFilter,
   type URLAnalyticsFilter,
 } from "@/lib/analytics";
-import { getCurrentManagementId } from "@/lib/management";
+import { resolveManagementId } from "@/lib/management";
 
-export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}): Promise<AnalyticsData> {
-  const managementId = await getCurrentManagementId();
+export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}, managementId?: string): Promise<AnalyticsData> {
+  managementId = await resolveManagementId(managementId);
   return getAnalyticsFromURL(urlFilter, managementId);
 }
 
-export async function fetchAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsData> {
-  const managementId = await getCurrentManagementId();
+export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId?: string): Promise<AnalyticsData> {
+  managementId = await resolveManagementId(managementId);
   return getAnalytics(filter, managementId);
 }
 
-export async function fetchActivityOverview(daysBack = 182): Promise<ActivityOverview> {
-  const managementId = await getCurrentManagementId();
+export async function fetchActivityOverview(daysBack = 182, managementId?: string): Promise<ActivityOverview> {
+  managementId = await resolveManagementId(managementId);
   return getActivityOverview(daysBack, managementId);
 }
 
-export async function fetchFilteredSummary(filter: AnalyticsFilter = {}): Promise<{
+export async function fetchFilteredSummary(filter: AnalyticsFilter = {}, managementId?: string): Promise<{
   totalIncome: number;
   totalExpenses: number;
   balance: number;
   entryCount: number;
 }> {
-  const managementId = await getCurrentManagementId();
+  managementId = await resolveManagementId(managementId);
   return getFilteredSummary(filter, managementId);
 }
 

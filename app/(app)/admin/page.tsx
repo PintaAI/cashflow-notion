@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserAvatar } from "@/components/profile";
 import {
   getAdminDashboard,
   getAllUsers,

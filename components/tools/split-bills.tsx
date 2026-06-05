@@ -15,9 +15,10 @@ import {
   UserGroupIcon,
   Wallet01Icon,
 } from "@hugeicons/core-free-icons";
-import { CameraCapture } from "@/components/camera-capture";
+import { CameraCapture } from "@/components/utils";
 import { useCurrency } from "@/components/providers/currency-provider";
-import { UserAvatar, getUserDisplayName } from "@/components/user-avatar";
+import { useManagement } from "@/components/providers/management-provider";
+import { UserAvatar, getUserDisplayName } from "@/components/profile";
 import { addEntry } from "@/app/actions/cashflow";
 import { searchRegisteredUsers } from "@/app/actions/users";
 import type { RegisteredUserOption } from "@/app/actions/users";
@@ -215,6 +216,7 @@ function getPaidPlaces(personId: string, bills: Bill[]) {
 export function SplitBills() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { currency, setCurrency, toIdr } = useCurrency();
   const { data: session } = useSession();
@@ -763,6 +765,7 @@ export function SplitBills() {
       const name = places ? `Split bill - ${places}` : "Split bill";
 
       await addEntry({
+        managementId,
         name,
         nominal: Math.round(toIdr(currentUserSummary.share)),
         category: expenseCategory || undefined,
@@ -770,9 +773,9 @@ export function SplitBills() {
         io: "Expenses",
       });
 
-      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
-      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
-      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot });
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) });
       router.refresh();
       setExpenseMessage("Expense ditambahkan dari hasil split bill.");
     } catch (error) {
@@ -836,7 +839,7 @@ export function SplitBills() {
             <SelectContent>
               {SUPPORTED_CURRENCIES.map((c) => (
                 <SelectItem key={c.code} value={c.code}>
-                  {c.symbol} {c.code}
+                  <span>{c.flag} {c.name}</span>
                 </SelectItem>
               ))}
             </SelectContent>

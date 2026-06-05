@@ -38,3 +38,29 @@ export const getCurrentManagementId = cache(async () => {
 
   return membership.managementId;
 });
+
+export async function assertManagementAccess(managementId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const membership = await prisma.managementMember.findFirst({
+    where: { userId: session.user.id, managementId },
+  });
+  if (!membership) throw new Error("Anda bukan anggota management ini");
+
+  return { session, managementId };
+}
+
+export async function resolveManagementId(managementId?: string) {
+  if (!managementId) return getCurrentManagementId();
+  await assertManagementAccess(managementId);
+  return managementId;
+}
+
+export async function activateManagement(managementId: string) {
+  const { session } = await assertManagementAccess(managementId);
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { activeManagementId: managementId },
+  });
+}

@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
-import { PullToRefreshWrapper } from "@/components/pull-to-refresh-wrapper";
-import { LocalThemeStyle } from "@/components/local-theme-style";
+import { PullToRefreshWrapper } from "@/components/pwa";
+import { LocalThemeStyle } from "@/components/layout";
 import { CSS_VARIABLE_NAMES } from "@/lib/theme-palettes";
+import { fetchExchangeRates, fetchUserCurrency } from "@/app/actions/preferences";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
 
@@ -82,17 +83,29 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [initialCurrency, initialRates] = await Promise.all([
+    fetchUserCurrency(),
+    fetchExchangeRates(),
+  ]).catch(() => ["IDR", { IDR: 1 }] as const);
+
   return (
     <html
       lang="en"
       suppressHydrationWarning
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-mono", jetbrainsMono.variable)}
     >
+      <head>
+        <Script
+          id="cashflow-local-theme"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: localThemeScript }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <LocalThemeStyle />
         <ThemeProvider
@@ -102,7 +115,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            <CurrencyProvider>
+            <CurrencyProvider initialCurrency={initialCurrency} initialRates={initialRates}>
               <PullToRefreshWrapper>
                 {children}
               </PullToRefreshWrapper>
@@ -110,11 +123,6 @@ export default function RootLayout({
           </QueryProvider>
         </ThemeProvider>
       </body>
-      <Script
-        id="cashflow-local-theme"
-        strategy="beforeInteractive"
-        dangerouslySetInnerHTML={{ __html: localThemeScript }}
-      />
     </html>
   );
 }

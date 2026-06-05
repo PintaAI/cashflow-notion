@@ -3,22 +3,23 @@ export interface CurrencyOption {
   name: string;
   locale: string;
   symbol: string;
+  flag: string;
 }
 
 export const SUPPORTED_CURRENCIES: CurrencyOption[] = [
-  { code: "IDR", name: "Rupiah (Rp)", locale: "id-ID", symbol: "Rp" },
-  { code: "KRW", name: "Won (₩)", locale: "ko-KR", symbol: "₩" },
-  { code: "JPY", name: "Yen (¥)", locale: "ja-JP", symbol: "¥" },
-  { code: "VND", name: "Dong (₫)", locale: "vi-VN", symbol: "₫" },
-  { code: "USD", name: "US Dollar ($)", locale: "en-US", symbol: "$" },
-  { code: "EUR", name: "Euro (€)", locale: "de-DE", symbol: "€" },
-  { code: "GBP", name: "Pound Sterling (£)", locale: "en-GB", symbol: "£" },
-  { code: "SGD", name: "Singapore Dollar (S$)", locale: "en-SG", symbol: "S$" },
-  { code: "AUD", name: "Australian Dollar (A$)", locale: "en-AU", symbol: "A$" },
-  { code: "MYR", name: "Ringgit (RM)", locale: "ms-MY", symbol: "RM" },
-  { code: "CNY", name: "Yuan (¥)", locale: "zh-CN", symbol: "¥" },
-  { code: "THB", name: "Baht (฿)", locale: "th-TH", symbol: "฿" },
-  { code: "PHP", name: "Peso (₱)", locale: "en-PH", symbol: "₱" },
+  { code: "IDR", name: "Rupiah (Rp)", locale: "id-ID", symbol: "Rp", flag: "🇮🇩" },
+  { code: "KRW", name: "Won (₩)", locale: "ko-KR", symbol: "₩", flag: "🇰🇷" },
+  { code: "JPY", name: "Yen (¥)", locale: "ja-JP", symbol: "¥", flag: "🇯🇵" },
+  { code: "VND", name: "Dong (₫)", locale: "vi-VN", symbol: "₫", flag: "🇻🇳" },
+  { code: "USD", name: "US Dollar ($)", locale: "en-US", symbol: "$", flag: "🇺🇸" },
+  { code: "EUR", name: "Euro (€)", locale: "de-DE", symbol: "€", flag: "🇪🇺" },
+  { code: "GBP", name: "Pound Sterling (£)", locale: "en-GB", symbol: "£", flag: "🇬🇧" },
+  { code: "SGD", name: "Singapore Dollar (S$)", locale: "en-SG", symbol: "S$", flag: "🇸🇬" },
+  { code: "AUD", name: "Australian Dollar (A$)", locale: "en-AU", symbol: "A$", flag: "🇦🇺" },
+  { code: "MYR", name: "Ringgit (RM)", locale: "ms-MY", symbol: "RM", flag: "🇲🇾" },
+  { code: "CNY", name: "Yuan (¥)", locale: "zh-CN", symbol: "¥", flag: "🇨🇳" },
+  { code: "THB", name: "Baht (฿)", locale: "th-TH", symbol: "฿", flag: "🇹🇭" },
+  { code: "PHP", name: "Peso (₱)", locale: "en-PH", symbol: "₱", flag: "🇵🇭" },
 ];
 
 export const CURRENCY_DENOMINATIONS: Record<string, number[]> = {

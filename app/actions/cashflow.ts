@@ -13,21 +13,22 @@ import {
   getCalendarEntries,
 } from "@/lib/db";
 import type { CashflowEntry, CashflowSummary, IOType, CategoryType, CalendarDayData } from "@/lib/db";
-import { getCurrentManagementId, getSession } from "@/lib/management";
+import { resolveManagementId, getSession } from "@/lib/management";
 import { checkBudgetAlerts } from "@/lib/budget-alerts";
 import { prisma } from "@/lib/db";
 
-export async function fetchAllEntries(): Promise<CashflowEntry[]> {
-  const managementId = await getCurrentManagementId();
+export async function fetchAllEntries(managementId?: string): Promise<CashflowEntry[]> {
+  managementId = await resolveManagementId(managementId);
   return getAllEntries(managementId);
 }
 
-export async function fetchSummary(): Promise<CashflowSummary> {
-  const managementId = await getCurrentManagementId();
+export async function fetchSummary(managementId?: string): Promise<CashflowSummary> {
+  managementId = await resolveManagementId(managementId);
   return getSummary(managementId);
 }
 
 export async function fetchEntriesPage(options?: {
+  managementId?: string;
   pageSize?: number;
   skip?: number;
 }): Promise<{
@@ -35,7 +36,7 @@ export async function fetchEntriesPage(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(options?.managementId);
   return getEntries({
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
@@ -44,6 +45,7 @@ export async function fetchEntriesPage(options?: {
 }
 
 export async function fetchEntriesFiltered(options?: {
+  managementId?: string;
   pageSize?: number;
   skip?: number;
   io?: IOType;
@@ -54,7 +56,7 @@ export async function fetchEntriesFiltered(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(options?.managementId);
   return getEntriesFiltered({
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
@@ -66,6 +68,7 @@ export async function fetchEntriesFiltered(options?: {
 }
 
 export async function fetchIncomeEntries(options?: {
+  managementId?: string;
   pageSize?: number;
   skip?: number;
 }): Promise<{
@@ -73,7 +76,7 @@ export async function fetchIncomeEntries(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(options?.managementId);
   return getEntriesByIOPaginated("Income", {
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
@@ -82,6 +85,7 @@ export async function fetchIncomeEntries(options?: {
 }
 
 export async function fetchExpensesEntries(options?: {
+  managementId?: string;
   pageSize?: number;
   skip?: number;
 }): Promise<{
@@ -89,7 +93,7 @@ export async function fetchExpensesEntries(options?: {
   nextCursor: string | null;
   hasMore: boolean;
 }> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(options?.managementId);
   return getEntriesByIOPaginated("Expenses", {
     pageSize: options?.pageSize ?? 20,
     skip: options?.skip ?? 0,
@@ -98,11 +102,12 @@ export async function fetchExpensesEntries(options?: {
 }
 
 export async function fetchCategoryEntries(category: string, filters?: {
+  managementId?: string;
   from?: string;
   to?: string;
   limit?: number;
 }): Promise<CashflowEntry[]> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(filters?.managementId);
   const endDate = filters?.to
     ? (() => {
         const [y, m, d] = filters.to.split("-").map(Number);
@@ -122,19 +127,20 @@ export async function fetchCategoryEntries(category: string, filters?: {
   return result.entries;
 }
 
-export async function fetchTotalCount(): Promise<number> {
-  const managementId = await getCurrentManagementId();
+export async function fetchTotalCount(managementId?: string): Promise<number> {
+  managementId = await resolveManagementId(managementId);
   return countEntries(managementId);
 }
 
 export async function addEntry(data: {
+  managementId?: string;
   name: string;
   nominal: number;
   category?: CategoryType;
   date?: string;
   io?: IOType;
 }): Promise<CashflowEntry> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(data.managementId);
   const session = await getSession();
   const entry = await createEntry({ ...data, managementId, userId: session?.user.id });
 
@@ -151,6 +157,7 @@ export async function addEntry(data: {
 export async function editEntry(
   pageId: string,
   data: Partial<{
+    managementId: string;
     name: string;
     nominal: number;
     category: CategoryType;
@@ -159,7 +166,7 @@ export async function editEntry(
     createdById: string | null;
   }>
 ): Promise<CashflowEntry> {
-  const managementId = await getCurrentManagementId();
+  const managementId = await resolveManagementId(data.managementId);
   const entry = await updateEntry(pageId, { ...data, managementId });
 
   if (data.io === "Expenses" && data.category) {
@@ -172,7 +179,13 @@ export async function editEntry(
   return entry;
 }
 
-export async function removeEntry(pageId: string): Promise<void> {
+export async function removeEntry(pageId: string, managementId?: string): Promise<void> {
+  managementId = await resolveManagementId(managementId);
+  const entry = await prisma.entry.findFirst({
+    where: { id: pageId, managementId },
+    select: { id: true },
+  });
+  if (!entry) throw new Error("Entry not found");
   return deleteEntry(pageId);
 }
 
@@ -180,7 +193,8 @@ export async function fetchCalendarEntries(
   year: number,
   month: number,
   io?: IOType,
+  managementId?: string,
 ): Promise<Record<string, CalendarDayData>> {
-  const managementId = await getCurrentManagementId();
+  managementId = await resolveManagementId(managementId);
   return getCalendarEntries(managementId, year, month, io);
 }

@@ -38,44 +38,32 @@ import {
   performAudit,
 } from "@/app/actions/audit";
 import { getCurrentManagement } from "@/app/actions/management";
+import { useManagement } from "@/components/providers/management-provider";
 import type { BudgetPeriod, RecurringFrequency, IOType } from "@/lib/db";
 
 export const cashflowQueryKeys = {
-  entries: ["cashflow-entries"] as const,
-  summary: ["cashflow-summary"] as const,
-  activity: ["cashflow-activity"] as const,
-  analytics: (filters: URLAnalyticsFilter) => ["cashflow-analytics", filters] as const,
-  analyticsRoot: ["cashflow-analytics"] as const,
-  categories: ["cashflow-categories"] as const,
-  categoriesWithDetails: ["cashflow-categories-details"] as const,
-  quickFills: ["cashflow-quick-fills"] as const,
-  budgetStatus: ["cashflow-budget-status"] as const,
-  recurring: ["cashflow-recurring"] as const,
-  balance: ["cashflow-balance"] as const,
-  auditHistory: ["cashflow-audit-history"] as const,
-  latestAudit: ["cashflow-latest-audit"] as const,
-  managementMembers: ["cashflow-management-members"] as const,
-  calendarEntries: (year: number, month: number) => ["cashflow-calendar", year, month] as const,
-  categoryEntries: (category: string, from?: string, to?: string) => ["cashflow-category-entries", category, from, to] as const,
+  scope: (managementId: string) => ["management", managementId] as const,
+  entries: (managementId: string) => ["management", managementId, "cashflow-entries"] as const,
+  summary: (managementId: string) => ["management", managementId, "cashflow-summary"] as const,
+  activity: (managementId: string) => ["management", managementId, "cashflow-activity"] as const,
+  analytics: (managementId: string, filters: URLAnalyticsFilter) => ["management", managementId, "cashflow-analytics", filters] as const,
+  analyticsRoot: (managementId: string) => ["management", managementId, "cashflow-analytics"] as const,
+  categories: (managementId: string) => ["management", managementId, "cashflow-categories"] as const,
+  categoriesWithDetails: (managementId: string) => ["management", managementId, "cashflow-categories-details"] as const,
+  quickFills: (managementId: string) => ["management", managementId, "cashflow-quick-fills"] as const,
+  budgetStatus: (managementId: string) => ["management", managementId, "cashflow-budget-status"] as const,
+  recurring: (managementId: string) => ["management", managementId, "cashflow-recurring"] as const,
+  balance: (managementId: string) => ["management", managementId, "cashflow-balance"] as const,
+  auditHistory: (managementId: string) => ["management", managementId, "cashflow-audit-history"] as const,
+  latestAudit: (managementId: string) => ["management", managementId, "cashflow-latest-audit"] as const,
+  managementMembers: (managementId: string) => ["management", managementId, "cashflow-management-members"] as const,
+  calendarEntries: (managementId: string, year: number, month: number) => ["management", managementId, "cashflow-calendar", year, month] as const,
+  categoryEntries: (managementId: string, category: string, from?: string, to?: string) => ["management", managementId, "cashflow-category-entries", category, from, to] as const,
 };
 
-export function invalidateActiveManagementQueries(queryClient: QueryClient) {
+export function invalidateActiveManagementQueries(queryClient: QueryClient, managementId: string) {
   const queryKeys: QueryKey[] = [
-    cashflowQueryKeys.entries,
-    cashflowQueryKeys.summary,
-    cashflowQueryKeys.activity,
-    cashflowQueryKeys.analyticsRoot,
-    cashflowQueryKeys.categories,
-    cashflowQueryKeys.categoriesWithDetails,
-    cashflowQueryKeys.quickFills,
-    cashflowQueryKeys.budgetStatus,
-    cashflowQueryKeys.recurring,
-    cashflowQueryKeys.balance,
-    cashflowQueryKeys.auditHistory,
-    cashflowQueryKeys.latestAudit,
-    cashflowQueryKeys.managementMembers,
-    ["cashflow-calendar"],
-    ["cashflow-category-entries"],
+    cashflowQueryKeys.scope(managementId),
   ];
 
   for (const queryKey of queryKeys) {
@@ -86,92 +74,102 @@ export function invalidateActiveManagementQueries(queryClient: QueryClient) {
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
 
 export function useSummary() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.summary,
-    queryFn: fetchSummary,
+    queryKey: cashflowQueryKeys.summary(managementId),
+    queryFn: () => fetchSummary(managementId),
   });
 }
 
 export function useActivityOverview() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.activity,
-    queryFn: () => fetchActivityOverview(),
+    queryKey: cashflowQueryKeys.activity(managementId),
+    queryFn: () => fetchActivityOverview(182, managementId),
   });
 }
 
 export function useCalendarEntries(year: number, month: number) {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.calendarEntries(year, month),
-    queryFn: () => fetchCalendarEntries(year, month),
+    queryKey: cashflowQueryKeys.calendarEntries(managementId, year, month),
+    queryFn: () => fetchCalendarEntries(year, month, undefined, managementId),
   });
 }
 
 export function useCategoryEntries(category: string, filters?: { from?: string; to?: string }) {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.categoryEntries(category, filters?.from, filters?.to),
-    queryFn: () => fetchCategoryEntries(category, { from: filters?.from, to: filters?.to }),
+    queryKey: cashflowQueryKeys.categoryEntries(managementId, category, filters?.from, filters?.to),
+    queryFn: () => fetchCategoryEntries(category, { managementId, from: filters?.from, to: filters?.to }),
     enabled: Boolean(category),
   });
 }
 
 export function useAnalytics(filters: URLAnalyticsFilter) {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.analytics(filters),
-    queryFn: () => fetchAnalyticsFromURL(filters),
+    queryKey: cashflowQueryKeys.analytics(managementId, filters),
+    queryFn: () => fetchAnalyticsFromURL(filters, managementId),
   });
 }
 
 export function useCategories() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.categories,
-    queryFn: fetchCategories,
+    queryKey: cashflowQueryKeys.categories(managementId),
+    queryFn: () => fetchCategories(managementId),
     staleTime: CATEGORY_STALE_TIME,
   });
 }
 
 export function useManagementMembers() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.managementMembers,
+    queryKey: cashflowQueryKeys.managementMembers(managementId),
     queryFn: async () => {
-      const management = await getCurrentManagement();
+      const management = await getCurrentManagement(managementId);
       return management?.management.members ?? [];
     },
   });
 }
 
 export function useCategoriesWithDetails() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.categoriesWithDetails,
-    queryFn: fetchCategoriesWithDetails,
+    queryKey: cashflowQueryKeys.categoriesWithDetails(managementId),
+    queryFn: () => fetchCategoriesWithDetails(managementId),
     staleTime: CATEGORY_STALE_TIME,
   });
 }
 
 export function useCreateCategory() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
   
   return useMutation({
-    mutationFn: ({ name, color, icon, budgets }: { name: string; color?: string; icon?: string; budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null } }) => createCategory(name, color ?? "default", icon, budgets),
+    mutationFn: ({ name, color, icon, budgets }: { name: string; color?: string; icon?: string; budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null } }) => createCategory(name, color ?? "default", icon, budgets, managementId),
     onSuccess: (newCategories) => {
-      queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+      queryClient.setQueryData(cashflowQueryKeys.categories(managementId), newCategories.map((c) => c.name));
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
     },
   });
 }
 
 export function useDeleteCategory() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
   
   return useMutation({
-    mutationFn: (categoryId: string) => deleteCategory(categoryId),
+    mutationFn: (categoryId: string) => deleteCategory(categoryId, managementId),
     onSuccess: async (result) => {
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categories });
-        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
-        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
-        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot });
-        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categories(managementId) });
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails(managementId) });
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) });
+        queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
       }
       return result;
     },
@@ -180,97 +178,107 @@ export function useDeleteCategory() {
 
 export function useUpdateCategory() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
     mutationFn: ({ id, name, color, icon, budgetDaily, budgetWeekly, budgetMonthly, budgetYearly }: { id: string; name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null }) =>
-      updateCategoryAction(id, { name, color, icon, budgetDaily, budgetWeekly, budgetMonthly, budgetYearly }),
+      updateCategoryAction(id, { name, color, icon, budgetDaily, budgetWeekly, budgetMonthly, budgetYearly, managementId }),
     onSuccess: (newCategories) => {
-      queryClient.setQueryData(cashflowQueryKeys.categories, newCategories.map((c) => c.name));
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+      queryClient.setQueryData(cashflowQueryKeys.categories(managementId), newCategories.map((c) => c.name));
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoriesWithDetails(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
     },
   });
 }
 
 export function useQuickFills() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.quickFills,
-    queryFn: fetchQuickFills,
+    queryKey: cashflowQueryKeys.quickFills(managementId),
+    queryFn: () => fetchQuickFills(managementId),
   });
 }
 
 export function useCreateQuickFill() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: (data: { name: string; nominal: number; categoryId?: string | null }) => addQuickFill(data),
+    mutationFn: (data: { name: string; nominal: number; categoryId?: string | null }) => addQuickFill({ ...data, managementId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills(managementId) });
     },
   });
 }
 
 export function useUpdateQuickFill() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
     mutationFn: ({ id, ...data }: { id: string; name?: string; nominal?: number; categoryId?: string | null }) =>
-      editQuickFill(id, data),
+      editQuickFill(id, { ...data, managementId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills(managementId) });
     },
   });
 }
 
 export function useDeleteQuickFill() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: (id: string) => removeQuickFill(id),
+    mutationFn: (id: string) => removeQuickFill(id, managementId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.quickFills(managementId) });
     },
   });
 }
 
 export function useBudgetStatus() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.budgetStatus,
-    queryFn: fetchBudgetStatus,
+    queryKey: cashflowQueryKeys.budgetStatus(managementId),
+    queryFn: () => fetchBudgetStatus(managementId),
   });
 }
 
 export function useSaveOverallBudget() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: ({ period, amount }: { period: BudgetPeriod; amount: number }) => saveOverallBudget(period, amount),
+    mutationFn: ({ period, amount }: { period: BudgetPeriod; amount: number }) => saveOverallBudget(period, amount, managementId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
     },
   });
 }
 
 export function useRemoveOverallBudget() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: (period: BudgetPeriod) => removeOverallBudget(period),
+    mutationFn: (period: BudgetPeriod) => removeOverallBudget(period, managementId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
     },
   });
 }
 
 export function useRecurringEntries() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.recurring,
-    queryFn: fetchRecurringEntries,
+    queryKey: cashflowQueryKeys.recurring(managementId),
+    queryFn: () => fetchRecurringEntries(managementId),
   });
 }
 
 export function useCreateRecurringEntry() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
     mutationFn: (data: {
@@ -284,15 +292,16 @@ export function useCreateRecurringEntry() {
       monthOfYear?: number | null;
       startDate: string;
       endDate?: string | null;
-    }) => addRecurringEntry(data),
+    }) => addRecurringEntry({ ...data, managementId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring(managementId) });
     },
   });
 }
 
 export function useUpdateRecurringEntry() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
     mutationFn: ({ id, ...data }: {
@@ -308,70 +317,76 @@ export function useUpdateRecurringEntry() {
       startDate?: string;
       endDate?: string | null;
       active?: boolean;
-    }) => editRecurringEntry(id, data),
+    }) => editRecurringEntry(id, { ...data, managementId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring(managementId) });
     },
   });
 }
 
 export function useDeleteRecurringEntry() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: (id: string) => removeRecurringEntry(id),
+    mutationFn: (id: string) => removeRecurringEntry(id, managementId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring(managementId) });
     },
   });
 }
 
 export function useRunRecurringGeneration() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: () => runRecurringGeneration(),
+    mutationFn: () => runRecurringGeneration(managementId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring(managementId) });
     },
   });
 }
 
 export function useBalance() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.balance,
-    queryFn: fetchBalance,
+    queryKey: cashflowQueryKeys.balance(managementId),
+    queryFn: () => fetchBalance(managementId),
   });
 }
 
 export function useAuditHistory() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.auditHistory,
-    queryFn: fetchAuditHistory,
+    queryKey: cashflowQueryKeys.auditHistory(managementId),
+    queryFn: () => fetchAuditHistory(managementId),
   });
 }
 
 export function useLatestAudit() {
+  const { managementId } = useManagement();
   return useQuery({
-    queryKey: cashflowQueryKeys.latestAudit,
-    queryFn: fetchLatestAudit,
+    queryKey: cashflowQueryKeys.latestAudit(managementId),
+    queryFn: () => fetchLatestAudit(managementId),
   });
 }
 
 export function usePerformAudit() {
   const queryClient = useQueryClient();
+  const { managementId } = useManagement();
 
   return useMutation({
-    mutationFn: performAudit,
+    mutationFn: (params: { actualBalance: number; note?: string; autoAdjust: boolean }) => performAudit({ ...params, managementId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.balance });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.auditHistory });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.latestAudit });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
-      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.balance(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.auditHistory(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.latestAudit(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
     },
   });
 }

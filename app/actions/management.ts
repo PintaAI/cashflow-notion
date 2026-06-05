@@ -3,30 +3,8 @@
 import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/management";
-
-const DEFAULT_CATEGORIES = [
-  { name: "Makanan", color: "#ef4444", icon: "utensils" },
-  { name: "Transportasi", color: "#f97316", icon: "car" },
-  { name: "Belanja", color: "#eab308", icon: "shopping-bag" },
-  { name: "Tagihan", color: "#84cc16", icon: "receipt" },
-  { name: "Hiburan", color: "#22c55e", icon: "music" },
-  { name: "Kesehatan", color: "#14b8a6", icon: "heart" },
-  { name: "Pendidikan", color: "#06b6d4", icon: "book" },
-  { name: "Rumah Tangga", color: "#3b82f6", icon: "home" },
-  { name: "Pakaian & Aksesoris", color: "#6366f1", icon: "shirt" },
-  { name: "Asuransi", color: "#8b5cf6", icon: "shield" },
-  { name: "Tabungan & Investasi", color: "#a855f7", icon: "piggy-bank" },
-  { name: "Hadiah & Donasi", color: "#d946ef", icon: "gift" },
-  { name: "Perjalanan", color: "#ec4899", icon: "plane" },
-  { name: "Lainnya", color: "#64748b", icon: "more-horizontal" },
-  { name: "Gaji", color: "#22c55e", icon: "banknote" },
-  { name: "Bonus", color: "#14b8a6", icon: "award" },
-  { name: "Freelance", color: "#3b82f6", icon: "laptop" },
-  { name: "Investasi", color: "#8b5cf6", icon: "trending-up" },
-  { name: "Hadiah", color: "#ec4899", icon: "gift" },
-  { name: "Lainnya Pemasukan", color: "#64748b", icon: "more-horizontal" },
-];
+import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
+import { getSession, resolveManagementId } from "@/lib/management";
 
 export type ManagementWithMembers = {
   management: {
@@ -41,7 +19,7 @@ export type ManagementWithMembers = {
   role: string;
 };
 
-export async function getCurrentManagement(): Promise<ManagementWithMembers | null> {
+export async function getCurrentManagement(managementId?: string): Promise<ManagementWithMembers | null> {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
@@ -52,9 +30,11 @@ export async function getCurrentManagement(): Promise<ManagementWithMembers | nu
 
   let membership;
 
-  if (user?.activeManagementId) {
+  const requestedManagementId = managementId ?? user?.activeManagementId;
+
+  if (requestedManagementId) {
     membership = await prisma.managementMember.findFirst({
-      where: { userId: session.user.id, managementId: user.activeManagementId },
+      where: { userId: session.user.id, managementId: requestedManagementId },
       include: {
         management: {
           include: {
@@ -92,7 +72,7 @@ export async function getCurrentManagement(): Promise<ManagementWithMembers | nu
   return membership;
 }
 
-export async function getUserManagements() {
+export async function getUserManagements(activeManagementId?: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
@@ -118,7 +98,7 @@ export async function getUserManagements() {
     name: m.management.name,
     role: m.role,
     memberCount: m.management._count.members,
-    isActive: m.management.id === user?.activeManagementId,
+    isActive: m.management.id === (activeManagementId ?? user?.activeManagementId),
   }));
 }
 
@@ -140,18 +120,14 @@ export async function switchManagement(managementId: string) {
   return { success: true, managementId };
 }
 
-export async function renameManagement(name: string) {
+export async function renameManagement(name: string, managementId?: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { activeManagementId: true },
-  });
-  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+  const targetManagementId = await resolveManagementId(managementId);
 
   const membership = await prisma.managementMember.findFirst({
-    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+    where: { userId: session.user.id, managementId: targetManagementId, role: "owner" },
   });
   if (!membership) throw new Error("Hanya pemilik yang bisa mengubah nama management");
 
@@ -159,7 +135,7 @@ export async function renameManagement(name: string) {
   if (!trimmed) throw new Error("Nama tidak boleh kosong");
 
   await prisma.management.update({
-    where: { id: user.activeManagementId },
+    where: { id: targetManagementId },
     data: { name: trimmed },
   });
   revalidatePath("/", "layout");
@@ -194,18 +170,14 @@ export async function createManagement(name: string) {
   return { success: true, managementId: management.id, name: management.name };
 }
 
-export async function createInvite() {
+export async function createInvite(managementId?: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { activeManagementId: true },
-  });
-  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+  const targetManagementId = await resolveManagementId(managementId);
 
   const membership = await prisma.managementMember.findFirst({
-    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+    where: { userId: session.user.id, managementId: targetManagementId, role: "owner" },
   });
   if (!membership) throw new Error("Only management owner can create invites");
 
@@ -231,18 +203,14 @@ export type ManagementInvitation = {
   expiresAt: string;
 };
 
-export async function getManagementInvitations(): Promise<ManagementInvitation[]> {
+export async function getManagementInvitations(managementId?: string): Promise<ManagementInvitation[]> {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { activeManagementId: true },
-  });
-  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+  const targetManagementId = await resolveManagementId(managementId);
 
   const membership = await prisma.managementMember.findFirst({
-    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+    where: { userId: session.user.id, managementId: targetManagementId, role: "owner" },
   });
   if (!membership) throw new Error("Only management owner can view invites");
 
@@ -265,18 +233,14 @@ export async function getManagementInvitations(): Promise<ManagementInvitation[]
   }));
 }
 
-export async function deleteInvite(invitationId: string) {
+export async function deleteInvite(invitationId: string, managementId?: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { activeManagementId: true },
-  });
-  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+  const targetManagementId = await resolveManagementId(managementId);
 
   const membership = await prisma.managementMember.findFirst({
-    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+    where: { userId: session.user.id, managementId: targetManagementId, role: "owner" },
   });
   if (!membership) throw new Error("Only management owner can delete invites");
 
@@ -287,18 +251,14 @@ export async function deleteInvite(invitationId: string) {
   return { success: true };
 }
 
-export async function removeManagementMember(memberId: string) {
+export async function removeManagementMember(memberId: string, managementId?: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { activeManagementId: true },
-  });
-  if (!user?.activeManagementId) throw new Error("Tidak ada management aktif");
+  const targetManagementId = await resolveManagementId(managementId);
 
   const ownerMembership = await prisma.managementMember.findFirst({
-    where: { userId: session.user.id, managementId: user.activeManagementId, role: "owner" },
+    where: { userId: session.user.id, managementId: targetManagementId, role: "owner" },
   });
   if (!ownerMembership) throw new Error("Only management owner can remove members");
 

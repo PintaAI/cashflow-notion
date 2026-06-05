@@ -30,10 +30,18 @@ interface CurrencyContextValue {
 
 const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
-export function CurrencyProvider({ children }: { children: React.ReactNode }) {
-  const [currency, setCurrencyState] = useState("IDR");
-  const [rates, setRates] = useState<Record<string, number>>({ IDR: 1 });
-  const [loading, setLoading] = useState(true);
+export function CurrencyProvider({
+  children,
+  initialCurrency = "IDR",
+  initialRates = { IDR: 1 },
+}: {
+  children: React.ReactNode;
+  initialCurrency?: string;
+  initialRates?: Record<string, number>;
+}) {
+  const [currency, setCurrencyState] = useState(initialCurrency);
+  const [rates, setRates] = useState<Record<string, number>>(initialRates);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,9 +62,9 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    load();
+    if (!initialRates[currency]) load();
     return () => { cancelled = true; };
-  }, []);
+  }, [currency, initialRates]);
 
   const rate = rates[currency] ?? 1;
 

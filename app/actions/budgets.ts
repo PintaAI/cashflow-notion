@@ -9,24 +9,24 @@ import {
   type BudgetStatusItem,
   type OverallBudgetOption,
 } from "@/lib/db";
-import { getCurrentManagementId } from "@/lib/management";
+import { resolveManagementId } from "@/lib/management";
 
-export async function fetchBudgetStatus(): Promise<BudgetStatusItem[]> {
-  const managementId = await getCurrentManagementId();
+export async function fetchBudgetStatus(managementId?: string): Promise<BudgetStatusItem[]> {
+  managementId = await resolveManagementId(managementId);
   return getBudgetStatus(managementId);
 }
 
-export async function fetchOverallBudgets(): Promise<OverallBudgetOption[]> {
-  const managementId = await getCurrentManagementId();
+export async function fetchOverallBudgets(managementId?: string): Promise<OverallBudgetOption[]> {
+  managementId = await resolveManagementId(managementId);
   return getOverallBudgets(managementId);
 }
 
-export async function saveOverallBudget(period: BudgetPeriod, amount: number): Promise<OverallBudgetOption> {
-  const managementId = await getCurrentManagementId();
+export async function saveOverallBudget(period: BudgetPeriod, amount: number, managementId?: string): Promise<OverallBudgetOption> {
+  managementId = await resolveManagementId(managementId);
   return upsertOverallBudget(managementId, period, amount);
 }
 
-export async function removeOverallBudget(period: BudgetPeriod): Promise<void> {
-  const managementId = await getCurrentManagementId();
+export async function removeOverallBudget(period: BudgetPeriod, managementId?: string): Promise<void> {
+  managementId = await resolveManagementId(managementId);
   return deleteOverallBudget(managementId, period);
 }

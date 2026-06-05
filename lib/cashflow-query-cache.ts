@@ -15,7 +15,7 @@ type EntriesSnapshot = Array<{
 }>
 
 function shouldIncludeEntry(queryKey: QueryKey, entry: CashflowEntry) {
-  const ioFilter = queryKey[1]
+  const ioFilter = queryKey[3]
 
   return ioFilter === undefined || ioFilter === "all" || ioFilter === entry.io
 }
@@ -36,8 +36,12 @@ function mapEntry(
   }
 }
 
-export function snapshotCashflowEntries(queryClient: QueryClient): EntriesSnapshot {
-  return queryClient.getQueriesData<EntriesData>({ queryKey: ["cashflow-entries"] })
+function entriesQueryKey(managementId: string) {
+  return ["management", managementId, "cashflow-entries"]
+}
+
+export function snapshotCashflowEntries(queryClient: QueryClient, managementId: string): EntriesSnapshot {
+  return queryClient.getQueriesData<EntriesData>({ queryKey: entriesQueryKey(managementId) })
     .map(([queryKey, data]) => ({ queryKey, data }))
 }
 
@@ -47,8 +51,8 @@ export function restoreCashflowEntries(queryClient: QueryClient, snapshot: Entri
   }
 }
 
-export function addEntryToCashflowCache(queryClient: QueryClient, entry: CashflowEntry) {
-  for (const [queryKey, data] of queryClient.getQueriesData<EntriesData>({ queryKey: ["cashflow-entries"] })) {
+export function addEntryToCashflowCache(queryClient: QueryClient, entry: CashflowEntry, managementId: string) {
+  for (const [queryKey, data] of queryClient.getQueriesData<EntriesData>({ queryKey: entriesQueryKey(managementId) })) {
     if (!data || !shouldIncludeEntry(queryKey, entry)) continue
 
     queryClient.setQueryData<EntriesData>(queryKey, {
@@ -63,8 +67,8 @@ export function addEntryToCashflowCache(queryClient: QueryClient, entry: Cashflo
   }
 }
 
-export function updateEntryInCashflowCache(queryClient: QueryClient, entry: CashflowEntry) {
-  for (const [queryKey, data] of queryClient.getQueriesData<EntriesData>({ queryKey: ["cashflow-entries"] })) {
+export function updateEntryInCashflowCache(queryClient: QueryClient, entry: CashflowEntry, managementId: string) {
+  for (const [queryKey, data] of queryClient.getQueriesData<EntriesData>({ queryKey: entriesQueryKey(managementId) })) {
     if (!data) continue
 
     let found = false
@@ -96,19 +100,20 @@ export function updateEntryInCashflowCache(queryClient: QueryClient, entry: Cash
 export function replaceEntryInCashflowCache(
   queryClient: QueryClient,
   entryId: string,
-  entry: CashflowEntry
+  entry: CashflowEntry,
+  managementId: string
 ) {
   queryClient.setQueriesData<EntriesData>(
-    { queryKey: ["cashflow-entries"] },
+    { queryKey: entriesQueryKey(managementId) },
     (data) => mapEntry(data, (current) => current.id === entryId, () => entry)
   )
 }
 
-export function removeEntriesFromCashflowCache(queryClient: QueryClient, entryIds: string[]) {
+export function removeEntriesFromCashflowCache(queryClient: QueryClient, entryIds: string[], managementId: string) {
   const entryIdSet = new Set(entryIds)
 
   queryClient.setQueriesData<EntriesData>(
-    { queryKey: ["cashflow-entries"] },
+    { queryKey: entriesQueryKey(managementId) },
     (data) => {
       if (!data) return data
 

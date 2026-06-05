@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getWeekStartEnd, toIsoDateKey } from "@/lib/date";
 import { configureWebPush, readSubscriptions, writeSubscriptions } from "@/lib/notifications";
 import webPush from "web-push";
 
@@ -10,42 +11,29 @@ function getAlertKey(managementId: string, type: "category" | "overall", id: str
   return `${managementId}:${type}:${id}:${period}:${threshold}`;
 }
 
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
-function getWeekStartEnd(date: Date): { start: Date; end: Date } {
-  const day = date.getDay();
-  const diff = date.getDate() - day;
-  const start = new Date(date.getFullYear(), date.getMonth(), diff);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return { start, end };
-}
-
 function getDateRange(period: string): { start: string; end: string } {
   const now = new Date();
 
   if (period === "daily") {
-    const d = formatDate(now);
+    const d = toIsoDateKey(now);
     return { start: d, end: d };
   }
 
   if (period === "weekly") {
     const { start, end } = getWeekStartEnd(now);
-    return { start: formatDate(start), end: formatDate(end) };
+    return { start: toIsoDateKey(start), end: toIsoDateKey(end) };
   }
 
   if (period === "yearly") {
     const start = new Date(now.getFullYear(), 0, 1);
     const end = new Date(now.getFullYear(), 11, 31);
-    return { start: formatDate(start), end: formatDate(end) };
+    return { start: toIsoDateKey(start), end: toIsoDateKey(end) };
   }
 
   // monthly
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { start: formatDate(start), end: formatDate(end) };
+  return { start: toIsoDateKey(start), end: toIsoDateKey(end) };
 }
 
 async function sendBudgetNotification(managementId: string, title: string, body: string): Promise<void> {

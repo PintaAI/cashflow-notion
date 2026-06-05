@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { parseDateKey, toDateKey } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -36,13 +37,8 @@ function parseAmount(value: string) {
   return Number.parseFloat(value) || 0;
 }
 
-function formatDateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 function createDateFromKey(dateKey: string) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  return parseDateKey(dateKey);
 }
 
 function isWeekday(date: Date) {
@@ -123,7 +119,7 @@ export function OvertimeTracker() {
   const [entries, setEntries] = useState<OvertimeEntry[]>([]);
   const [step, setStep] = useState(0);
 
-  const selectedDateKey = selectedDate ? formatDateKey(selectedDate) : null;
+  const selectedDateKey = selectedDate ? toDateKey(selectedDate) : null;
   const baseRate = parseAmount(hourlyRate);
   const holidayHourCount = parseAmount(holidayHours);
   const requiredHourCount = parseAmount(requiredOvertimeHours);
@@ -160,7 +156,7 @@ export function OvertimeTracker() {
       return;
     }
 
-    const existing = entries.find((entry) => entry.dateKey === formatDateKey(date));
+    const existing = entries.find((entry) => entry.dateKey === toDateKey(date));
     setOvertimeHours(existing?.overtimeHours ?? "");
     setHolidayWork(existing?.holidayWork ?? false);
   }
@@ -200,7 +196,7 @@ export function OvertimeTracker() {
   }
 
   function getHeatmapHours(date: Date) {
-    const dateKey = formatDateKey(date);
+    const dateKey = toDateKey(date);
     const entry = entries.find((item) => item.dateKey === dateKey);
     const weekdayRequiredHours = isWeekday(date) ? requiredHourCount : 0;
     const manualHours = entry ? parseAmount(entry.overtimeHours) : 0;
@@ -250,9 +246,9 @@ export function OvertimeTracker() {
               </SelectTrigger>
               <SelectContent>
                 {SUPPORTED_CURRENCIES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    {c.symbol} {c.code}
-                  </SelectItem>
+                <SelectItem key={c.code} value={c.code}>
+                  <span>{c.flag} {c.name}</span>
+                </SelectItem>
                 ))}
               </SelectContent>
             </Select>

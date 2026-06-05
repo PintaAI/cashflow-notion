@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import type { CategoryType, IOType } from "@/lib/db";
+import { addDaysToDateKey, addDays, getMondayOfWeek, startOfDay, toDateKey } from "@/lib/date";
+import { toNumber } from "@/lib/number";
 
 export interface AnalyticsFilter {
   io?: IOType;
@@ -78,34 +80,13 @@ export interface AnalyticsData {
   filteredBy: AnalyticsFilter;
 }
 
-function addOneDayToDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function formatDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function subtractDays(date: Date, days: number): Date {
-  const nextDate = new Date(date);
-  nextDate.setDate(nextDate.getDate() - days);
-  return nextDate;
-}
-
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
 function getCurrentStreak(activeDateKeys: Set<string>, today: Date): number {
   let streak = 0;
   let cursor = startOfDay(today);
 
-  while (activeDateKeys.has(formatDateKey(cursor))) {
+  while (activeDateKeys.has(toDateKey(cursor))) {
     streak += 1;
-    cursor = subtractDays(cursor, 1);
+    cursor = addDays(cursor, -1);
   }
 
   return streak;
@@ -116,7 +97,7 @@ function urlFilterToAnalyticsFilter(urlFilter: URLAnalyticsFilter): AnalyticsFil
     io: urlFilter.io,
     category: urlFilter.category,
     startDate: urlFilter.from,
-    endDate: urlFilter.to ? addOneDayToDate(urlFilter.to) : undefined,
+    endDate: urlFilter.to ? addDaysToDateKey(urlFilter.to, 1) : undefined,
   };
 }
 
@@ -172,11 +153,6 @@ type ActivityRow = {
   date: Date | string;
   count: number | bigint;
 };
-
-function toNumber(value: number | string | bigint | null | undefined): number {
-  if (value === null || value === undefined) return 0;
-  return Number(value);
-}
 
 export async function fetchAnalyticsFromURL(urlFilter: URLAnalyticsFilter = {}, managementId: string): Promise<AnalyticsData> {
   return fetchAnalytics(urlFilterToAnalyticsFilter(urlFilter), managementId);
@@ -313,17 +289,9 @@ export async function fetchAnalytics(filter: AnalyticsFilter = {}, managementId:
   };
 }
 
-function getMondayOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return startOfDay(d);
-}
-
 export async function fetchActivityOverview(daysBack = 182, managementId: string): Promise<ActivityOverview> {
   const today = startOfDay(new Date());
-  const startDate = subtractDays(today, daysBack - 1);
+  const startDate = addDays(today, -(daysBack - 1));
   const alignedStartDate = getMondayOfWeek(startDate);
   const rows = await prisma.$queryRaw<ActivityRow[]>`
     SELECT DATE(e."createdAt") AS "date", COUNT(*) AS "count"
@@ -335,7 +303,7 @@ export async function fetchActivityOverview(daysBack = 182, managementId: string
 
   const dayMap = new Map<string, ActivityDay>();
   for (const row of rows) {
-    const dateKey = typeof row.date === "string" ? row.date : formatDateKey(row.date);
+    const dateKey = typeof row.date === "string" ? row.date : toDateKey(row.date);
     const existing = dayMap.get(dateKey) || { date: dateKey, count: 0 };
     existing.count += toNumber(row.count);
     dayMap.set(dateKey, existing);
@@ -344,8 +312,8 @@ export async function fetchActivityOverview(daysBack = 182, managementId: string
   const totalDays = daysBack + (startDate.getTime() - alignedStartDate.getTime()) / (24 * 60 * 60 * 1000);
   const days: ActivityDay[] = [];
   for (let i = 0; i < Math.ceil(totalDays); i += 1) {
-    const date = subtractDays(alignedStartDate, -i);
-    const dateKey = formatDateKey(date);
+    const date = addDays(alignedStartDate, i);
+    const dateKey = toDateKey(date);
     days.push(dayMap.get(dateKey) || { date: dateKey, count: 0 });
   }
 

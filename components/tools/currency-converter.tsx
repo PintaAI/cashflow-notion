@@ -5,6 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MoneyExchange03Icon } from "@hugeicons/core-free-icons";
 import { convertCurrency } from "@/app/actions/currency-converter";
 import { formatCurrencyAmount, getCurrencyOption, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { useCurrency } from "@/components/providers/currency-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,8 +17,9 @@ import {
 } from "@/components/ui/select";
 
 export function CurrencyConverter() {
+  const { currency: userCurrency } = useCurrency();
   const [amount, setAmount] = useState("1");
-  const [from, setFrom] = useState("USD");
+  const [from, setFrom] = useState(userCurrency);
   const [to, setTo] = useState("IDR");
   const [result, setResult] = useState<number | null>(null);
   const [rate, setRate] = useState<number | null>(null);
@@ -71,31 +73,62 @@ export function CurrencyConverter() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <p className="text-xs text-muted-foreground">Jumlah</p>
-        <Input
-          type="number"
-          value={amount}
-          onChange={handleAmountChange}
-          min={0}
-          step="any"
-          placeholder="1"
-          className="text-base"
-        />
+    <div className="space-y-5">
+      <div className="py-3 sm:py-4">
+        <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+            Convert Duit
+          </span>
+        </div>
+
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            {loading ? (
+              <div className="text-2xl font-bold tracking-tight transition-all sm:text-3xl md:text-4xl text-muted-foreground animate-pulse">
+                Ngitung...
+              </div>
+            ) : result !== null ? (
+              <>
+                <div
+                  className="text-2xl font-bold tracking-tight transition-all sm:text-3xl md:text-4xl"
+                  title={formatCurrencyAmount(result, to)}
+                >
+                  {formatCurrencyAmount(result, to)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  {amount} {getCurrencyOption(from).symbol}{from}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold tracking-tight text-muted-foreground/40 transition-all sm:text-3xl md:text-4xl">
+                  —
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  Isi nominal
+                </p>
+              </>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <span>{from}</span>
+            <span className="text-muted-foreground/40">→</span>
+            <span>{to}</span>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-end gap-2">
         <div className="flex-1 space-y-2">
           <p className="text-xs text-muted-foreground">Dari</p>
           <Select value={from} onValueChange={handleFromChange}>
-            <SelectTrigger>
+            <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {SUPPORTED_CURRENCIES.map((c) => (
                 <SelectItem key={c.code} value={c.code}>
-                  {c.symbol} {c.code} — {c.name}
+                  <span>{c.flag} {c.name}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -109,13 +142,13 @@ export function CurrencyConverter() {
         <div className="flex-1 space-y-2">
           <p className="text-xs text-muted-foreground">Ke</p>
           <Select value={to} onValueChange={handleToChange}>
-            <SelectTrigger>
+            <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {SUPPORTED_CURRENCIES.map((c) => (
                 <SelectItem key={c.code} value={c.code}>
-                  {c.symbol} {c.code} — {c.name}
+                  <span>{c.flag} {c.name}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -123,26 +156,25 @@ export function CurrencyConverter() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Menghitung...</p>
-        ) : result !== null ? (
-          <>
-            <p className="text-xs text-muted-foreground">Hasil</p>
-            <p className="text-2xl font-semibold">
-              {formatCurrencyAmount(result, to)}
-            </p>
-            {rate !== null && (
-              <p className="text-xs text-muted-foreground">
-                1 {getCurrencyOption(from).symbol}{from} = {formatCurrencyAmount(rate, to, { compact: true })} ·{" "}
-                1 {getCurrencyOption(to).symbol}{to} = {formatCurrencyAmount(1 / rate, from, { compact: true })}
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">Masukkan jumlah untuk mulai konversi</p>
-        )}
+      <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">Nominal</p>
+        <Input
+          type="number"
+          value={amount}
+          onChange={handleAmountChange}
+          min={0}
+          step="any"
+          placeholder="1"
+          className="h-9 text-base"
+        />
       </div>
+
+      {rate !== null && (
+        <div className="space-y-1 rounded-lg border bg-muted/30 p-4 text-xs text-muted-foreground">
+          <p>1 {from} = {formatCurrencyAmount(rate, to, { compact: true })}</p>
+          <p>1 {to} = {formatCurrencyAmount(1 / rate, from, { compact: true })}</p>
+        </div>
+      )}
     </div>
   );
 }
