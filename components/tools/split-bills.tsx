@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
@@ -15,7 +17,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { CameraCapture } from "@/components/camera-capture";
 import { useCurrency } from "@/components/providers/currency-provider";
+import { UserAvatar, getUserDisplayName } from "@/components/user-avatar";
+import { addEntry } from "@/app/actions/cashflow";
+import { searchRegisteredUsers } from "@/app/actions/users";
+import type { RegisteredUserOption } from "@/app/actions/users";
+import { useSession } from "@/lib/auth-client";
 import { formatCurrencyAmount, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { cashflowQueryKeys, useCategoriesWithDetails } from "@/hooks/use-cashflow-data";
+import type { CategoryType } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -35,7 +44,11 @@ import {
 
 type Person = {
   id: string;
+  userId?: string;
   name: string;
+  email?: string | null;
+  image?: string | null;
+  isCurrentUser?: boolean;
 };
 
 type BillItem = {
@@ -79,10 +92,7 @@ type ExtractSplitBillResponse = {
   error?: string;
 };
 
-const initialPeople: Person[] = [
-  { id: "person-1", name: "Aku" },
-  { id: "person-2", name: "Teman" },
-];
+const initialPeople: Person[] = [];
 
 const initialBills: Bill[] = [];
 
@@ -92,6 +102,22 @@ function parseAmount(value: string) {
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function toPersonFromUser(user: RegisteredUserOption, currentUserId?: string): Person {
+  return {
+    id: `user-${user.id}`,
+    userId: user.id,
+    name: getUserDisplayName(user),
+    email: user.email,
+    image: user.image,
+    isCurrentUser: user.id === currentUserId,
+  };
+}
+
+function getTodayDateString() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function getPersonName(people: Person[], id: string) {
@@ -187,8 +213,12 @@ function getPaidPlaces(personId: string, bills: Bill[]) {
 }
 
 export function SplitBills() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { currency, setCurrency } = useCurrency();
+  const { currency, setCurrency, toIdr } = useCurrency();
+  const { data: session } = useSession();
+  const categoriesQuery = useCategoriesWithDetails();
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [bills, setBills] = useState<Bill[]>(initialBills);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
@@ -198,13 +228,89 @@ export function SplitBills() {
   const [extractError, setExtractError] = useState<string | null>(null);
   const [isSharingPng, setIsSharingPng] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUserOption[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [userSearchError, setUserSearchError] = useState<string | null>(null);
+  const [expenseCategory, setExpenseCategory] = useState<CategoryType>("");
+  const [expenseDate, setExpenseDate] = useState(getTodayDateString);
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const [expenseMessage, setExpenseMessage] = useState<string | null>(null);
 
   const summaries = calculateSummaries(people, bills);
   const settlements = calculateSettlements(summaries);
   const totalPaid = summaries.reduce((total, summary) => total + summary.paid, 0);
   const editingBill = bills.find((bill) => bill.id === editingBillId) ?? null;
+  const currentUserId = session?.user.id;
+  const currentUserSummary = currentUserId
+    ? summaries.find((summary) => summary.userId === currentUserId) ?? null
+    : null;
+  const categories = categoriesQuery.data;
+  const selectedUserIds = new Set(people.map((person) => person.userId).filter(Boolean));
+  const availableRegisteredUsers = registeredUsers.filter((user) => !selectedUserIds.has(user.id));
   const steps = ["Orang", "Tempat", "Pesanan", "Hasil"];
   const canGoNext = step === 0 ? people.some((person) => person.name.trim()) : step === 1 ? bills.length > 0 : true;
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const currentUser = toPersonFromUser({
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      image: session.user.image ?? null,
+    }, session.user.id);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync split participants with authenticated profile
+    setPeople((current) => {
+      const existing = current.find((person) => person.userId === currentUser.userId);
+
+      if (existing) {
+        return current.map((person) =>
+          person.userId === currentUser.userId ? { ...person, ...currentUser } : person
+        );
+      }
+
+      return [currentUser, ...current];
+    });
+  }, [session?.user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setIsSearchingUsers(true);
+      setUserSearchError(null);
+
+      try {
+        const users = await searchRegisteredUsers(userSearch);
+        if (!cancelled) setRegisteredUsers(users);
+      } catch (error) {
+        if (!cancelled) {
+          setUserSearchError(error instanceof Error ? error.message : "Gagal mencari user.");
+        }
+      } finally {
+        if (!cancelled) setIsSearchingUsers(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [userSearch]);
+
+  useEffect(() => {
+    if (expenseCategory || !categories || categories.length === 0) return;
+
+    const fallbackCategory = categories.find((category) => category.name === "Makanan")
+      ?? categories.find((category) => category.name === "Lainnya")
+      ?? categories[0];
+
+    if (fallbackCategory) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initialize category after async category query resolves
+      setExpenseCategory(fallbackCategory.name);
+    }
+  }, [categories, expenseCategory]);
 
   function updatePersonName(personId: string, name: string) {
     setPeople((current) =>
@@ -219,6 +325,17 @@ export function SplitBills() {
     };
 
     setPeople((current) => [...current, person]);
+  }
+
+  function addRegisteredPerson(user: RegisteredUserOption) {
+    setPeople((current) => {
+      if (current.some((person) => person.userId === user.id)) {
+        return current;
+      }
+
+      return [...current, toPersonFromUser(user, currentUserId)];
+    });
+    setUserSearch("");
   }
 
   function removePerson(personId: string) {
@@ -595,6 +712,43 @@ export function SplitBills() {
     }
   }
 
+  async function addExpenseFromResult() {
+    if (!currentUserSummary || currentUserSummary.share <= 0) {
+      setExpenseMessage("Tidak ada nominal expense untuk profil kamu.");
+      return;
+    }
+
+    setIsAddingExpense(true);
+    setExpenseMessage(null);
+
+    try {
+      const places = bills
+        .map((bill) => bill.place.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ");
+      const name = places ? `Split bill - ${places}` : "Split bill";
+
+      await addEntry({
+        name,
+        nominal: Math.round(toIdr(currentUserSummary.share)),
+        category: expenseCategory || undefined,
+        date: expenseDate || undefined,
+        io: "Expenses",
+      });
+
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries });
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary });
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot });
+      router.refresh();
+      setExpenseMessage("Expense ditambahkan dari hasil split bill.");
+    } catch (error) {
+      setExpenseMessage(error instanceof Error ? error.message : "Gagal menambahkan expense.");
+    } finally {
+      setIsAddingExpense(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-3 mb-4">
@@ -681,9 +835,9 @@ export function SplitBills() {
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold">Siapa saja?</p>
-              <p className="text-xs text-muted-foreground">Masukkan orang yang ikut split.</p>
+              <p className="text-xs text-muted-foreground">Profil kamu otomatis dipakai. Tambahkan teman dari user terdaftar atau manual.</p>
             </div>
-            <Button size="icon-sm" variant="outline" onClick={addPerson} title="Tambah orang">
+            <Button size="icon-sm" variant="outline" onClick={addPerson} title="Tambah manual">
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
             </Button>
           </div>
@@ -691,17 +845,31 @@ export function SplitBills() {
           <div className="space-y-2">
             {people.map((person) => (
               <div key={person.id} className="flex items-center gap-2">
-                <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
-                <Input
-                  value={person.name}
-                  onChange={(event) => updatePersonName(person.id, event.target.value)}
-                  className="h-9"
-                />
+                {person.userId ? (
+                  <UserAvatar user={person} size={28} className="size-7" fallbackClassName="text-xs" />
+                ) : (
+                  <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
+                )}
+                {person.userId ? (
+                  <div className="min-w-0 flex-1 rounded-md border px-3 py-1.5">
+                    <p className="truncate text-sm font-medium">
+                      {person.name || "Tanpa nama"}
+                      {person.isCurrentUser ? <span className="ml-1 text-xs text-muted-foreground">(kamu)</span> : null}
+                    </p>
+                    {person.email ? <p className="truncate text-xs text-muted-foreground">{person.email}</p> : null}
+                  </div>
+                ) : (
+                  <Input
+                    value={person.name}
+                    onChange={(event) => updatePersonName(person.id, event.target.value)}
+                    className="h-9"
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   className="text-muted-foreground hover:text-destructive"
-                  disabled={people.length <= 1}
+                  disabled={people.length <= 1 || person.isCurrentUser}
                   onClick={() => removePerson(person.id)}
                   title="Hapus orang"
                 >
@@ -709,6 +877,40 @@ export function SplitBills() {
                 </Button>
               </div>
             ))}
+          </div>
+
+          <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+            <div>
+              <p className="text-sm font-medium">Tambah user terdaftar</p>
+              <p className="text-xs text-muted-foreground">Cari nama atau email akun yang sudah register.</p>
+            </div>
+            <Input
+              value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)}
+              placeholder="Cari user..."
+              className="h-9"
+            />
+            {isSearchingUsers ? <p className="text-xs text-muted-foreground">Mencari user...</p> : null}
+            {userSearchError ? <p className="text-xs text-destructive">{userSearchError}</p> : null}
+            <div className="space-y-1">
+              {availableRegisteredUsers.slice(0, 5).map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                  onClick={() => addRegisteredPerson(user)}
+                >
+                  <UserAvatar user={user} size={24} className="size-6" fallbackClassName="text-xs" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{getUserDisplayName(user)}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+                  </span>
+                </button>
+              ))}
+              {!isSearchingUsers && availableRegisteredUsers.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Tidak ada user lain yang bisa ditambahkan.</p>
+              ) : null}
+            </div>
           </div>
         </section>
       ) : null}
@@ -902,6 +1104,67 @@ export function SplitBills() {
                 ))}
               </div>
             )}
+          </section>
+
+          <section className="space-y-3 rounded-lg border p-4">
+            <div>
+              <p className="text-sm font-semibold">Tambah expense dari hasil ini?</p>
+              <p className="text-xs text-muted-foreground">
+                Akan mencatat porsi konsumsi profil kamu sebagai expense.
+              </p>
+            </div>
+
+            <div className="rounded-md bg-muted/40 p-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Profil</span>
+                <span className="font-medium">{currentUserSummary?.name ?? "Profil kamu"}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Nominal expense</span>
+                <span className="font-semibold">
+                  {formatCurrencyAmount(currentUserSummary?.share ?? 0, currency)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Select value={expenseCategory} onValueChange={setExpenseCategory}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(categories ?? []).map((category) => (
+                    <SelectItem key={category.id} value={category.name}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={expenseDate}
+                onChange={(event) => setExpenseDate(event.target.value)}
+                className="h-9"
+              />
+            </div>
+
+            {expenseMessage ? <p className="text-xs text-muted-foreground">{expenseMessage}</p> : null}
+
+            <Button
+              type="button"
+              className="w-full"
+              onClick={addExpenseFromResult}
+              disabled={isAddingExpense || !currentUserSummary || currentUserSummary.share <= 0}
+            >
+              {isAddingExpense ? (
+                <>
+                  <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-4 animate-spin" />
+                  Menambahkan...
+                </>
+              ) : (
+                "Ya, tambah expense"
+              )}
+            </Button>
           </section>
         </div>
       ) : null}
