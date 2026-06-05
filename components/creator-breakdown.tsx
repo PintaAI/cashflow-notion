@@ -29,7 +29,7 @@ export function CreatorBreakdown({ creators }: { creators: CreatorAnalytics[] })
           return (
             <div key={creator.userId ?? "unknown"} className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <UserAvatar user={creator.userId ? creator : null} size={28} className="size-7 text-xs" />
+                <UserAvatar user={creator.userId ? creator : null} size={28} className="size-7" fallbackClassName="text-xs" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{label}</p>
                   <p className="text-xs text-muted-foreground">{creator.entryCount} entries</p>

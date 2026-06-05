@@ -1,5 +1,4 @@
-import Image from "next/image";
-
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getProfileImageSrc } from "@/lib/profile-image";
 import { cn } from "@/lib/utils";
 
@@ -29,28 +28,10 @@ export function UserAvatar({
   const displayName = getUserDisplayName(user);
   const initial = displayName[0]?.toUpperCase() ?? "?";
 
-  if (imageSrc) {
-    return (
-      <Image
-        src={imageSrc}
-        alt=""
-        width={size}
-        height={size}
-        className={cn("shrink-0 rounded-full object-cover", className)}
-        unoptimized
-      />
-    );
-  }
-
   return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground",
-        className,
-        fallbackClassName,
-      )}
-    >
-      {initial}
-    </div>
+    <Avatar className={className} style={{ width: size, height: size }}>
+      {imageSrc ? <AvatarImage src={imageSrc} alt="" /> : null}
+      <AvatarFallback className={cn(fallbackClassName)}>{initial}</AvatarFallback>
+    </Avatar>
   );
 }

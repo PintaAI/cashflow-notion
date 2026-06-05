@@ -16,15 +16,17 @@ export async function searchRegisteredUsers(query = ""): Promise<RegisteredUserO
 
   const trimmed = query.trim();
 
+  if (trimmed.length < 2) {
+    return [];
+  }
+
   return prisma.user.findMany({
-    where: trimmed
-      ? {
-          OR: [
-            { name: { contains: trimmed, mode: "insensitive" } },
-            { email: { contains: trimmed, mode: "insensitive" } },
-          ],
-        }
-      : undefined,
+    where: {
+      OR: [
+        { name: { contains: trimmed, mode: "insensitive" } },
+        { email: { contains: trimmed, mode: "insensitive" } },
+      ],
+    },
     select: { id: true, name: true, email: true, image: true },
     orderBy: [{ name: "asc" }, { email: "asc" }],
     take: 20,

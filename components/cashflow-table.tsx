@@ -20,6 +20,8 @@ import {
   Tag01Icon,
   Calendar01Icon,
   ArrowUpDownIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
   Delete03Icon,
   Loading03Icon,
   UserCircleIcon,
@@ -214,14 +216,14 @@ function getColumns(deps: {
             });
           }}>
             <SelectTrigger className="h-7 gap-1 border-0 bg-transparent p-0 text-xs shadow-none hover:bg-muted/50">
-              <UserAvatar user={createdBy} size={18} className="size-[18px] text-[9px]" />
+              <UserAvatar user={createdBy} size={18} className="size-[18px]" fallbackClassName="text-[9px]" />
               <span className="truncate text-muted-foreground">{label}</span>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" align="start">
               {memberOptions.map((member) => (
                 <SelectItem key={member.user.id} value={member.user.id}>
                   <div className="flex items-center gap-2">
-                    <UserAvatar user={member.user} size={18} className="size-[18px] text-[9px]" />
+                    <UserAvatar user={member.user} size={18} className="size-[18px]" fallbackClassName="text-[9px]" />
                     <span>{getUserDisplayName(member.user)}</span>
                   </div>
                 </SelectItem>
@@ -308,11 +310,53 @@ const ioOptions: IOType[] = ["Income", "Expenses"];
 
 const PAGE_SIZE = 20;
 
-interface CashflowTableProps {
-  dateFilter?: string;
+const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+function parseDateKey(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-export function CashflowTable({ dateFilter }: CashflowTableProps) {
+function formatDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function moveDateKey(value: string, delta: number): string {
+  const date = parseDateKey(value);
+  date.setDate(date.getDate() + delta);
+  return formatDateKey(date);
+}
+
+function formatDayName(value: string): string {
+  return dayNames[parseDateKey(value).getDay()];
+}
+
+function DayFilterNavigator({
+  dateFilter,
+  onDateFilterChange,
+}: {
+  dateFilter: string;
+  onDateFilterChange: (date: string) => void;
+}) {
+  return (
+    <div className="mt-3 grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-2">
+      <Button type="button" variant="ghost" size="icon-sm" aria-label="Hari sebelumnya" onClick={() => onDateFilterChange(moveDateKey(dateFilter, -1))}>
+        <HugeiconsIcon icon={ArrowLeftIcon} strokeWidth={2} className="size-4" />
+      </Button>
+      <p className="truncate text-center text-sm font-semibold capitalize sm:text-base">{formatDayName(dateFilter)}</p>
+      <Button type="button" variant="ghost" size="icon-sm" aria-label="Hari berikutnya" onClick={() => onDateFilterChange(moveDateKey(dateFilter, 1))}>
+        <HugeiconsIcon icon={ArrowRightIcon} strokeWidth={2} className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+interface CashflowTableProps {
+  dateFilter?: string;
+  onDateFilterChange?: (date: string) => void;
+}
+
+export function CashflowTable({ dateFilter, onDateFilterChange }: CashflowTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "date", desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
@@ -561,6 +605,10 @@ export function CashflowTable({ dateFilter }: CashflowTableProps) {
             </PopoverContent>
           </Popover>
         </div>
+
+        {dateFilter && onDateFilterChange ? (
+          <DayFilterNavigator dateFilter={dateFilter} onDateFilterChange={onDateFilterChange} />
+        ) : null}
 
         {/* Bulk Actions Bar */}
         {Object.values(rowSelection).filter(Boolean).length > 0 && (

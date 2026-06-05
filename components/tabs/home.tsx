@@ -138,6 +138,7 @@ export function HomeTab() {
   const summary = summaryQuery.data ?? getEmptySummary();
   const activity = activityQuery.data ?? getEmptyActivityOverview();
   const today = formatDateKey(new Date());
+  const [selectedDate, setSelectedDate] = useState(today);
   const runGeneration = useRunRecurringGeneration();
   const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -218,7 +219,7 @@ export function HomeTab() {
       {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
       <BudgetWarningCard />
       {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} />}
-      <CashflowTable dateFilter={today} />
+      <CashflowTable dateFilter={selectedDate} onDateFilterChange={setSelectedDate} />
     </>
   );
 }

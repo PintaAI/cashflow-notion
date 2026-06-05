@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
 } from "@/components/ui/sheet";
 import { SidebarContent, type AppTab } from "@/components/sidebar-content";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
@@ -35,6 +36,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent side="left" showCloseButton={true} className="w-72 p-0">
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
           <div className="flex h-full flex-col px-4 py-5">
             <SidebarContent onNavigate={() => setIsOpen(false)} />
           </div>

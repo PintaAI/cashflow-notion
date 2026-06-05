@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   getAdminDashboard,
   getAllUsers,
@@ -112,9 +113,7 @@ function OverviewTab() {
           <div className="divide-y">
             {recentUsers.map((user) => (
               <div key={user.id} className="flex items-center gap-2 px-4 py-2.5">
-                <div className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground shrink-0">
-                  {user.name?.[0]?.toUpperCase() ?? user.email[0].toUpperCase()}
-                </div>
+                <UserAvatar user={user} size={28} className="size-7" fallbackClassName="text-[10px]" />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{user.name ?? user.email}</p>
                   <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
@@ -214,9 +213,7 @@ function UsersTab() {
             <TableRow key={user.id}>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <div className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground shrink-0">
-                    {user.name?.[0]?.toUpperCase() ?? user.email[0].toUpperCase()}
-                  </div>
+                  <UserAvatar user={user} size={28} className="size-7" fallbackClassName="text-[10px]" />
                   <span className="text-xs font-medium truncate max-w-[120px]">{user.name ?? "—"}</span>
                 </div>
               </TableCell>
@@ -415,9 +412,7 @@ function ManagementDetailView({
               <TableRow key={member.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <div className="flex size-7 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground shrink-0">
-                      {member.user.name?.[0]?.toUpperCase() ?? member.user.email[0].toUpperCase()}
-                    </div>
+                    <UserAvatar user={member.user} size={28} className="size-7" fallbackClassName="text-[10px]" />
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate max-w-[120px]">
                         {member.user.name ?? "—"}

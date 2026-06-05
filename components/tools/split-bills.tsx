@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -229,6 +229,7 @@ export function SplitBills() {
   const [isSharingPng, setIsSharingPng] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState("");
+  const [isAddingPerson, setIsAddingPerson] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUserOption[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [userSearchError, setUserSearchError] = useState<string | null>(null);
@@ -276,6 +277,14 @@ export function SplitBills() {
   }, [session?.user]);
 
   useEffect(() => {
+    if (userSearch.trim().length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear private search results when query is too short
+      setRegisteredUsers([]);
+      setUserSearchError(null);
+      setIsSearchingUsers(false);
+      return;
+    }
+
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setIsSearchingUsers(true);
@@ -318,13 +327,36 @@ export function SplitBills() {
     );
   }
 
-  function addPerson() {
-    const person: Person = {
-      id: createId("person"),
-      name: `Teman ${people.length}`,
-    };
+  function addPerson(name?: string) {
+    setPeople((current) => [
+      ...current,
+      {
+        id: createId("person"),
+        name: name?.trim() || `Teman ${current.length}`,
+      },
+    ]);
+  }
 
-    setPeople((current) => [...current, person]);
+  function addManualPersonFromSearch() {
+    const name = userSearch.trim();
+
+    if (!name) {
+      return;
+    }
+
+    addPerson(name);
+    setUserSearch("");
+    setRegisteredUsers([]);
+    setIsAddingPerson(false);
+  }
+
+  function handlePersonSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    addManualPersonFromSearch();
   }
 
   function addRegisteredPerson(user: RegisteredUserOption) {
@@ -336,6 +368,7 @@ export function SplitBills() {
       return [...current, toPersonFromUser(user, currentUserId)];
     });
     setUserSearch("");
+    setIsAddingPerson(false);
   }
 
   function removePerson(personId: string) {
@@ -835,28 +868,20 @@ export function SplitBills() {
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold">Siapa saja?</p>
-              <p className="text-xs text-muted-foreground">Profil kamu otomatis dipakai. Tambahkan teman dari user terdaftar atau manual.</p>
+              <p className="text-xs text-muted-foreground">Ketik nama teman, Enter untuk tambah manual.</p>
             </div>
-            <Button size="icon-sm" variant="outline" onClick={addPerson} title="Tambah manual">
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-            </Button>
           </div>
 
           <div className="space-y-2">
             {people.map((person) => (
               <div key={person.id} className="flex items-center gap-2">
-                {person.userId ? (
-                  <UserAvatar user={person} size={28} className="size-7" fallbackClassName="text-xs" />
-                ) : (
-                  <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
-                )}
+                <UserAvatar user={person} size={28} className="size-7" fallbackClassName="text-xs" />
                 {person.userId ? (
                   <div className="min-w-0 flex-1 rounded-md border px-3 py-1.5">
                     <p className="truncate text-sm font-medium">
                       {person.name || "Tanpa nama"}
                       {person.isCurrentUser ? <span className="ml-1 text-xs text-muted-foreground">(kamu)</span> : null}
                     </p>
-                    {person.email ? <p className="truncate text-xs text-muted-foreground">{person.email}</p> : null}
                   </div>
                 ) : (
                   <Input
@@ -877,40 +902,62 @@ export function SplitBills() {
                 </Button>
               </div>
             ))}
-          </div>
 
-          <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-            <div>
-              <p className="text-sm font-medium">Tambah user terdaftar</p>
-              <p className="text-xs text-muted-foreground">Cari nama atau email akun yang sudah register.</p>
-            </div>
-            <Input
-              value={userSearch}
-              onChange={(event) => setUserSearch(event.target.value)}
-              placeholder="Cari user..."
-              className="h-9"
-            />
-            {isSearchingUsers ? <p className="text-xs text-muted-foreground">Mencari user...</p> : null}
-            {userSearchError ? <p className="text-xs text-destructive">{userSearchError}</p> : null}
-            <div className="space-y-1">
-              {availableRegisteredUsers.slice(0, 5).map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                  onClick={() => addRegisteredPerson(user)}
-                >
-                  <UserAvatar user={user} size={24} className="size-6" fallbackClassName="text-xs" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{getUserDisplayName(user)}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
-                  </span>
-                </button>
-              ))}
-              {!isSearchingUsers && availableRegisteredUsers.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Tidak ada user lain yang bisa ditambahkan.</p>
-              ) : null}
-            </div>
+            {isAddingPerson ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <UserAvatar
+                    user={{ name: userSearch || "Teman" }}
+                    size={28}
+                    className="size-7"
+                    fallbackClassName="text-xs"
+                  />
+                  <Input
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                    onKeyDown={handlePersonSearchKeyDown}
+                    placeholder="Tambah teman atau cari user..."
+                    className="h-9"
+                    autoFocus
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    disabled={!userSearch.trim()}
+                    onClick={addManualPersonFromSearch}
+                    title="Tambah teman manual"
+                  >
+                    <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+                  </Button>
+                </div>
+
+                {isSearchingUsers ? <p className="text-xs text-muted-foreground">Mencari user...</p> : null}
+                {userSearchError ? <p className="text-xs text-destructive">{userSearchError}</p> : null}
+                {userSearch.trim().length >= 2 ? (
+                  <div className="space-y-1 pl-6">
+                    {availableRegisteredUsers.slice(0, 5).map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                        onClick={() => addRegisteredPerson(user)}
+                      >
+                        <UserAvatar user={user} size={24} className="size-6" fallbackClassName="text-xs" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{getUserDisplayName(user)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <Button variant="outline" className="w-full gap-2" onClick={() => setIsAddingPerson(true)}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+                Tambah teman
+              </Button>
+            )}
           </div>
         </section>
       ) : null}
@@ -922,9 +969,6 @@ export function SplitBills() {
               <p className="text-sm font-semibold">Bayar di mana?</p>
               <p className="text-xs text-muted-foreground">Tambah tempat dan pilih siapa yang bayar.</p>
             </div>
-            <Button size="icon-sm" onClick={addBill} title="Tambah tempat">
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-            </Button>
           </div>
 
           {bills.length === 0 ? (
@@ -968,6 +1012,11 @@ export function SplitBills() {
                 </Button>
               </div>
             ))}
+
+            <Button variant="outline" className="w-full gap-2" onClick={addBill}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+              Tambah tempat
+            </Button>
           </div>
         </section>
       ) : null}

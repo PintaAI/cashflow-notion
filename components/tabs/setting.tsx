@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AiChat01Icon, BellDotIcon, CurrencyIcon, Delete02Icon, Edit02Icon, FlashIcon, Logout01Icon, PercentIcon, RefreshIcon, Tag01Icon, UserCircleIcon, Wallet01Icon } from "@hugeicons/core-free-icons";
@@ -19,10 +18,12 @@ import { BudgetManager } from "@/components/budget-manager";
 import { RecurringManager } from "@/components/recurring-manager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { useCurrency } from "@/components/providers/currency-provider"
 import { SUPPORTED_CURRENCIES } from "@/lib/currency"
 import { getProfileImageSrc } from "@/lib/profile-image";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   Select,
   SelectContent,
@@ -426,17 +427,9 @@ function ManagementSettings() {
       <div className="space-y-1">
         <p className="text-sm font-medium">Anggota</p>
         <div className="space-y-1.5">
-          {management.management.members.map((member) => {
-            const memberImageSrc = getProfileImageSrc(member.user.image);
-            return (
+          {management.management.members.map((member) => (
             <div key={member.id} className="flex items-center gap-2 border border-border rounded p-2">
-              {memberImageSrc ? (
-                <Image src={memberImageSrc} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover" unoptimized />
-              ) : (
-                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground shrink-0">
-                  {member.user.name?.[0]?.toUpperCase() ?? member.user.email[0].toUpperCase()}
-                </div>
-              )}
+              <UserAvatar user={member.user} size={24} className="size-6" fallbackClassName="text-[10px]" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium truncate">{member.user.name ?? member.user.email}</p>
                 <p className="text-[10px] text-muted-foreground">{member.role === "owner" ? "Pemilik" : "Anggota"}</p>
@@ -452,8 +445,7 @@ function ManagementSettings() {
                 </Button>
               )}
             </div>
-          );
-          })}
+          ))}
         </div>
       </div>
 
@@ -768,22 +760,23 @@ function ProfileEditor({ user, onUpdated }: { user: EditableProfileUser; onUpdat
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex flex-col items-center gap-2">
         <label className="group relative cursor-pointer" aria-label="Ganti foto profil">
-          {objectPreviewUrl ? (
-            <Image src={objectPreviewUrl} alt="Preview" width={88} height={88} className="size-22 rounded-full object-cover" unoptimized />
-          ) : getProfileImageSrc(user.image) ? (
-            <Image src={getProfileImageSrc(user.image)!} alt="Foto profil" width={88} height={88} className="size-22 rounded-full object-cover" unoptimized />
-          ) : (
-            <div className="flex size-22 items-center justify-center rounded-full bg-primary/10 text-3xl font-semibold text-primary">
+          <Avatar className="size-22 text-3xl font-semibold" size="lg">
+            {objectPreviewUrl ? (
+              <AvatarImage src={objectPreviewUrl} alt="Preview" />
+            ) : getProfileImageSrc(user.image) ? (
+              <AvatarImage src={getProfileImageSrc(user.image)!} alt="Foto profil" />
+            ) : null}
+            <AvatarFallback className="bg-primary/10 text-primary">
               {user.name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-          )}
-          <span className="absolute right-0 bottom-1 flex size-7 items-center justify-center rounded-full border bg-background text-foreground shadow-sm transition-colors group-hover:bg-muted">
+            </AvatarFallback>
+            <AvatarBadge className="right-0 bottom-1 size-7 border bg-background text-foreground shadow-sm transition-colors group-hover:bg-muted">
             {photoPending ? (
               <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="size-3.5 animate-spin" />
             ) : (
               <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-3.5" />
             )}
-          </span>
+            </AvatarBadge>
+          </Avatar>
           <input type="file" name="image" accept="image/*" onChange={handleFileUpload} className="hidden" disabled={photoPending} />
         </label>
         <p className="text-xs text-muted-foreground">
@@ -973,13 +966,7 @@ export function SettingTab() {
 
       {visibleProfileUser && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border p-3">
-          {getProfileImageSrc(visibleProfileUser.image) ? (
-            <Image src={getProfileImageSrc(visibleProfileUser.image)!} alt="Foto profil" width={36} height={36} className="size-9 rounded-full object-cover" unoptimized />
-          ) : (
-            <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {visibleProfileUser.name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-          )}
+          <UserAvatar user={visibleProfileUser} size={36} className="size-9" fallbackClassName="bg-primary/10 text-sm font-semibold text-primary" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{visibleProfileUser.name}</p>
             <p className="text-xs text-muted-foreground truncate">{visibleProfileUser.email}</p>
