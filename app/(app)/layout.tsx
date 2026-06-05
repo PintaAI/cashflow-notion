@@ -18,7 +18,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isOpen, setIsOpen } = useSidebar();
-  const managementPath = params.managementId ? `/dompet/${params.managementId}` : "/";
+  const managementId = params.managementId;
+  const managementPath = managementId ? `/dompet/${managementId}` : "/";
 
   const currentTab: AppTab =
     pathname === managementPath
@@ -55,12 +56,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <MobileBottomNav activeTab={currentTab} onTabChange={handleTabChange} />
+      {managementId && <MobileBottomNav activeTab={currentTab} onTabChange={handleTabChange} />}
     </>
   );
 
-  if (params.managementId) {
-    return <ManagementProvider managementId={params.managementId}>{shell}</ManagementProvider>;
+  if (managementId) {
+    return <ManagementProvider managementId={managementId}>{shell}</ManagementProvider>;
   }
 
   return shell;
