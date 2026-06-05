@@ -9,7 +9,7 @@ import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { CashflowTable } from "@/components/cashflow-table";
 import { ActivityHeatmapSkeleton, StatsSkeleton } from "@/components/loading-skeletons";
 import { Stats, type StatsData } from "@/components/stats";
-import { useActivityOverview, useSummary, useBudgetStatus, useRunRecurringGeneration } from "@/hooks/use-cashflow-data";
+import { invalidateActiveManagementQueries, useActivityOverview, useSummary, useBudgetStatus, useRunRecurringGeneration } from "@/hooks/use-cashflow-data";
 import { getUserManagements, switchManagement } from "@/app/actions/management";
 import type { ActivityOverview } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
@@ -165,7 +165,7 @@ export function HomeTab() {
     try {
       await switchManagement(id);
       setManagements((prev) => prev.map((m) => ({ ...m, isActive: m.id === id })));
-      await queryClient.invalidateQueries();
+      invalidateActiveManagementQueries(queryClient);
     } catch (err) {
       console.error(err);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { fetchSummary, fetchCalendarEntries, fetchCategoryEntries } from "@/app/actions/cashflow";
 import { fetchActivityOverview, fetchAnalyticsFromURL } from "@/app/actions/analytics";
@@ -57,6 +58,30 @@ export const cashflowQueryKeys = {
   calendarEntries: (year: number, month: number) => ["cashflow-calendar", year, month] as const,
   categoryEntries: (category: string, from?: string, to?: string) => ["cashflow-category-entries", category, from, to] as const,
 };
+
+export function invalidateActiveManagementQueries(queryClient: QueryClient) {
+  const queryKeys: QueryKey[] = [
+    cashflowQueryKeys.entries,
+    cashflowQueryKeys.summary,
+    cashflowQueryKeys.activity,
+    cashflowQueryKeys.analyticsRoot,
+    cashflowQueryKeys.categories,
+    cashflowQueryKeys.categoriesWithDetails,
+    cashflowQueryKeys.quickFills,
+    cashflowQueryKeys.budgetStatus,
+    cashflowQueryKeys.recurring,
+    cashflowQueryKeys.balance,
+    cashflowQueryKeys.auditHistory,
+    cashflowQueryKeys.latestAudit,
+    cashflowQueryKeys.managementMembers,
+    ["cashflow-calendar"],
+    ["cashflow-category-entries"],
+  ];
+
+  for (const queryKey of queryKeys) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+}
 
 const CATEGORY_STALE_TIME = 1000 * 60 * 30;
 

@@ -66,6 +66,7 @@ import {
   SELECTED_LOCAL_THEME_KEY,
   type LocalTheme,
 } from "@/components/local-theme-style";
+import { invalidateActiveManagementQueries } from "@/hooks/use-cashflow-data";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -231,18 +232,21 @@ function ManagementSettings() {
     try {
       await switchManagement(id);
       setEditingName(false);
-      const [currentManagement, userManagements, currentInvitations] = await Promise.all([
+      setManagements((prev) => prev.map((m) => ({ ...m, isActive: m.id === id })));
+      invalidateActiveManagementQueries(queryClient);
+
+      void Promise.all([
         getCurrentManagement(),
         getUserManagements(),
         getManagementInvitations().catch(() => []),
-      ]);
-      if (currentManagement) {
-        setManagement(currentManagement);
-        setNameValue(currentManagement.management.name);
-      }
-      setManagements(userManagements);
-      setInvitations(currentInvitations);
-      await queryClient.invalidateQueries();
+      ]).then(([currentManagement, userManagements, currentInvitations]) => {
+        if (currentManagement) {
+          setManagement(currentManagement);
+          setNameValue(currentManagement.management.name);
+        }
+        setManagements(userManagements);
+        setInvitations(currentInvitations);
+      }).catch(console.error);
     } catch (err) {
       console.error(err);
     }
