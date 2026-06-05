@@ -1,6 +1,7 @@
 "use server";
 
 import crypto from "crypto";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/management";
 
@@ -160,6 +161,7 @@ export async function renameManagement(name: string) {
     where: { id: user.activeManagementId },
     data: { name: trimmed },
   });
+  revalidatePath("/", "layout");
 
   return { success: true, name: trimmed };
 }

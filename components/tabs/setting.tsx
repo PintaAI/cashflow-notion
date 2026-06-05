@@ -303,6 +303,9 @@ function ManagementSettings() {
       setManagement((prev) =>
         prev ? { ...prev, management: { ...prev.management, name: trimmed } } : prev
       );
+      setManagements((prev) =>
+        prev.map((m) => (m.isActive ? { ...m, name: trimmed } : m))
+      );
     } catch (err) {
       setNameValue(management?.management.name ?? "");
       console.error(err);
