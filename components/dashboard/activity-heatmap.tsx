@@ -1,14 +1,15 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import type { ActivityOverview } from "@/lib/analytics";
+import { useRef, useEffect, useState } from "react";
+import type { ActivityOverview, ActivityDay } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 interface ActivityHeatmapProps {
   activity: ActivityOverview;
 }
 
-const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""];
+const DAY_LABELS = ["Sen", "", "Rab", "", "Jum", "", ""];
+const DAY_HEADERS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
 function getLevel(count: number): number {
   if (count === 0) return 0;
@@ -47,16 +48,75 @@ function formatDayTitle(day: ActivityOverview["days"][number]): string {
   return `${formattedDate}: ${day.count} transaksi`;
 }
 
+const VIEW_STORAGE_KEY = "cashflow_activity_view";
+
+function getStoredView(): "grid" | "calendar" {
+  if (typeof window === "undefined") return "grid";
+  try {
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (stored === "grid" || stored === "calendar") return stored;
+  } catch { /* ignore */ }
+  return "grid";
+}
+
+function storeView(view: "grid" | "calendar") {
+  try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
+}
+
+function getDayNumber(dateStr: string): number {
+  return new Date(`${dateStr}T00:00:00`).getDate();
+}
+
+function getLocalTodayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getMonthYearLabel(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("id-ID", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function chunkIntoWeeks(days: ActivityDay[]): ActivityDay[][] {
+  const weeks: ActivityDay[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+  return weeks;
+}
+
 export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
+  const [view, setView] = useState<"grid" | "calendar">(getStoredView);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const today = activity.days.at(-1);
-  const hasLoggedToday = Boolean(today?.count);
+  const todayKey = getLocalTodayKey();
+  const todayDOW = (new Date().getDay() + 6) % 7;
+  const hasLoggedToday = Boolean(activity.days.at(-1)?.count);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && view === "grid") {
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
     }
-  }, []);
+  }, [view]);
+
+  function handleViewChange(v: "grid" | "calendar") {
+    setView(v);
+    storeView(v);
+  }
+
+  const lastWeekDays = activity.days.slice(-7);
+  const calendarWeeks = chunkIntoWeeks(lastWeekDays).map((week) => {
+    const midDay = week[3] ?? week[0];
+    return {
+      days: week,
+      monthYear: midDay ? getMonthYearLabel(midDay.date) : "",
+    };
+  });
+  const calendarRows = calendarWeeks.map((week, i) => ({
+    ...week,
+    showHeader: i === 0 || week.monthYear !== calendarWeeks[i - 1].monthYear,
+  }));
 
   return (
     <section className="mb-4 sm:mb-6">
@@ -68,38 +128,122 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
               {hasLoggedToday ? "Today logged. Keep it alive." : "Log today to light up the grid."}
             </p>
           </div>
-          <div className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-            {activity.currentStreak} day streak
+          <div className="flex items-center gap-2">
+            <div className="flex overflow-hidden rounded-md border">
+              <button
+                type="button"
+                onClick={() => handleViewChange("grid")}
+                className={cn(
+                  "px-2 py-1 text-xs font-medium transition-colors",
+                  view === "grid" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent"
+                )}
+              >
+                Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewChange("calendar")}
+                className={cn(
+                  "px-2 py-1 text-xs font-medium transition-colors",
+                  view === "calendar" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent"
+                )}
+              >
+                Calendar
+              </button>
+            </div>
+            <div className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+              {activity.currentStreak} day streak
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>{activity.totalEntries} tercatat</span>
         <span>|</span>
         <span>{activity.activeDays} active days</span>
+        <span className="ml-auto sm:hidden">
+          <div className="flex overflow-hidden rounded-md border">
+            <button
+              type="button"
+              onClick={() => handleViewChange("grid")}
+              className={cn(
+                "px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                view === "grid" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+              )}
+            >
+              Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewChange("calendar")}
+              className={cn(
+                "px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                view === "calendar" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+              )}
+            >
+              Calendar
+            </button>
+          </div>
+        </span>
       </div>
 
-      <div ref={scrollRef} className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-        <div className="flex shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
-          {DAY_LABELS.map((label, i) => (
-            <span key={i} className="h-3 leading-none sm:h-3.5">{label}</span>
-          ))}
+      {view === "grid" ? (
+        <div ref={scrollRef} className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
+            {DAY_LABELS.map((label, i) => (
+              <span key={i} className="h-3 leading-none sm:h-3.5">{label}</span>
+            ))}
+          </div>
+          <div className="grid w-max grid-flow-col grid-rows-7 gap-1">
+            {activity.days.map((day) => (
+              <div
+                key={day.date}
+                title={formatDayTitle(day)}
+                aria-label={formatDayTitle(day)}
+                className={cn(
+                  "size-3 rounded-[3px] ring-1 ring-border/30 transition-transform hover:scale-125 sm:size-3.5",
+                  getCellClass(day.count)
+                )}
+              />
+            ))}
+          </div>
         </div>
-        <div className="grid w-max grid-flow-col grid-rows-7 gap-1">
-          {activity.days.map((day) => (
-            <div
-              key={day.date}
-              title={formatDayTitle(day)}
-              aria-label={formatDayTitle(day)}
-              className={cn(
-                "size-3 rounded-[3px] ring-1 ring-border/30 transition-transform hover:scale-125 sm:size-3.5",
-                getCellClass(day.count)
-              )}
-            />
-          ))}
+      ) : (
+        <div className="mt-3">
+          <div className="mb-1 grid grid-cols-7 gap-1">
+              {DAY_HEADERS.map((d, i) => (
+                <div key={i} className={cn("text-center text-[10px] font-medium", i === todayDOW ? "text-foreground font-bold underline underline-offset-2" : i === 5 ? "text-muted-foreground/50" : i === 6 ? "text-red-400 dark:text-red-500" : "text-muted-foreground")}>{d}</div>
+              ))}
+          </div>
+          <div className="space-y-1">
+            {calendarRows.map((week) => (
+              <div key={week.days[0]?.date ?? "unknown"}>
+                {week.showHeader && (
+                  <div className="py-1 text-[11px] font-semibold text-muted-foreground">{week.monthYear}</div>
+                )}
+                <div className="grid grid-cols-7 gap-1">
+                  {week.days.map((day) => (
+                    <div
+                      key={day.date}
+                      title={formatDayTitle(day)}
+                      aria-label={formatDayTitle(day)}
+                      className={cn(
+                        "flex items-center justify-center rounded-[3px] text-[11px] font-medium h-7 transition-transform hover:scale-125",
+                        day.date === todayKey ? "ring-2 ring-primary" : "ring-1 ring-border/30",
+                        day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
+                        getCellClass(day.count)
+                      )}
+                    >
+                      {getDayNumber(day.date)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
         <span>Less</span>

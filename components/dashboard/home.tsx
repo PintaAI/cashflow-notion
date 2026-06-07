@@ -89,7 +89,6 @@ function getEmptyActivityOverview(daysBack = 182): ActivityOverview {
 
 function toStatsData(summary: CashflowSummary): StatsData {
   return {
-    totalEntries: summary.totalEntries,
     totalIncome: summary.totalIncome,
     totalExpenses: summary.totalExpenses,
     balance: summary.balance,

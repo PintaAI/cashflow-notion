@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import type { AppTab } from "@/components/layout";
+import { DEFAULT_TAB_KEY } from "@/components/settings/appearance-section";
 
 type AppTabContextValue = {
   activeTab: AppTab;
@@ -44,6 +45,15 @@ export function AppTabProvider({
   searchParams: SearchParamsLike;
 }) {
   const [activeTab, setActiveTabState] = useState(() => getTabFromParams(searchParams));
+
+  useEffect(() => {
+    if (searchParams.get("tab")) return;
+    const saved = localStorage.getItem(DEFAULT_TAB_KEY);
+    if (saved === "summary" || saved === "catatan" || saved === "setting") {
+      setActiveTabState(saved);
+      window.history.replaceState(window.history.state, "", getTabUrl(pathname, saved));
+    }
+  }, []);
 
   function setActiveTab(tab: AppTab) {
     setActiveTabState(tab);

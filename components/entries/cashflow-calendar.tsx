@@ -227,7 +227,6 @@ export function CashflowCalendar() {
     return (
       <div className="space-y-4">
         <div className="flex min-h-6 items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-foreground">Catatan</h2>
           <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
             <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin text-primary" />
             <span>Memuat...</span>
@@ -252,15 +251,12 @@ export function CashflowCalendar() {
 
   return (
     <div className="space-y-4">
-      <div className="flex min-h-6 items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-foreground">Catatan</h2>
-        {calendarQuery.isFetching && !calendarQuery.isLoading && (
-          <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-            <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin text-primary" />
-            <span>Memuat...</span>
-          </div>
-        )}
-      </div>
+      {calendarQuery.isFetching && !calendarQuery.isLoading && (
+        <div className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+          <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3.5 animate-spin text-primary" />
+          <span>Memuat...</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 text-xs">
         <span>

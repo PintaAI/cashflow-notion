@@ -1,3 +1,4 @@
+export { AppearanceSettings, DEFAULT_TAB_KEY } from "./appearance-section"
 export { BudgetManager } from "./budget-manager"
 export { CategoryManager } from "./category-manager"
 export { QuickFillManager } from "./quick-fill-manager"

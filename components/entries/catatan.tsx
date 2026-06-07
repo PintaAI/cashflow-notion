@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Calendar03Icon, Table01Icon } from "@hugeicons/core-free-icons";
 
@@ -8,8 +8,22 @@ import { CashflowTable, CashflowCalendar } from "@/components/entries";
 import { PageHeader } from "@/components/layout";
 import { cn } from "@/lib/utils"
 
+const VIEW_KEY = "cashflow.catatanView";
+
 export function CatatanTab() {
   const [view, setView] = useState<"list" | "calendar">("list");
+
+  useEffect(() => {
+    const saved = localStorage.getItem(VIEW_KEY);
+    if (saved === "list" || saved === "calendar") {
+      setView(saved);
+    }
+  }, []);
+
+  function handleChange(v: "list" | "calendar") {
+    setView(v);
+    localStorage.setItem(VIEW_KEY, v);
+  }
 
   return (
     <>
@@ -18,7 +32,7 @@ export function CatatanTab() {
         <div className="flex items-center rounded-lg border p-0.5">
           <button
             type="button"
-            onClick={() => setView("list")}
+            onClick={() => handleChange("list")}
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               view === "list"
@@ -31,7 +45,7 @@ export function CatatanTab() {
           </button>
           <button
             type="button"
-            onClick={() => setView("calendar")}
+            onClick={() => handleChange("calendar")}
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               view === "calendar"

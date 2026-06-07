@@ -19,7 +19,7 @@ import { useCurrency } from "@/components/providers/currency-provider";
 
 export type StatsData = Pick<
   CashflowSummary,
-  "totalEntries" | "totalIncome" | "totalExpenses" | "balance"
+  "totalIncome" | "totalExpenses" | "balance"
 > & {
   currentWeek?: CashflowSummary["currentWeek"];
   currentMonth?: CashflowSummary["currentMonth"];
@@ -100,10 +100,6 @@ export function Stats({ stats }: StatsProps) {
               {showBalance ? formatCurrencyCompact(stats.balance) : "••••••"}
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-xs text-muted-foreground/50">
-                <span className="font-medium text-muted-foreground/70">{stats.totalEntries}</span>{" "}
-                entries
-              </div>
               {hasDetailedStats && (
                 <Badge
                   onClick={() => setIsExpanded(!isExpanded)}

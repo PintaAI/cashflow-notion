@@ -257,14 +257,11 @@ function AnalyticsChartsContent({
       {/* Summary Cards */}
       <Stats
         stats={{
-          totalEntries: analytics.summary.entryCount,
           totalIncome: analytics.summary.totalIncome,
           totalExpenses: analytics.summary.totalExpenses,
           balance: analytics.summary.balance,
         }}
       />
-
-      <CreatorBreakdown creators={analytics.byCreator} />
 
       <AppliedFilterPeriod filters={filters} onFiltersChange={onFiltersChange} />
 
@@ -319,7 +316,7 @@ function AnalyticsChartsContent({
       </div>
 
       {/* Category */}
-      <div className="rounded-lg border p-3 sm:p-4">
+      <div className="mb-4 rounded-lg border p-3 sm:mb-6 sm:p-4">
         <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
           <h2 className="text-base font-semibold sm:text-lg">Category</h2>
           <div className="flex w-fit items-center rounded-lg border p-0.5">
@@ -463,6 +460,8 @@ function AnalyticsChartsContent({
           }}
         />
       )}
+
+      <CreatorBreakdown creators={analytics.byCreator} />
 
     </>
   );
