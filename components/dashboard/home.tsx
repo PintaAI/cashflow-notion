@@ -18,6 +18,23 @@ import { SidebarTrigger } from "@/components/layout";
 import { getWeekNumber, getWeekStartEnd, toDateKey } from "@/lib/date";
 import { cn } from "@/lib/utils"
 
+const WALLET_CACHE_KEY = "cashflow_wallets";
+
+type WalletMeta = { id: string; name: string; isActive: boolean };
+
+function readWalletCache(): WalletMeta[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(WALLET_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function writeWalletCache(data: WalletMeta[]) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(WALLET_CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+}
+
 function getEmptySummary(): CashflowSummary {
   const now = new Date();
   const { start: weekStart, end: weekEnd } = getWeekStartEnd(now);
@@ -130,7 +147,22 @@ export function HomeTab() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
-    getUserManagements(managementId).then(setManagements);
+    const cached = readWalletCache();
+    if (cached && cached.length > 0) {
+      setManagements(
+        cached.map((m) => ({
+          id: m.id,
+          name: m.name,
+          role: "" as never,
+          memberCount: 0,
+          isActive: m.id === managementId,
+        })) as Awaited<ReturnType<typeof getUserManagements>>
+      );
+    }
+    getUserManagements(managementId).then((data) => {
+      setManagements(data);
+      writeWalletCache(data.map((m) => ({ id: m.id, name: m.name, isActive: m.isActive })));
+    });
   }, [managementId]);
 
   useEffect(() => {
@@ -147,7 +179,11 @@ export function HomeTab() {
   async function handleSwitch(id: string) {
     setSwitcherOpen(false);
     try {
-      setManagements((prev) => prev.map((m) => ({ ...m, isActive: m.id === id })));
+      setManagements((prev) => {
+        const next = prev.map((m) => ({ ...m, isActive: m.id === id }));
+        writeWalletCache(next.map((m) => ({ id: m.id, name: m.name, isActive: m.isActive })));
+        return next;
+      });
       router.push(`/dompet/${id}`);
       router.refresh();
       void switchManagement(id).catch(console.error);

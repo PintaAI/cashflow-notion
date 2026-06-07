@@ -134,12 +134,13 @@ export function useManagementMembers() {
   });
 }
 
-export function useCategoriesWithDetails() {
+export function useCategoriesWithDetails(options?: { enabled?: boolean }) {
   const { managementId } = useManagement();
   return useQuery({
     queryKey: cashflowQueryKeys.categoriesWithDetails(managementId),
     queryFn: () => fetchCategoriesWithDetails(managementId),
     staleTime: CATEGORY_STALE_TIME,
+    ...options,
   });
 }
 
@@ -191,11 +192,12 @@ export function useUpdateCategory() {
   });
 }
 
-export function useQuickFills() {
+export function useQuickFills(options?: { enabled?: boolean }) {
   const { managementId } = useManagement();
   return useQuery({
     queryKey: cashflowQueryKeys.quickFills(managementId),
     queryFn: () => fetchQuickFills(managementId),
+    ...options,
   });
 }
 

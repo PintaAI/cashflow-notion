@@ -14,9 +14,13 @@ async function getRedirectManagementId(session: SessionWithManagement) {
   const userId = session.user?.id;
   if (!userId) return null;
 
-  if (session.user?.activeManagementId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { activeManagementId: true },
+  });
+  if (user?.activeManagementId) {
     const membership = await prisma.managementMember.findFirst({
-      where: { userId, managementId: session.user.activeManagementId },
+      where: { userId, managementId: user.activeManagementId },
       select: { managementId: true },
     });
     if (membership) return membership.managementId;

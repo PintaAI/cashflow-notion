@@ -97,9 +97,9 @@ export function CashflowFormDrawer({
     return formatCurrencyAmount(Number(value), currency, { locale: option.locale })
   }
 
-  const categoriesQuery = useCategoriesWithDetails()
+  const categoriesQuery = useCategoriesWithDetails({ enabled: open })
   const expenseCategories = categoriesQuery.data ?? []
-  const quickFillsQuery = useQuickFills()
+  const quickFillsQuery = useQuickFills({ enabled: open })
   const quickFills = quickFillsQuery.data ?? []
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
