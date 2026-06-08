@@ -41,7 +41,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
   }, [])
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-black flex flex-col">
       {/* Camera View */}
       <div className="relative flex-1 overflow-hidden">
         <Webcam

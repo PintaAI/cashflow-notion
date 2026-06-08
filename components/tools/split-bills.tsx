@@ -29,6 +29,14 @@ import type { CategoryType } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Drawer,
   DrawerContent,
   DrawerHeader,
@@ -226,6 +234,7 @@ export function SplitBills() {
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [showCamera, setShowCamera] = useState(false);
+  const cameraBillRef = useRef<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [isSharingPng, setIsSharingPng] = useState(false);
@@ -235,6 +244,8 @@ export function SplitBills() {
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUserOption[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [userSearchError, setUserSearchError] = useState<string | null>(null);
+  const [isAddBillDialogOpen, setIsAddBillDialogOpen] = useState(false);
+  const [newBillPayerId, setNewBillPayerId] = useState("");
   const [expenseCategory, setExpenseCategory] = useState<CategoryType>("");
   const [expenseDate, setExpenseDate] = useState(getTodayDateString);
   const [isAddingExpense, setIsAddingExpense] = useState(false);
@@ -251,8 +262,10 @@ export function SplitBills() {
   const categories = categoriesQuery.data;
   const selectedUserIds = new Set(people.map((person) => person.userId).filter(Boolean));
   const availableRegisteredUsers = registeredUsers.filter((user) => !selectedUserIds.has(user.id));
-  const steps = ["Orang", "Tempat", "Pesanan", "Hasil"];
-  const canGoNext = step === 0 ? people.some((person) => person.name.trim()) : step === 1 ? bills.length > 0 : true;
+  const steps = ["Orang", "Pesanan", "Hasil"];
+  const hasNamedPerson = people.some((person) => person.name.trim());
+  const hasAnyPlace = bills.length > 0;
+  const canGoNext = step === 0 ? hasNamedPerson : step === 1 ? hasAnyPlace : true;
 
   useEffect(() => {
     if (!session?.user) return;
@@ -393,8 +406,18 @@ export function SplitBills() {
     );
   }
 
+  function openAddBillDialog() {
+    setNewBillPayerId(currentUserSummary?.id || people[0]?.id || "");
+    setIsAddBillDialogOpen(true);
+  }
+
   function addBill() {
-    const firstPersonId = people[0]?.id || "";
+    const payerId = newBillPayerId || people[0]?.id || "";
+
+    if (!payerId) {
+      return;
+    }
+
     const billId = createId("bill");
 
     setBills((current) => [
@@ -402,10 +425,11 @@ export function SplitBills() {
       {
         id: billId,
         place: "",
-        payerId: firstPersonId,
+        payerId,
         items: [],
       },
     ]);
+    setIsAddBillDialogOpen(false);
     setEditingBillId(billId);
   }
 
@@ -421,8 +445,6 @@ export function SplitBills() {
   }
 
   function addItem(billId: string) {
-    const allPersonIds = people.map((person) => person.id);
-
     setBills((current) =>
       current.map((bill) =>
         bill.id === billId
@@ -432,9 +454,9 @@ export function SplitBills() {
                 ...bill.items,
                 {
                   id: createId("item"),
-                  name: "Item baru",
-                  amount: "0",
-                  participantIds: allPersonIds,
+                  name: "",
+                  amount: "",
+                  participantIds: [],
                 },
               ],
             }
@@ -481,14 +503,13 @@ export function SplitBills() {
   }
 
   function appendExtractedItems(billId: string, items: ExtractedSplitBillItem[], place?: string | null) {
-    const participantIds = people.map((person) => person.id);
     const extractedItems = items
       .filter((item) => item.name.trim() && item.amount > 0)
       .map((item) => ({
         id: createId("item"),
         name: item.name.trim(),
         amount: String(Math.round(item.amount)),
-        participantIds,
+        participantIds: [],
       }));
 
     if (extractedItems.length === 0) {
@@ -503,7 +524,7 @@ export function SplitBills() {
               ...bill,
               place: bill.place.trim() || place?.trim() || bill.place,
               items: [
-                ...bill.items.filter((item) => parseAmount(item.amount) > 0 || item.name !== "Item baru"),
+                ...bill.items.filter((item) => parseAmount(item.amount) > 0 || item.name.trim()),
                 ...extractedItems,
               ],
             }
@@ -549,17 +570,21 @@ export function SplitBills() {
   }
 
   async function handleCameraCapture(imageData: string) {
+    const billId = cameraBillRef.current;
+    cameraBillRef.current = null;
     setShowCamera(false);
 
-    if (!editingBillId) {
+    if (!billId) {
       return;
     }
+
+    setEditingBillId(billId);
 
     const response = await fetch(imageData);
     const blob = await response.blob();
     const file = new File([blob], "split-bill-receipt.jpg", { type: "image/jpeg" });
 
-    await extractSplitBillImage(file, editingBillId);
+    await extractSplitBillImage(file, billId);
   }
 
   function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -849,12 +874,13 @@ export function SplitBills() {
       </div>
 
       <div className="space-y-2">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-3 gap-1">
           {steps.map((label, index) => (
             <button
               key={label}
               type="button"
               className={index === step ? "h-1.5 bg-foreground" : "h-1.5 bg-muted"}
+              disabled={!canGoNext && index > step}
               onClick={() => setStep(index)}
               aria-label={`Step ${index + 1}: ${label}`}
             />
@@ -967,11 +993,9 @@ export function SplitBills() {
 
       {step === 1 ? (
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold">Bayar di mana?</p>
-              <p className="text-xs text-muted-foreground">Tambah tempat dan pilih siapa yang bayar.</p>
-            </div>
+          <div>
+            <p className="text-sm font-semibold">Pesanan</p>
+            <p className="text-xs text-muted-foreground">Tambah tempat, pilih siapa yang bayar, lalu isi makanan.</p>
           </div>
 
           {bills.length === 0 ? (
@@ -981,42 +1005,59 @@ export function SplitBills() {
           ) : null}
 
           <div className="space-y-2">
-            {bills.map((bill, billIndex) => (
-              <div key={bill.id} className="flex items-center gap-2">
-                <Input
-                  value={bill.place}
-                  onChange={(event) => updateBill(bill.id, { place: event.target.value })}
-                  placeholder={`Tempat ${billIndex + 1}`}
-                  className="h-9 min-w-0 flex-1 rounded-md border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
-                />
-                <Select
-                  value={bill.payerId}
-                  onValueChange={(payerId) => updateBill(bill.id, { payerId })}
-                >
-                  <SelectTrigger className="h-9 w-32 shrink-0 sm:w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {people.map((person) => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.name || "Tanpa nama"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeBill(bill.id)}
-                  title="Hapus tempat"
-                >
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-4" />
-                </Button>
-              </div>
-            ))}
+            {bills.map((bill, billIndex) => {
+              const billTotal = bill.items.reduce((total, item) => total + parseAmount(item.amount), 0);
 
-            <Button variant="outline" className="w-full gap-2" onClick={addBill}>
+              return (
+                <div key={bill.id} className="space-y-1.5 rounded-md border bg-muted/30 p-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={bill.place}
+                      onChange={(event) => updateBill(bill.id, { place: event.target.value })}
+                      placeholder={`Tempat ${billIndex + 1}`}
+                      className="h-9 min-w-0 flex-1 rounded-md border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
+                    />
+                    <Select
+                      value={bill.payerId}
+                      onValueChange={(payerId) => updateBill(bill.id, { payerId })}
+                    >
+                      <SelectTrigger className="h-9 w-32 shrink-0 sm:w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {people.map((person) => (
+                          <SelectItem key={person.id} value={person.id}>
+                            {person.name || "Tanpa nama"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeBill(bill.id)}
+                      title="Hapus tempat"
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-4" />
+                    </Button>
+                  </div>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
+                    onClick={() => setEditingBillId(bill.id)}
+                  >
+                    <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                      {bill.items.length === 0 ? "Belum ada item" : `${bill.items.length} item · ${formatCurrencyAmount(billTotal, currency)}`}
+                    </span>
+                    <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-3 shrink-0 text-muted-foreground" />
+                  </button>
+                </div>
+              );
+            })}
+
+            <Button variant="outline" className="w-full gap-2" onClick={openAddBillDialog}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
               Tambah tempat
             </Button>
@@ -1025,46 +1066,6 @@ export function SplitBills() {
       ) : null}
 
       {step === 2 ? (
-        <section className="space-y-3">
-          <div>
-            <p className="text-sm font-semibold">Makan apa saja?</p>
-            <p className="text-xs text-muted-foreground">Buka tiap tempat untuk isi item dan yang konsumsi.</p>
-          </div>
-
-          <div className="space-y-1">
-            {bills.map((bill) => {
-              const billTotal = bill.items.reduce((total, item) => total + parseAmount(item.amount), 0);
-
-              return (
-                <div key={bill.id} className="flex items-center gap-3 py-2">
-                  <HugeiconsIcon icon={Wallet01Icon} strokeWidth={2} className="size-4 shrink-0 text-muted-foreground" />
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setEditingBillId(bill.id)}
-                  >
-                    <p className="truncate text-sm font-medium">{bill.place || "Tanpa nama"}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {bill.items.length} item · {formatCurrencyAmount(billTotal, currency)}
-                    </p>
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    onClick={() => setEditingBillId(bill.id)}
-                    title="Edit pesanan"
-                  >
-                    <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-4" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      {step === 3 ? (
         <div className="space-y-5">
           <section className="space-y-3">
             <div>
@@ -1222,24 +1223,64 @@ export function SplitBills() {
       ) : null}
 
       <div className="flex items-center justify-between gap-2 border-t pt-3">
-        <Button variant="outline" size="sm" disabled={step === 0} onClick={() => setStep((current) => Math.max(0, current - 1))}>
+        <Button variant="outline" size="sm" disabled={step === 0} onClick={() => setStep((c) => Math.max(0, c - 1))}>
           Kembali
         </Button>
-        <Button size="sm" disabled={!canGoNext} onClick={() => setStep((current) => Math.min(steps.length - 1, current + 1))}>
+        <Button size="sm" disabled={!canGoNext} onClick={() => setStep((c) => Math.min(steps.length - 1, c + 1))}>
           {step === steps.length - 1 ? "Selesai" : "Lanjut"}
         </Button>
       </div>
+
+      <Dialog open={isAddBillDialogOpen} onOpenChange={setIsAddBillDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Siapa yang bayar?</DialogTitle>
+            <DialogDescription>
+              Pilih orang yang membayar di tempat baru ini sebelum isi pesanan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Select value={newBillPayerId} onValueChange={setNewBillPayerId}>
+            <SelectTrigger className="h-10">
+              <SelectValue placeholder="Pilih pembayar" />
+            </SelectTrigger>
+            <SelectContent>
+              {people.map((person) => (
+                <SelectItem key={person.id} value={person.id}>
+                  {person.name || "Tanpa nama"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddBillDialogOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={addBill} disabled={!newBillPayerId}>
+              Lanjut isi tempat
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {showCamera ? (
+        <CameraCapture
+          onCapture={handleCameraCapture}
+          onClose={() => {
+            setShowCamera(false);
+            if (cameraBillRef.current) {
+              setEditingBillId(cameraBillRef.current);
+              cameraBillRef.current = null;
+            }
+          }}
+        />
+      ) : null}
 
       <Drawer open={Boolean(editingBill)} onOpenChange={(open) => !open && setEditingBillId(null)}>
         <DrawerContent className="mx-auto max-h-[90vh] max-w-md data-[vaul-drawer-direction=bottom]:rounded-t-2xl">
           {editingBill ? (
             <>
-              {showCamera ? (
-                <CameraCapture
-                  onCapture={handleCameraCapture}
-                  onClose={() => setShowCamera(false)}
-                />
-              ) : null}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1264,43 +1305,59 @@ export function SplitBills() {
               </DrawerHeader>
 
               <div className="space-y-4 overflow-y-auto px-4 pb-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">Items</p>
-                    <p className="text-xs text-muted-foreground">
-                      Total {formatCurrencyAmount(
-                        editingBill.items.reduce((total, item) => total + parseAmount(item.amount), 0),
-                        currency
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="icon-sm"
-                      variant="outline"
-                      onClick={() => setShowCamera(true)}
-                      disabled={isExtracting}
-                      title="Ambil foto struk"
-                    >
-                      {isExtracting ? (
-                        <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-4 animate-spin" />
-                      ) : (
-                        <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-4" />
-                      )}
-                    </Button>
-                    <Button
-                      size="icon-sm"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isExtracting}
-                      title="Upload gambar struk"
-                    >
-                      <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-4" />
-                    </Button>
-                    <Button size="icon-sm" variant="outline" onClick={() => addItem(editingBill.id)} title="Tambah item">
-                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-                    </Button>
-                  </div>
+                <div>
+                  <p className="text-sm font-medium">Items</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total {formatCurrencyAmount(
+                      editingBill.items.reduce((total, item) => total + parseAmount(item.amount), 0),
+                      currency
+                    )}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 gap-2"
+                    onClick={() => {
+                      cameraBillRef.current = editingBillId;
+                      setEditingBillId(null);
+                      setShowCamera(true);
+                    }}
+                    disabled={isExtracting}
+                  >
+                    {isExtracting ? (
+                      <>
+                        <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <HugeiconsIcon icon={Camera01Icon} strokeWidth={2} className="size-5" />
+                        Camera
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isExtracting}
+                  >
+                    <HugeiconsIcon icon={Image01Icon} strokeWidth={2} className="size-5" />
+                    Upload
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 gap-2"
+                    onClick={() => addItem(editingBill.id)}
+                  >
+                    <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-5" />
+                    Tambah
+                  </Button>
                 </div>
 
                 {isExtracting ? (

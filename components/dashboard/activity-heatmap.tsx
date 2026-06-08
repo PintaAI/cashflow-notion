@@ -72,13 +72,6 @@ function getLocalTodayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function getMonthYearLabel(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("id-ID", {
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function chunkIntoWeeks(days: ActivityDay[]): ActivityDay[][] {
   const weeks: ActivityDay[][] = [];
   for (let i = 0; i < days.length; i += 7) {
@@ -105,17 +98,8 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
     storeView(v);
   }
 
-  const lastWeekDays = activity.days.slice(-7);
-  const calendarWeeks = chunkIntoWeeks(lastWeekDays).map((week) => {
-    const midDay = week[3] ?? week[0];
-    return {
-      days: week,
-      monthYear: midDay ? getMonthYearLabel(midDay.date) : "",
-    };
-  });
-  const calendarRows = calendarWeeks.map((week, i) => ({
-    ...week,
-    showHeader: i === 0 || week.monthYear !== calendarWeeks[i - 1].monthYear,
+  const calendarRows = chunkIntoWeeks(activity.days.slice(-7)).map((week) => ({
+    days: week,
   }));
 
   return (
@@ -218,11 +202,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
           </div>
           <div className="space-y-1">
             {calendarRows.map((week) => (
-              <div key={week.days[0]?.date ?? "unknown"}>
-                {week.showHeader && (
-                  <div className="py-1 text-[11px] font-semibold text-muted-foreground">{week.monthYear}</div>
-                )}
-                <div className="grid grid-cols-7 gap-1">
+              <div key={week.days[0]?.date ?? "unknown"} className="grid grid-cols-7 gap-1">
                   {week.days.map((day) => (
                     <div
                       key={day.date}
@@ -238,7 +218,6 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
                       {getDayNumber(day.date)}
                     </div>
                   ))}
-                </div>
               </div>
             ))}
           </div>
