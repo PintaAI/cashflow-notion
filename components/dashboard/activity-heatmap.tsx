@@ -232,7 +232,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
                     title={formatDayTitle(day)}
                     aria-label={formatDayTitle(day)}
                     className={cn(
-                      "flex items-center justify-center rounded-md text-[11px] font-medium size-7 transition-transform hover:scale-125",
+                      "flex items-center justify-center rounded-[3px] text-xs font-semibold w-11 h-8 transition-transform hover:scale-110",
                       isToday ? "ring-2 ring-primary" : "ring-1 ring-border/30",
                       day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
                       getCellClass(day.count)
