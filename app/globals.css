@@ -127,6 +127,9 @@
   --spacing: 0.25rem;
   --shadow-2xl: 0px 4px 10px 0px hsl(222 47% 11% / 0.25);
   --tracking-normal: -0.02em;
+  --tracking-body: var(--tracking-normal);
+  --font-size-root: 16px;
+  --font-body: var(--font-mono);
 }
 
 .dark {
@@ -190,11 +193,16 @@
   }
   body {
     @apply bg-background text-foreground;
-    letter-spacing: var(--tracking-normal);
   }
-  html {
-    @apply font-mono;
-  }
+}
+
+html {
+  font-family: var(--font-body);
+  font-size: var(--font-size-root);
+}
+
+body {
+  letter-spacing: var(--tracking-body);
 }
 
 @utility no-scrollbar {

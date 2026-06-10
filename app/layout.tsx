@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter, Roboto, Poppins, Lora, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -7,11 +7,23 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
 import { PullToRefreshWrapper } from "@/components/pwa";
-import { LocalThemeStyle } from "@/components/layout";
+import { LocalThemeStyle, FontStyle } from "@/components/layout";
 import { CSS_VARIABLE_NAMES } from "@/lib/theme-palettes";
 import { fetchExchangeRates, fetchUserCurrency } from "@/app/actions/preferences";
 
-const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
+const FONT_FAMILY_MAP: Record<string, string> = {
+  "jetbrains-mono": "var(--font-mono)",
+  "inter": "var(--font-inter)",
+  "roboto": "var(--font-roboto)",
+  "poppins": "var(--font-poppins)",
+  "lora": "var(--font-lora)",
+};
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const roboto = Roboto({ subsets: ["latin"], variable: "--font-roboto", weight: ["400", "500", "700"] });
+const poppins = Poppins({ subsets: ["latin"], variable: "--font-poppins", weight: ["400", "500", "600", "700"] });
+const lora = Lora({ subsets: ["latin"], variable: "--font-lora", weight: ["400", "500", "600", "700"] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 const localThemeScript = `(() => {
   try {
@@ -44,6 +56,37 @@ const localThemeScript = `(() => {
     const style = document.getElementById("user-theme") || document.createElement("style");
     style.id = "user-theme";
     style.textContent = ":root {\\n" + light + "\\n}\\n.dark {\\n" + dark + "\\n}";
+    if (!style.parentNode) document.head.appendChild(style);
+  } catch {}
+})();`;
+
+const fontPreferenceScript = `(() => {
+  try {
+    const rules = [];
+
+    const fontFamily = window.localStorage.getItem("cashflow.fontFamily");
+    if (fontFamily) {
+      const map = ${JSON.stringify(FONT_FAMILY_MAP)};
+      if (map[fontFamily]) {
+        rules.push("--font-body: " + map[fontFamily]);
+      }
+    }
+
+    const fontSize = window.localStorage.getItem("cashflow.fontSize");
+    if (fontSize && /^\\d+px$/.test(fontSize)) {
+      rules.push("--font-size-root: " + fontSize);
+    }
+
+    const fontSpacing = window.localStorage.getItem("cashflow.fontSpacing");
+    if (fontSpacing && /^-?\\d+\\.?\\d*em$/.test(fontSpacing)) {
+      rules.push("--tracking-body: " + fontSpacing);
+    }
+
+    if (rules.length === 0) return;
+
+    const style = document.getElementById("user-font") || document.createElement("style");
+    style.id = "user-font";
+    style.textContent = ":root { " + rules.join("; ") + " }";
     if (!style.parentNode) document.head.appendChild(style);
   } catch {}
 })();`;
@@ -97,7 +140,7 @@ export default async function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-mono", jetbrainsMono.variable)}
+      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, inter.variable, roboto.variable, poppins.variable, lora.variable, jetbrainsMono.variable)}
     >
       <head>
         <Script
@@ -105,9 +148,15 @@ export default async function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: localThemeScript }}
         />
+        <Script
+          id="cashflow-local-font"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: fontPreferenceScript }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocalThemeStyle />
+        <FontStyle />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

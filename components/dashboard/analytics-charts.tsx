@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeftIcon, ArrowRightIcon, Loading03Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeftIcon, ArrowRightIcon, Loading03Icon, Exchange02Icon } from "@hugeicons/core-free-icons";
 import {
   Bar,
   BarChart,
@@ -34,13 +34,23 @@ import {
 } from "@/components/ui/chart";
 import { AnalyticsFilter } from "@/components/dashboard";
 import { AnalyticsContentSkeleton } from "@/components/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useAnalytics, useCategories, useCategoryEntries } from "@/hooks/use-cashflow-data";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAnalytics, useCategories, useCategoryEntries, useCategoriesWithDetails, cashflowQueryKeys } from "@/hooks/use-cashflow-data";
 import type { AnalyticsData, CategoryAnalytics } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
+import { getCategoryConfig } from "@/lib/categories";
 import { useCurrency } from "@/components/providers/currency-provider";
+import { useManagement } from "@/components/providers/management-provider";
 import { cn } from "@/lib/utils";
 import { formatLocalizedDate } from "@/lib/date";
+import { editEntry } from "@/app/actions/cashflow";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Color palette for charts - using oklch values directly for better color support
 const COLORS = [
@@ -479,15 +489,36 @@ function CategoryDetailDrawer({
   onOpenChange: (open: boolean) => void;
 }) {
   const { format } = useCurrency();
+  const queryClient = useQueryClient();
+  const { managementId } = useManagement();
   const detailQuery = useAnalytics({ ...filters, category: category.category });
   const entriesQuery = useCategoryEntries(category.category, { from: filters.from, to: filters.to });
+  const categoriesQuery = useCategoriesWithDetails({ enabled: open });
   const detail = detailQuery.data;
   const total = detail?.summary.totalExpenses ?? category.total;
   const count = detail?.summary.entryCount ?? category.count;
   const average = count > 0 ? total / count : 0;
   const entries = entriesQuery.data ?? [];
+  const allCategories = categoriesQuery.data ?? [];
   const isLoading = detailQuery.isLoading || entriesQuery.isLoading;
   const isError = detailQuery.isError || entriesQuery.isError;
+  const [movingId, setMovingId] = React.useState<string | null>(null);
+
+  const handleMoveEntry = async (entryId: string, newCategory: string) => {
+    setMovingId(entryId);
+    try {
+      await editEntry(entryId, { category: newCategory as CategoryType, managementId });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoryEntries(managementId, category.category, filters.from, filters.to) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.categoryEntries(managementId, newCategory, filters.from, filters.to) });
+    } finally {
+      setMovingId(null);
+    }
+  };
+
+  const targetCategories = allCategories.filter((c) => c.name !== category.category);
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -496,7 +527,7 @@ function CategoryDetailDrawer({
           <DrawerTitle>{category.category}</DrawerTitle>
         </DrawerHeader>
 
-        <div className="max-h-[70vh] overflow-y-auto space-y-4 px-4 pb-4">
+        <div className="space-y-4 px-4 pb-4">
           {isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
               <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-5 animate-spin" />
@@ -542,8 +573,7 @@ function CategoryDetailDrawer({
                   <span className="text-xs text-muted-foreground">{entries.length} of {count}</span>
                 </div>
                 {entries.length > 0 ? (
-                  <ScrollArea className="h-[280px]">
-                    <div className="divide-y">
+                  <div className="divide-y">
                       {entries.map((entry) => (
                         <div key={entry.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
                           <div className="min-w-0 flex-1">
@@ -551,10 +581,44 @@ function CategoryDetailDrawer({
                             <p className="text-[10px] text-muted-foreground">{entry.date}</p>
                           </div>
                           <span className="shrink-0 text-xs font-semibold tabular-nums">{format(entry.nominal)}</span>
+                          {targetCategories.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  disabled={movingId === entry.id}
+                                >
+                                  {movingId === entry.id ? (
+                                    <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="size-3 animate-spin" />
+                                  ) : (
+                                    <HugeiconsIcon icon={Exchange02Icon} strokeWidth={2} className="size-3 text-muted-foreground" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[140px]">
+                                <DropdownMenuLabel className="text-[10px]">Move to</DropdownMenuLabel>
+                                <div className="max-h-[200px] overflow-y-auto">
+                                  {targetCategories.map((cat) => {
+                                    const config = getCategoryConfig(cat.name, cat.color as string | undefined, cat.icon);
+                                    return (
+                                      <DropdownMenuItem
+                                        key={cat.id}
+                                        onClick={() => handleMoveEntry(entry.id, cat.name)}
+                                      >
+                                        <HugeiconsIcon icon={config.icon} strokeWidth={2} className={cn("size-3.5 shrink-0", config.color)} />
+                                        <span>{cat.name}</span>
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       ))}
-                    </div>
-                  </ScrollArea>
+                  </div>
                 ) : (
                   <p className="py-6 text-center text-sm text-muted-foreground">No transactions found for this period</p>
                 )}

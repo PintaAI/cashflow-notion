@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import type { ActivityOverview, ActivityDay } from "@/lib/analytics";
+import type { ActivityOverview } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 interface ActivityHeatmapProps {
@@ -67,17 +67,13 @@ function getDayNumber(dateStr: string): number {
   return new Date(`${dateStr}T00:00:00`).getDate();
 }
 
+function getLocalDOW(dateStr: string): number {
+  return (new Date(`${dateStr}T00:00:00`).getDay() + 6) % 7;
+}
+
 function getLocalTodayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function chunkIntoWeeks(days: ActivityDay[]): ActivityDay[][] {
-  const weeks: ActivityDay[][] = [];
-  for (let i = 0; i < days.length; i += 7) {
-    weeks.push(days.slice(i, i + 7));
-  }
-  return weeks;
 }
 
 export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
@@ -98,9 +94,8 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
     storeView(v);
   }
 
-  const calendarRows = chunkIntoWeeks(activity.days.slice(-7)).map((week) => ({
-    days: week,
-  }));
+  const calendarDays = activity.days.slice(-7);
+  const calendarPadLeft = calendarDays.length > 0 ? getLocalDOW(calendarDays[0].date) : 0;
 
   return (
     <section className="mb-4 sm:mb-6">
@@ -200,24 +195,23 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
                 <div key={i} className={cn("text-center text-[10px] font-medium", i === todayDOW ? "text-foreground font-bold underline underline-offset-2" : i === 5 ? "text-muted-foreground/50" : i === 6 ? "text-red-400 dark:text-red-500" : "text-muted-foreground")}>{d}</div>
               ))}
           </div>
-          <div className="space-y-1">
-            {calendarRows.map((week) => (
-              <div key={week.days[0]?.date ?? "unknown"} className="grid grid-cols-7 gap-1">
-                  {week.days.map((day) => (
-                    <div
-                      key={day.date}
-                      title={formatDayTitle(day)}
-                      aria-label={formatDayTitle(day)}
-                      className={cn(
-                        "flex items-center justify-center rounded-[3px] text-[11px] font-medium h-7 transition-transform hover:scale-125",
-                        day.date === todayKey ? "ring-2 ring-primary" : "ring-1 ring-border/30",
-                        day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
-                        getCellClass(day.count)
-                      )}
-                    >
-                      {getDayNumber(day.date)}
-                    </div>
-                  ))}
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: calendarPadLeft }).map((_, i) => (
+              <div key={`pad-${i}`} />
+            ))}
+            {calendarDays.map((day) => (
+              <div
+                key={day.date}
+                title={formatDayTitle(day)}
+                aria-label={formatDayTitle(day)}
+                className={cn(
+                  "flex items-center justify-center rounded-[3px] text-[11px] font-medium h-7 transition-transform hover:scale-125",
+                  day.date === todayKey ? "ring-2 ring-primary" : "ring-1 ring-border/30",
+                  day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
+                  getCellClass(day.count)
+                )}
+              >
+                {getDayNumber(day.date)}
               </div>
             ))}
           </div>
