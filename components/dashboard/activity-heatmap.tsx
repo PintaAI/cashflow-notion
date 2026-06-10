@@ -67,13 +67,27 @@ function getDayNumber(dateStr: string): number {
   return new Date(`${dateStr}T00:00:00`).getDate();
 }
 
-function getLocalDOW(dateStr: string): number {
-  return (new Date(`${dateStr}T00:00:00`).getDay() + 6) % 7;
-}
-
 function getLocalTodayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getCurrentWeekDays(days: ActivityOverview["days"]): ActivityOverview["days"] {
+  const today = new Date();
+  const todayDow = (today.getDay() + 6) % 7;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - todayDow);
+
+  const dayMap = new Map(days.map((d) => [d.date, d]));
+
+  const week: ActivityOverview["days"] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    week.push(dayMap.get(key) || { date: key, count: 0 });
+  }
+  return week;
 }
 
 export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
@@ -94,8 +108,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
     storeView(v);
   }
 
-  const calendarDays = activity.days.slice(-7);
-  const calendarPadLeft = calendarDays.length > 0 ? getLocalDOW(calendarDays[0].date) : 0;
+  const calendarDays = getCurrentWeekDays(activity.days);
 
   return (
     <section className="mb-4 sm:mb-6">
@@ -196,9 +209,6 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
               ))}
           </div>
           <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: calendarPadLeft }).map((_, i) => (
-              <div key={`pad-${i}`} />
-            ))}
             {calendarDays.map((day) => (
               <div
                 key={day.date}
