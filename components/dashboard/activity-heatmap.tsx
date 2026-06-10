@@ -9,7 +9,6 @@ interface ActivityHeatmapProps {
 }
 
 const DAY_LABELS = ["Sen", "", "Rab", "", "Jum", "", ""];
-const DAY_HEADERS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
 function getLevel(count: number): number {
   if (count === 0) return 0;
@@ -72,34 +71,47 @@ function getLocalTodayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function getCurrentWeekDays(days: ActivityOverview["days"]): ActivityOverview["days"] {
+function getMonthRangeDays(days: ActivityOverview["days"]): ActivityOverview["days"] {
   const today = new Date();
-  const todayDow = (today.getDay() + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - todayDow);
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const endDate = new Date(today);
+  endDate.setDate(today.getDate() + 3);
 
   const dayMap = new Map(days.map((d) => [d.date, d]));
 
-  const week: ActivityOverview["days"] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    week.push(dayMap.get(key) || { date: key, count: 0 });
+  const range: ActivityOverview["days"] = [];
+  const cursor = new Date(firstOfMonth);
+  while (cursor <= endDate) {
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    range.push(dayMap.get(key) || { date: key, count: 0 });
+    cursor.setDate(cursor.getDate() + 1);
   }
-  return week;
+  return range;
 }
 
 export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
   const [view, setView] = useState<"grid" | "calendar">(getStoredView);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
   const todayKey = getLocalTodayKey();
-  const todayDOW = (new Date().getDay() + 6) % 7;
   const hasLoggedToday = Boolean(activity.days.at(-1)?.count);
 
   useEffect(() => {
-    if (scrollRef.current && view === "grid") {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    if (gridScrollRef.current && view === "grid") {
+      gridScrollRef.current.scrollLeft = gridScrollRef.current.scrollWidth;
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (calendarScrollRef.current && view === "calendar") {
+      requestAnimationFrame(() => {
+        const todayEl = calendarScrollRef.current?.querySelector('[data-today="true"]') as HTMLElement | null;
+        if (todayEl) {
+          const container = calendarScrollRef.current!;
+          const scrollTo = todayEl.offsetLeft - container.clientWidth / 2 + todayEl.clientWidth / 2;
+          container.scrollLeft = Math.max(0, scrollTo);
+        }
+      });
     }
   }, [view]);
 
@@ -108,7 +120,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
     storeView(v);
   }
 
-  const calendarDays = getCurrentWeekDays(activity.days);
+  const calendarDays = getMonthRangeDays(activity.days);
 
   return (
     <section className="mb-4 sm:mb-6">
@@ -181,7 +193,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
       </div>
 
       {view === "grid" ? (
-        <div ref={scrollRef} className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div ref={gridScrollRef} className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           <div className="flex shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
             {DAY_LABELS.map((label, i) => (
               <span key={i} className="h-3 leading-none sm:h-3.5">{label}</span>
@@ -202,30 +214,36 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
           </div>
         </div>
       ) : (
-        <div className="mt-3">
-          <div className="mb-1 grid grid-cols-7 gap-1">
-              {DAY_HEADERS.map((d, i) => (
-                <div key={i} className={cn("text-center text-[10px] font-medium", i === todayDOW ? "text-foreground font-bold underline underline-offset-2" : i === 5 ? "text-muted-foreground/50" : i === 6 ? "text-red-400 dark:text-red-500" : "text-muted-foreground")}>{d}</div>
-              ))}
+        <div ref={calendarScrollRef} className="mt-3 flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+            {calendarDays.map((day) => {
+              const d = new Date(`${day.date}T00:00:00`);
+              const dowShort = d.toLocaleDateString("id-ID", { weekday: "short" });
+              const isToday = day.date === todayKey;
+              const isPast = day.date < todayKey;
+              return (
+                <div key={day.date} data-today={isToday ? "true" : undefined} className="flex shrink-0 flex-col items-center gap-0.5">
+                  <span className={cn(
+                    "text-[9px] font-medium",
+                    isToday ? "text-foreground" : isPast ? "text-muted-foreground" : "text-muted-foreground/50",
+                  )}>
+                    {dowShort}
+                  </span>
+                  <div
+                    title={formatDayTitle(day)}
+                    aria-label={formatDayTitle(day)}
+                    className={cn(
+                      "flex items-center justify-center rounded-md text-[11px] font-medium size-7 transition-transform hover:scale-125",
+                      isToday ? "ring-2 ring-primary" : "ring-1 ring-border/30",
+                      day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
+                      getCellClass(day.count)
+                    )}
+                  >
+                    {getDayNumber(day.date)}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="grid grid-cols-7 gap-1">
-            {calendarDays.map((day) => (
-              <div
-                key={day.date}
-                title={formatDayTitle(day)}
-                aria-label={formatDayTitle(day)}
-                className={cn(
-                  "flex items-center justify-center rounded-[3px] text-[11px] font-medium h-7 transition-transform hover:scale-125",
-                  day.date === todayKey ? "ring-2 ring-primary" : "ring-1 ring-border/30",
-                  day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
-                  getCellClass(day.count)
-                )}
-              >
-                {getDayNumber(day.date)}
-              </div>
-            ))}
-          </div>
-        </div>
       )}
 
       <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
