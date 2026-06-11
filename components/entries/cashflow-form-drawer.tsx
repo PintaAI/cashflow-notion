@@ -415,95 +415,89 @@ export function CashflowFormDrawer({
           {/* Category Select */}
           {(
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground flex items-center justify-between">
-                <span>Category</span>
-                {!isAddingCategory && (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingCategory(true)}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    + New
-                  </button>
-                )}
+              <label className="text-sm font-medium text-foreground">
+                Kategori
               </label>
-
-              {isAddingCategory ? (
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex gap-2">
-                    <Input
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      placeholder="Category name"
-                      className="h-10 text-sm"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddCategory()
-                        if (e.key === "Escape") {
-                          setIsAddingCategory(false)
-                          setNewCatName("")
-                          setNewCatError(null)
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleAddCategory}
-                      disabled={createCategory.isPending || !newCatName.trim()}
-                      className="h-10 shrink-0"
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  {newCatError && (
-                    <p className="text-xs text-destructive">{newCatError}</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddingCategory(false)
-                      setNewCatName("")
-                      setNewCatError(null)
-                    }}
-                    className="text-xs text-muted-foreground hover:underline self-start"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="h-12 text-base w-full">
-                    <SelectValue placeholder="Select category">
-                      {category && (() => {
-                        const catData = expenseCategories.find((c) => c.name === category)
-                        const config = catData ? getCategoryConfig(catData.name, catData.color as any, catData.icon) : getCategoryConfig(category)
-                        return (
-                          <span className="inline-flex items-center gap-1.5">
-                            <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
-                            {category}
+              <Select value={category} onValueChange={setCategory} open={isAddingCategory ? true : undefined}>
+                <SelectTrigger className="h-12 text-base w-full">
+                  <SelectValue placeholder="Pilih kategori">
+                    {category && (() => {
+                      const catData = expenseCategories.find((c) => c.name === category)
+                      const config = catData ? getCategoryConfig(catData.name, catData.color as any, catData.icon) : getCategoryConfig(category)
+                      return (
+                        <span className="inline-flex items-center gap-1.5">
+                          <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
+                          {category}
+                        </span>
+                      )
+                    })()}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  <ScrollArea className="h-[200px]">
+                    {expenseCategories.map((cat) => {
+                      const config = getCategoryConfig(cat.name, cat.color as any, cat.icon);
+                      return (
+                        <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
+                          <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
+                            <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
+                            {cat.name}
                           </span>
-                        )
-                      })()}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent position="popper" align="start">
-                    <ScrollArea className="h-[200px]">
-                      {expenseCategories.map((cat) => {
-                        const config = getCategoryConfig(cat.name, cat.color as any, cat.icon);
-                        return (
-                          <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
-                            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
-                              <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
-                              {cat.name}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </ScrollArea>
-                  </SelectContent>
-                </Select>
-              )}
+                        </SelectItem>
+                      );
+                    })}
+                  </ScrollArea>
+                  <div className="border-t px-2 py-1.5">
+                    {isAddingCategory ? (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex gap-2">
+                          <Input
+                            value={newCatName}
+                            onChange={(e) => setNewCatName(e.target.value)}
+                            placeholder="Nama kategori"
+                            className="h-9 text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleAddCategory()
+                              if (e.key === "Escape") {
+                                setIsAddingCategory(false)
+                                setNewCatName("")
+                                setNewCatError(null)
+                              }
+                              e.stopPropagation()
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleAddCategory() }}
+                            disabled={createCategory.isPending || !newCatName.trim()}
+                            className="h-9 shrink-0"
+                          >
+                            Tambah
+                          </Button>
+                        </div>
+                        {newCatError && (
+                          <p className="text-xs text-destructive">{newCatError}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIsAddingCategory(true)
+                          setNewCatError(null)
+                        }}
+                        className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        + Tambah kategori
+                      </button>
+                    )}
+                  </div>
+                </SelectContent>
+              </Select>
             </div>
           )}
 
