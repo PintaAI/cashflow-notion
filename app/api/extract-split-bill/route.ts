@@ -2,6 +2,8 @@ import { google } from '@ai-sdk/google';
 import { generateText, NoObjectGeneratedError, Output } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { auth } from '@/lib/auth';
+import { validateImageUpload } from '@/app/api/extract-image-validation';
 
 const splitBillSchema = z.object({
   place: z
@@ -28,18 +30,23 @@ const splitBillSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const image = formData.get('image') as File | null;
     const currency = String(formData.get('currency') || 'IDR');
 
-    if (!image) {
-      return NextResponse.json(
-        { success: false, error: 'No image provided' },
-        { status: 400 }
-      );
-    }
+    const uploadError = validateImageUpload(image);
+    if (uploadError) return uploadError;
+    const imageFile = image as File;
 
-    const imageBuffer = await image.arrayBuffer();
+    const imageBuffer = await imageFile.arrayBuffer();
     const base64Image = Buffer.from(imageBuffer).toString('base64');
 
     const result = await generateText({
@@ -70,7 +77,7 @@ Ignore tax, service charge, discounts, payment method, cashier info, order numbe
             },
             {
               type: 'image',
-              image: `data:${image.type || 'image/jpeg'};base64,${base64Image}`,
+              image: `data:${imageFile.type};base64,${base64Image}`,
             },
           ],
         },

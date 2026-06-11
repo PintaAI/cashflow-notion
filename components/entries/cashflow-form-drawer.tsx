@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useState, useRef, useEffect } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import confetti from "canvas-confetti"
@@ -39,6 +40,7 @@ import {
   Camera01Icon,
   Loading03Icon,
   Image01Icon,
+  WinkIcon,
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 import { CameraCapture } from "@/components/utils"
@@ -105,6 +107,7 @@ export function CashflowFormDrawer({
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCatName, setNewCatName] = useState("")
   const [newCatError, setNewCatError] = useState<string | null>(null)
+  const [categorySelectOpen, setCategorySelectOpen] = useState(false)
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
 
@@ -202,6 +205,7 @@ export function CashflowFormDrawer({
     setIsSubmitting(true)
     try {
       const nominalIdr = Math.round(toIdr(Number(nominal)))
+      const formattedDate = date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined
 
       if (isEdit && entry) {
         const payload: {
@@ -216,7 +220,7 @@ export function CashflowFormDrawer({
           name: name.trim(),
           nominal: nominalIdr,
           category: category || undefined,
-          date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
+          date: formattedDate,
           io,
           managementId,
         }
@@ -228,7 +232,7 @@ export function CashflowFormDrawer({
           name: name.trim(),
           nominal: nominalIdr,
           category: category || undefined,
-          date: date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined,
+          date: formattedDate,
           io,
         })
       }
@@ -236,7 +240,7 @@ export function CashflowFormDrawer({
       celebrateSave()
       setName("")
       setNominal("")
-    setCategory("")
+      setCategory("")
       setDate(new Date())
       setIo("Expenses")
       setOpen(false)
@@ -252,6 +256,12 @@ export function CashflowFormDrawer({
     }
   }
 
+  const resetAddCategory = () => {
+    setIsAddingCategory(false)
+    setNewCatName("")
+    setNewCatError(null)
+  }
+
   const handleAddCategory = async () => {
     const trimmed = newCatName.trim()
     if (!trimmed) return
@@ -259,8 +269,8 @@ export function CashflowFormDrawer({
     try {
       await createCategory.mutateAsync({ name: trimmed })
       setCategory(trimmed)
-      setNewCatName("")
-      setIsAddingCategory(false)
+      resetAddCategory()
+      setCategorySelectOpen(false)
     } catch (err) {
       setNewCatError(err instanceof Error ? err.message : "Gagal membuat kategori")
     }
@@ -418,12 +428,24 @@ export function CashflowFormDrawer({
               <label className="text-sm font-medium text-foreground">
                 Kategori
               </label>
-              <Select value={category} onValueChange={setCategory} open={isAddingCategory ? true : undefined}>
+              <Select
+                value={category}
+                onValueChange={(value) => {
+                  setCategory(value)
+                  resetAddCategory()
+                  setCategorySelectOpen(false)
+                }}
+                open={categorySelectOpen}
+                onOpenChange={(nextOpen) => {
+                  setCategorySelectOpen(nextOpen)
+                  if (!nextOpen) resetAddCategory()
+                }}
+              >
                 <SelectTrigger className="h-12 text-base w-full">
                   <SelectValue placeholder="Pilih kategori">
                     {category && (() => {
                       const catData = expenseCategories.find((c) => c.name === category)
-                      const config = catData ? getCategoryConfig(catData.name, catData.color as any, catData.icon) : getCategoryConfig(category)
+                      const config = catData ? getCategoryConfig(catData.name, catData.color, catData.icon) : getCategoryConfig(category)
                       return (
                         <span className="inline-flex items-center gap-1.5">
                           <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
@@ -436,7 +458,7 @@ export function CashflowFormDrawer({
                 <SelectContent position="popper" align="start">
                   <ScrollArea className="h-[200px]">
                     {expenseCategories.map((cat) => {
-                      const config = getCategoryConfig(cat.name, cat.color as any, cat.icon);
+                      const config = getCategoryConfig(cat.name, cat.color, cat.icon);
                       return (
                         <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
                           <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
@@ -444,8 +466,22 @@ export function CashflowFormDrawer({
                             {cat.name}
                           </span>
                         </SelectItem>
-                      );
-                    })}
+                        );
+                      })}
+                      <div className="flex gap-1.5 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+                        <HugeiconsIcon icon={WinkIcon} strokeWidth={2} className="mt-0.5 size-3 shrink-0" />
+                        <p>
+                          Kalau mau hapus dan edit kategori, buka{" "}
+                          <Link
+                            href={`/dompet/${managementId}?tab=setting`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="underline underline-offset-2 hover:text-foreground"
+                          >
+                            settings
+                          </Link>
+                          .
+                        </p>
+                      </div>
                   </ScrollArea>
                   <div className="border-t px-2 py-1.5">
                     {isAddingCategory ? (
@@ -460,9 +496,8 @@ export function CashflowFormDrawer({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") handleAddCategory()
                               if (e.key === "Escape") {
-                                setIsAddingCategory(false)
-                                setNewCatName("")
-                                setNewCatError(null)
+                                resetAddCategory()
+                                setCategorySelectOpen(false)
                               }
                               e.stopPropagation()
                             }}
@@ -488,6 +523,7 @@ export function CashflowFormDrawer({
                         onClick={(e) => {
                           e.stopPropagation()
                           setIsAddingCategory(true)
+                          setCategorySelectOpen(true)
                           setNewCatError(null)
                         }}
                         className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

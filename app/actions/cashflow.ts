@@ -13,9 +13,10 @@ import {
   getCalendarEntries,
 } from "@/lib/db";
 import type { CashflowEntry, CashflowSummary, IOType, CategoryType, CalendarDayData } from "@/lib/db";
-import { resolveManagementId, getSession } from "@/lib/management";
+import { assertManagementAccess, resolveManagementId, getSession } from "@/lib/management";
 import { checkBudgetAlerts } from "@/lib/budget-alerts";
 import { prisma } from "@/lib/db";
+import { entryCreatorSelect, toEntry as mapDbEntry } from "@/lib/db/entries";
 
 export async function fetchAllEntries(managementId?: string): Promise<CashflowEntry[]> {
   managementId = await resolveManagementId(managementId);
@@ -186,7 +187,94 @@ export async function removeEntry(pageId: string, managementId?: string): Promis
     select: { id: true },
   });
   if (!entry) throw new Error("Entry not found");
-  return deleteEntry(pageId);
+  return deleteEntry(pageId, managementId);
+}
+
+async function ensureTransferCategory(managementId: string, name: "Transfer In" | "Transfer Out", io: IOType) {
+  const existing = await prisma.category.findFirst({
+    where: { managementId, name },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const category = await prisma.category.create({
+    data: {
+      managementId,
+      name,
+      color: io === "Income" ? "green" : "gray",
+      icon: io === "Income" ? "MoneyReceiveIcon" : "MoneySendIcon",
+    },
+    select: { id: true },
+  });
+  return category.id;
+}
+
+function todayDateKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+export async function transferBetweenManagements(data: {
+  fromManagementId?: string;
+  toManagementId: string;
+  nominal: number;
+  date?: string;
+  note?: string;
+}): Promise<{ fromEntry: CashflowEntry; toEntry: CashflowEntry }> {
+  const fromManagementId = await resolveManagementId(data.fromManagementId);
+  const { session } = await assertManagementAccess(data.toManagementId);
+
+  if (fromManagementId === data.toManagementId) {
+    throw new Error("Destination wallet must be different");
+  }
+  if (data.nominal <= 0) {
+    throw new Error("Amount must be greater than 0");
+  }
+
+  const [fromManagement, toManagement] = await Promise.all([
+    prisma.management.findUnique({ where: { id: fromManagementId }, select: { name: true } }),
+    prisma.management.findUnique({ where: { id: data.toManagementId }, select: { name: true } }),
+  ]);
+  if (!fromManagement || !toManagement) throw new Error("Wallet not found");
+
+  const date = data.date ?? todayDateKey();
+  const note = data.note?.trim();
+  const fromName = note || `Transfer to ${toManagement.name}`;
+  const toName = note || `Transfer from ${fromManagement.name}`;
+
+  const [fromCategoryId, toCategoryId] = await Promise.all([
+    ensureTransferCategory(fromManagementId, "Transfer Out", "Expenses"),
+    ensureTransferCategory(data.toManagementId, "Transfer In", "Income"),
+  ]);
+
+  const [fromEntry, destinationEntry] = await prisma.$transaction([
+    prisma.entry.create({
+      data: {
+        managementId: fromManagementId,
+        name: fromName,
+        nominal: data.nominal,
+        categoryId: fromCategoryId,
+        date,
+        io: "Expenses",
+        createdById: session.user.id,
+      },
+      include: { category: true, createdBy: { select: entryCreatorSelect } },
+    }),
+    prisma.entry.create({
+      data: {
+        managementId: data.toManagementId,
+        name: toName,
+        nominal: data.nominal,
+        categoryId: toCategoryId,
+        date,
+        io: "Income",
+        createdById: session.user.id,
+      },
+      include: { category: true, createdBy: { select: entryCreatorSelect } },
+    }),
+  ]);
+
+  return { fromEntry: mapDbEntry(fromEntry), toEntry: mapDbEntry(destinationEntry) };
 }
 
 export async function fetchCalendarEntries(

@@ -1,94 +1,47 @@
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This repo uses Next.js 16. APIs, routing conventions, and generated types may differ from older Next.js versions. Read the relevant guide in `node_modules/next/dist/docs/` before changing framework-sensitive code.
 <!-- END:nextjs-agent-rules -->
 
 # Cashflow Tracker
 
-Personal/household finance tracking PWA with multi-wallet support, budget alerts, push notifications, MCP server, OAuth 2.1, and AI receipt extraction.
-
-## Tech Stack
-
-| Concern       | Technology                                    |
-|---------------|-----------------------------------------------|
-| Runtime       | **Bun** — use `bun` for all commands          |
-| Framework     | Next.js 16 (App Router), React 19 + Compiler  |
-| Database      | PostgreSQL via Prisma ORM                     |
-| Auth          | better-auth (email/password + Google OAuth)   |
-| UI            | shadcn/ui (Radix) + Tailwind CSS v4           |
-| Data Fetching | TanStack Query (React Query)                  |
-| Charts        | Recharts                                      |
-| PWA           | next-pwa (builds require `--webpack`)         |
-| Push          | Web Push API via `web-push`                   |
-| AI            | Google Gemini (receipt extraction)            |
-
-## Directory Map
-
-| Path               | What's There                                                  |
-|--------------------|---------------------------------------------------------------|
-| `app/`             | App Router — pages, layouts, API routes, server actions       |
-| `app/actions/`     | Server actions (cashflow CRUD, analytics, budgets, auth, etc) |
-| `app/api/`         | API routes (auth, MCP, OAuth, notifications, receipt extract) |
-| `components/`      | React components (feature components + `ui/` shadcn primitives + `providers/`) |
-| `lib/`             | Core logic — Prisma queries (`db.ts`), auth config (`auth.ts`), notifications, MCP, OAuth, currency |
-| `lib/mcp/tools/`   | MCP tool implementations (entries, categories, analytics, quick-fills) |
-| `lib/oauth/`       | OAuth 2.1 server logic (`server.ts`)                          |
-| `hooks/`           | React hooks (TanStack Query data hooks, mobile, pull-to-refresh) |
-| `prisma/`          | `schema.prisma` — 14 models (User, Entry, Category, Management, etc) |
-| `worker/`          | Service worker for Web Push (`index.js`)                      |
-| `scripts/`         | Utility scripts (PWA icon generation, OAuth client seeding)   |
-| `types/`           | TypeScript type declarations                                  |
-| `public/`          | Static assets (PWA icons, favicon, manifest, service worker)  |
-| `proxy.ts`         | Middleware — auth guard (redirects unauthenticated to `/auth`)|
-
-## Database (Prisma)
-
-`prisma/schema.prisma` — PostgreSQL, 14 models. Key models:
-
-- **User** — profile, MCP API key, currency pref, active wallet
-- **Management** — a wallet/household (groups users)
-- **Entry** — transaction (name, nominal, date, IO Type: Income/Expenses, category)
-- **Category** — per-management categories with budget fields
-- **RecurringEntry** — auto-generating templates
-- **OverallBudget** — wallet-level budget caps per period
-- **OAuthClient / OAuthToken / OAuthAuthorizationCode / OAuthConsent** — OAuth 2.1
-
-UUID-based IDs, cascade deletes on management. Run `bunx prisma generate` after schema changes.
-
-## Key Routes
-
-| Route                                    | Purpose                             |
-|------------------------------------------|-------------------------------------|
-| `/`                                      | Main dashboard (Home, List, Calendar, Settings tabs) |
-| `/auth`                                  | Login/signup                        |
-| `/admin`                                 | Admin dashboard                     |
-| `/invite?code=...`                       | Accept wallet invitation            |
-| `/oauth/authorize`                       | OAuth consent screen                |
-| `/.well-known/oauth-authorization-server`| OAuth discovery                     |
-| `/api/auth/[...all]`                     | better-auth endpoints               |
-| `/api/mcp`                               | MCP server (GET/POST/DELETE)        |
-| `/api/notifications/daily`               | Cron-triggered daily push (8 PM Jakarta) |
-| `/api/extract-receipt`                   | AI receipt extraction (Gemini)      |
-| `/api/oauth/register`                    | Dynamic OAuth client registration   |
-
 ## Commands
 
 ```bash
-bun dev                  # Dev server (Turbopack)
-bun run build            # Production build (--webpack for PWA)
-bun run lint             # ESLint
-bunx prisma generate     # Regenerate Prisma client
-bunx prisma db push      # Push schema to DB
-bun run generate-icons   # Generate PWA icons from cashflow.png
+bun dev                    # Next dev server; PWA is disabled in development
+bun run build              # next build --webpack; required because next-pwa needs webpack
+bun run lint               # only configured verifier; there is no test script in package.json
+bunx prisma generate       # run after Prisma schema changes; also runs on postinstall
+bunx prisma db push        # push schema to DATABASE_URL/DIRECT_URL database
+bun run generate-icons       # regenerate PWA icons from cashflow.png
+bun run scripts/seed-oauth.ts # seed the default public OAuth client
 ```
 
-## Deployment
+Use Bun for package/script commands; `bun.lock` is the lockfile. Do not invent `npm test`/`pnpm test` commands.
 
-- **Platform:** Vercel (`prj_hlxQdzS32S2PqfresgQVt8W13Wu2`)
-- **Trigger:** Pushing to `origin/master` auto-deploys
-- **Vercel CLI:** Logged in and available (`vercel` commands work)
-- **Cron:** `CRON_SECRET`-authorized call to `/api/notifications/daily` at 8 PM Jakarta
+## Architecture Notes
+
+- Main app routes live under `app/(app)`. `/` redirects to the user's active wallet at `/dompet/[managementId]`; `/m/[managementId]` exists as a short alias/redirect path.
+- `proxy.ts` is the auth gate for non-API pages and skips `/api`, `/_next`, `/.well-known`, `/oauth`, PWA assets, and static files.
+- Server actions are in `app/actions`; shared Prisma data access is re-exported from `lib/db.ts` and implemented in `lib/db/*`.
+- Data is wallet-scoped through `Management`/`ManagementMember`; most user-visible records carry `managementId`. Preserve this scoping in CRUD, analytics, MCP tools, and notification changes.
+- New users are created through `better-auth`; `lib/auth.ts` creates their first `Management`, default categories, MCP API key, and `activeManagementId` in the user create hook.
+- MCP is served by `app/api/mcp/route.ts` with `mcp-handler`. It accepts OAuth access tokens, `mcpApiKey` bearer tokens, or `api_key` query tokens and scopes tools via `AsyncLocalStorage` management context.
+- OAuth 2.1 server logic is in `lib/oauth/server.ts`; discovery routes are under `app/.well-known` and default `BETTER_AUTH_URL` to `http://localhost:3000`.
+
+## Database And Env
+
+- Prisma uses PostgreSQL with both `DATABASE_URL` and `DIRECT_URL` in `prisma/schema.prisma`.
+- Push subscriptions are stored in Upstash/Vercel KV first (`KV_REST_API_*` or `UPSTASH_REDIS_REST_*`), then Vercel Blob (`NOTIF_STORE_ID`/`NOTIF_READ_WRITE_TOKEN`), then local `data/push-subscriptions.json`.
+- Daily notifications require `CRON_SECRET`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`; timezone defaults to `Asia/Jakarta` via `NOTIFICATION_TIMEZONE`.
+- Google auth requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Admin access is controlled by comma-separated `ADMIN_EMAILS`.
+
+## UI And Framework Quirks
+
+- React Compiler is enabled in `next.config.ts`; avoid unnecessary `useMemo`/`useCallback` unless the local code already needs them.
+- Tailwind CSS v4 is wired through `@tailwindcss/postcss`; shadcn/Radix primitives live in `components/ui`.
+- `next-pwa` writes service worker assets to `public` and is disabled when `NODE_ENV=development`.
 
 ## Commit Convention
 
@@ -96,11 +49,4 @@ When the user says "commit", do ALL of these:
 
 1. Stage all changes (`git add -A`)
 2. Commit with a concise, descriptive message in English
-3. Push to `origin/master` — this triggers Vercel deploy
-
-## Environment
-
-- `.env.local` — Local development variables
-- `.env` — Base / fallback environment variables
-- `.env.prod` — Production-only variables (used in Vercel)
-- `.env.local.bak` — Backup
+3. Push to `origin/master`

@@ -7,10 +7,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   Analytics01Icon,
-  CurrencyIcon,
   File01Icon,
   Home02Icon,
-  ReceiptDollarIcon,
   Shield01Icon,
   ToolsIcon,
   UserCircleIcon,
@@ -20,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CashflowFormDrawer } from "@/components/entries";
 import { checkAdminStatus } from "@/app/actions/admin";
+import { cashflowTools } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 
 export type AppTab = "home" | "catatan" | "summary" | "setting";
@@ -30,11 +29,6 @@ export const navItems = [
   { value: "summary" as const, label: "Summary", icon: Analytics01Icon },
   { value: "setting" as const, label: "Setting", icon: UserCircleIcon },
 ];
-
-const toolItems = [
-  { value: "converter", label: "Convert Duit", icon: CurrencyIcon },
-  { value: "split-bills", label: "Split Bills", icon: ReceiptDollarIcon },
-] as const;
 
 interface SidebarContentProps {
   onNavigate?: () => void;
@@ -139,13 +133,13 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
           Tools
         </Link>
 
-        {toolItems.map((tool) => {
-          const isActiveTool = isOnTools && activeTool === tool.value;
+        {cashflowTools.map((tool) => {
+          const isActiveTool = isOnTools && activeTool === tool.id;
 
           return (
             <Link
-              key={tool.value}
-              href={`${toolsPath}?tool=${tool.value}`}
+              key={tool.id}
+              href={`${toolsPath}?tool=${tool.id}`}
               onClick={onNavigate}
               className={cn(
                 "ml-4 flex h-9 w-[calc(100%-1rem)] items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",

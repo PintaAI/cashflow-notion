@@ -51,7 +51,7 @@ export function registerQuickFillTools(server: McpServer) {
     },
     async ({ id }) => {
       try {
-        await deleteQuickFill(id);
+        await deleteQuickFill(id, getManagementId());
         return ok("Deleted quick-fill preset.", { id });
       } catch (error) {
         return toolError(error);

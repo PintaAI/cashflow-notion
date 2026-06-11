@@ -96,6 +96,8 @@ export async function updateCategoryOption(
   data: { name?: string; color?: string; icon?: string | null; budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null },
   managementId?: string,
 ): Promise<CategoryOptionWithColor[]> {
+  if (!managementId) throw new Error("managementId required");
+
   const updateData: Record<string, string | number | null> = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.color !== undefined) updateData.color = data.color;
@@ -106,7 +108,10 @@ export async function updateCategoryOption(
   if (data.budgetYearly !== undefined) updateData.budgetYearly = data.budgetYearly;
 
   try {
-    await prisma.category.update({ where: { id: categoryId }, data: updateData });
+    const result = await prisma.category.updateMany({ where: { id: categoryId, managementId }, data: updateData });
+    if (result.count === 0) {
+      throw new Error(`Category with ID "${categoryId}" not found`);
+    }
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new Error(`Category name "${data.name}" already exists`);
@@ -117,13 +122,17 @@ export async function updateCategoryOption(
     throw error;
   }
 
-  if (managementId) return getCategoryOptions(managementId);
-  throw new Error("managementId required");
+  return getCategoryOptions(managementId);
 }
 
 export async function removeCategoryOption(categoryId: string, managementId?: string): Promise<CategoryOptionWithColor[]> {
+  if (!managementId) throw new Error("managementId required");
+
   try {
-    await prisma.category.delete({ where: { id: categoryId } });
+    const result = await prisma.category.deleteMany({ where: { id: categoryId, managementId } });
+    if (result.count === 0) {
+      throw new Error(`Category with ID "${categoryId}" not found`);
+    }
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       throw new Error(`Category with ID "${categoryId}" not found`);
@@ -131,8 +140,7 @@ export async function removeCategoryOption(categoryId: string, managementId?: st
     throw error;
   }
 
-  if (managementId) return getCategoryOptions(managementId);
-  throw new Error("managementId required");
+  return getCategoryOptions(managementId);
 }
 
 export async function getCategoryUsageCount(categoryName: string, managementId: string): Promise<number> {

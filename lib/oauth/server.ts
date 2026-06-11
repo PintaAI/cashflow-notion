@@ -207,6 +207,15 @@ export function validateAuthorizationRequest(
     return "Unsupported code challenge method. Only S256 is supported.";
   }
 
+  if (client.isPublic) {
+    if (!params.codeChallenge) {
+      return "PKCE code challenge is required for public clients.";
+    }
+    if (params.codeChallengeMethod !== "S256") {
+      return "PKCE code challenge method must be S256.";
+    }
+  }
+
   return null;
 }
 
@@ -301,11 +310,23 @@ export async function exchangeAuthorizationCode(
     throw new Error("Authorization code has expired");
   }
 
-  if (redirectUri && authCode.redirectUri !== redirectUri) {
+  if (!redirectUri) {
+    throw new Error("Redirect URI is required");
+  }
+
+  if (authCode.redirectUri !== redirectUri) {
     throw new Error("Mismatched redirect URI");
   }
 
+  const client = await getClient(clientId);
+  if (client?.isPublic && !authCode.codeChallenge) {
+    throw new Error("PKCE code challenge is required for public clients");
+  }
+
   if (authCode.codeChallenge) {
+    if (authCode.codeChallengeMethod !== "S256") {
+      throw new Error("Unsupported PKCE code challenge method");
+    }
     if (!codeVerifier) {
       throw new Error("PKCE code verifier is required");
     }

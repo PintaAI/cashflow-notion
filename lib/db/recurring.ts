@@ -2,6 +2,15 @@ import { prisma } from "@/lib/db/client";
 import { formatDate } from "@/lib/db/dates";
 import type { IOType, RecurringEntryData, RecurringFrequency } from "@/lib/db/types";
 
+async function assertCategoryBelongsToManagement(categoryId: string | null | undefined, managementId: string) {
+  if (!categoryId) return;
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, managementId },
+    select: { id: true },
+  });
+  if (!category) throw new Error("Category not found");
+}
+
 export async function getRecurringEntries(managementId: string): Promise<RecurringEntryData[]> {
   const entries = await prisma.recurringEntry.findMany({
     where: { managementId },
@@ -39,6 +48,8 @@ export async function createRecurringEntry(data: {
   startDate: string;
   endDate?: string | null;
 }): Promise<RecurringEntryData> {
+  await assertCategoryBelongsToManagement(data.categoryId, data.managementId);
+
   const entry = await prisma.recurringEntry.create({
     data: {
       managementId: data.managementId,
@@ -88,25 +99,38 @@ export async function updateRecurringEntry(
     endDate: string | null;
     active: boolean;
   }>,
-  _managementId: string,
+  managementId: string,
 ): Promise<RecurringEntryData> {
-  const entry = await prisma.recurringEntry.update({
-    where: { id },
-    data: {
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.nominal !== undefined && { nominal: data.nominal }),
-      ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
-      ...(data.io !== undefined && { io: data.io }),
-      ...(data.frequency !== undefined && { frequency: data.frequency }),
-      ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
-      ...(data.dayOfMonth !== undefined && { dayOfMonth: data.dayOfMonth }),
-      ...(data.monthOfYear !== undefined && { monthOfYear: data.monthOfYear }),
-      ...(data.startDate !== undefined && { startDate: data.startDate }),
-      ...(data.endDate !== undefined && { endDate: data.endDate }),
-      ...(data.active !== undefined && { active: data.active }),
-    },
+  await assertCategoryBelongsToManagement(data.categoryId, managementId);
+
+  const updateData = {
+    ...(data.name !== undefined && { name: data.name }),
+    ...(data.nominal !== undefined && { nominal: data.nominal }),
+    ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+    ...(data.io !== undefined && { io: data.io }),
+    ...(data.frequency !== undefined && { frequency: data.frequency }),
+    ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
+    ...(data.dayOfMonth !== undefined && { dayOfMonth: data.dayOfMonth }),
+    ...(data.monthOfYear !== undefined && { monthOfYear: data.monthOfYear }),
+    ...(data.startDate !== undefined && { startDate: data.startDate }),
+    ...(data.endDate !== undefined && { endDate: data.endDate }),
+    ...(data.active !== undefined && { active: data.active }),
+  };
+
+  const result = await prisma.recurringEntry.updateMany({
+    where: { id, managementId },
+    data: updateData,
+  });
+
+  if (result.count === 0) throw new Error("Recurring entry not found");
+
+  const entry = await prisma.recurringEntry.findFirst({
+    where: { id, managementId },
     include: { category: true },
   });
+
+  if (!entry) throw new Error("Recurring entry not found");
+
   return {
     id: entry.id,
     name: entry.name,

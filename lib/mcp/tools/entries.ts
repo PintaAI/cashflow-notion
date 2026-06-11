@@ -151,7 +151,7 @@ export function registerEntryTools(server: McpServer) {
     },
     async ({ id }) => {
       try {
-        await deleteEntry(id);
+        await deleteEntry(id, getManagementId());
         return ok("Deleted cashflow entry.", { id });
       } catch (error) {
         return toolError(error);

@@ -3,6 +3,8 @@ import { generateText, Output, NoObjectGeneratedError } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { fetchCategories } from '@/app/actions/categories';
+import { auth } from '@/lib/auth';
+import { validateImageUpload } from '@/app/api/extract-image-validation';
 
 const receiptSchema = z.object({
   name: z
@@ -30,20 +32,25 @@ const receiptSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const image = formData.get('image') as File | null;
 
-    if (!image) {
-      return NextResponse.json(
-        { success: false, error: 'No image provided' },
-        { status: 400 }
-      );
-    }
+    const uploadError = validateImageUpload(image);
+    if (uploadError) return uploadError;
+    const imageFile = image as File;
 
     const categories = await fetchCategories();
     const categoryDescription = `Available categories: ${categories.join(', ')}. Use "Lainnya" if the expense does not fit any category.`;
 
-    const imageBuffer = await image.arrayBuffer();
+    const imageBuffer = await imageFile.arrayBuffer();
     const base64Image = Buffer.from(imageBuffer).toString('base64');
 
     const result = await generateText({
@@ -64,7 +71,7 @@ export async function POST(request: NextRequest) {
             },
             {
               type: 'image',
-              image: `data:${image.type || 'image/jpeg'};base64,${base64Image}`,
+              image: `data:${imageFile.type};base64,${base64Image}`,
             },
           ],
         },

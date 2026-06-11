@@ -5,34 +5,26 @@ import { useParams, useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft01Icon,
-  CurrencyIcon,
-  ReceiptDollarIcon,
   ToolsIcon,
-  WorkHistoryIcon,
 } from "@hugeicons/core-free-icons";
 import { PageHeader, SidebarTrigger } from "@/components/layout";
 import { CurrencyConverter } from "@/components/tools/currency-converter";
 import { OvertimeTracker } from "@/components/tools/overtime-tracker";
 import { SplitBills } from "@/components/tools/split-bills";
-
-const tools = [
-  { id: "converter", label: "Convert Duit", icon: CurrencyIcon },
-  { id: "split-bills", label: "Split Bills", icon: ReceiptDollarIcon },
-  { id: "lembur", label: "Lembur Tracker", icon: WorkHistoryIcon },
-] as const;
-
-type ToolId = (typeof tools)[number]["id"];
+import { WalletTransfer } from "@/components/tools/wallet-transfer";
+import { cashflowTools, getCashflowTool, type CashflowToolId } from "@/lib/tools";
 
 export function ToolsPageContent() {
   const params = useParams<{ managementId?: string }>();
   const searchParams = useSearchParams();
-  const activeTool = searchParams.get("tool") as ToolId | null;
-  const selectedTool = tools.find((t) => t.id === activeTool);
+  const activeTool = searchParams.get("tool") as CashflowToolId | null;
+  const selectedTool = getCashflowTool(activeTool);
   const toolsPath = params.managementId ? `/dompet/${params.managementId}/tools` : "/tools";
 
   function renderTool() {
     if (activeTool === "split-bills") return <SplitBills />;
     if (activeTool === "lembur") return <OvertimeTracker />;
+    if (activeTool === "transfer") return <WalletTransfer />;
     return <CurrencyConverter />;
   }
 
@@ -64,7 +56,7 @@ export function ToolsPageContent() {
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3">
-        {tools.map((tool) => (
+        {cashflowTools.map((tool) => (
           <Link
             key={tool.id}
             href={`${toolsPath}?tool=${tool.id}`}

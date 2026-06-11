@@ -168,6 +168,8 @@ export async function updateEntry(
     createdById: string | null;
   }>
 ): Promise<CashflowEntry> {
+  if (!data.managementId) throw new Error("managementId required");
+
   const category = data.category === undefined ? undefined : await findCategory(data.category, data.managementId || "");
   if (data.category && !category) {
     throw new Error(`Category "${data.category}" not found`);
@@ -183,24 +185,37 @@ export async function updateEntry(
     }
   }
 
-  const entry = await prisma.entry.update({
-    where: { id: entryId },
-    data: {
-      ...(data.name !== undefined ? { name: data.name } : {}),
-      ...(data.nominal !== undefined ? { nominal: data.nominal } : {}),
-      ...(data.category !== undefined ? { categoryId: category?.id ?? null } : {}),
-      ...(data.date !== undefined ? { date: data.date } : {}),
-      ...(data.io !== undefined ? { io: data.io } : {}),
-      ...(data.createdById !== undefined ? { createdById: data.createdById } : {}),
-    },
+  const updateData = {
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.nominal !== undefined ? { nominal: data.nominal } : {}),
+    ...(data.category !== undefined ? { categoryId: category?.id ?? null } : {}),
+    ...(data.date !== undefined ? { date: data.date } : {}),
+    ...(data.io !== undefined ? { io: data.io } : {}),
+    ...(data.createdById !== undefined ? { createdById: data.createdById } : {}),
+  };
+
+  const result = await prisma.entry.updateMany({
+    where: { id: entryId, managementId: data.managementId },
+    data: updateData,
+  });
+
+  if (result.count === 0) {
+    throw new Error("Entry not found");
+  }
+
+  const entry = await prisma.entry.findFirst({
+    where: { id: entryId, managementId: data.managementId },
     include: { category: true, createdBy: { select: entryCreatorSelect } },
   });
+
+  if (!entry) throw new Error("Entry not found");
 
   return toEntry(entry);
 }
 
-export async function deleteEntry(entryId: string): Promise<void> {
-  await prisma.entry.delete({ where: { id: entryId } });
+export async function deleteEntry(entryId: string, managementId: string): Promise<void> {
+  const result = await prisma.entry.deleteMany({ where: { id: entryId, managementId } });
+  if (result.count === 0) throw new Error("Entry not found");
 }
 
 export async function getCalendarEntries(

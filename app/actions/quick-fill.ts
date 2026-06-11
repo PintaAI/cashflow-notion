@@ -32,16 +32,16 @@ export async function addQuickFill(data: {
 }
 
 export async function editQuickFill(id: string, data: { name?: string; nominal?: number; categoryId?: string | null; managementId?: string }): Promise<QuickFillPreset> {
-  await resolveManagementId(data.managementId);
+  const managementId = await resolveManagementId(data.managementId);
   const quickFillData = {
     name: data.name,
     nominal: data.nominal,
     categoryId: data.categoryId,
   };
-  return updateQuickFill(id, quickFillData);
+  return updateQuickFill(id, quickFillData, managementId);
 }
 
 export async function removeQuickFill(id: string, managementId?: string): Promise<void> {
-  await resolveManagementId(managementId);
-  await deleteQuickFill(id);
+  managementId = await resolveManagementId(managementId);
+  await deleteQuickFill(id, managementId);
 }

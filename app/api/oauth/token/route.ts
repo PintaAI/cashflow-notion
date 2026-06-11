@@ -4,7 +4,6 @@ import {
   exchangeRefreshToken,
   getClient,
 } from "@/lib/oauth/server";
-import type { TokenRequest } from "@/lib/oauth/types";
 
 export async function POST(req: Request) {
   try {
@@ -19,10 +18,9 @@ export async function POST(req: Request) {
       body = await req.json();
     }
 
-    const clientId =
-      body.client_id ||
-      extractBasicAuthClientId(req.headers.get("authorization"));
-    const clientSecret = body.client_secret;
+    const basicAuth = extractBasicAuthCredentials(req.headers.get("authorization"));
+    const clientId = body.client_id || basicAuth?.clientId;
+    const clientSecret = body.client_secret || basicAuth?.clientSecret;
     const grantType = body.grant_type;
 
     if (!clientId) {
@@ -105,13 +103,17 @@ export async function POST(req: Request) {
   }
 }
 
-function extractBasicAuthClientId(authHeader: string | null): string | undefined {
+function extractBasicAuthCredentials(authHeader: string | null): { clientId: string; clientSecret?: string } | undefined {
   if (!authHeader || !authHeader.startsWith("Basic ")) return undefined;
   try {
     const base64 = authHeader.slice(6);
     const decoded = atob(base64);
     const colonIndex = decoded.indexOf(":");
-    return colonIndex >= 0 ? decoded.slice(0, colonIndex) : decoded;
+    if (colonIndex < 0) return { clientId: decoded };
+    return {
+      clientId: decoded.slice(0, colonIndex),
+      clientSecret: decoded.slice(colonIndex + 1),
+    };
   } catch {
     return undefined;
   }

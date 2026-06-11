@@ -17,6 +17,11 @@ export async function GET(request: Request) {
     return new Response("Invalid profile photo", { status: 400 });
   }
 
+  const [, ownerUserId, fileName] = pathname.split("/");
+  if (!ownerUserId || !fileName || pathname.includes("..")) {
+    return new Response("Invalid profile photo", { status: 400 });
+  }
+
   const blobOptions = getBlobOptions();
   if (!blobOptions) {
     return new Response("Blob storage is not configured", { status: 500 });
