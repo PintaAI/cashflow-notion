@@ -27,7 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { addEntry, editEntry } from "@/app/actions/cashflow"
 import type { CashflowEntry, CategoryType, IOType } from "@/lib/db"
 import { getCategoryConfig } from "@/lib/categories"
-import { cashflowQueryKeys, useCategoriesWithDetails, useQuickFills } from "@/hooks/use-cashflow-data"
+import { cashflowQueryKeys, useCategoriesWithDetails, useQuickFills, useCreateCategory } from "@/hooks/use-cashflow-data"
 import { useManagement } from "@/components/providers/management-provider"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -101,6 +101,10 @@ export function CashflowFormDrawer({
   const expenseCategories = categoriesQuery.data ?? []
   const quickFillsQuery = useQuickFills({ enabled: open })
   const quickFills = quickFillsQuery.data ?? []
+  const createCategory = useCreateCategory()
+  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const [newCatName, setNewCatName] = useState("")
+  const [newCatError, setNewCatError] = useState<string | null>(null)
   const celebrateSave = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
 
@@ -245,6 +249,20 @@ export function CashflowFormDrawer({
       console.error(`Failed to ${isEdit ? "edit" : "add"} entry:`, error)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleAddCategory = async () => {
+    const trimmed = newCatName.trim()
+    if (!trimmed) return
+    setNewCatError(null)
+    try {
+      await createCategory.mutateAsync({ name: trimmed })
+      setCategory(trimmed)
+      setNewCatName("")
+      setIsAddingCategory(false)
+    } catch (err) {
+      setNewCatError(err instanceof Error ? err.message : "Gagal membuat kategori")
     }
   }
 
@@ -397,40 +415,95 @@ export function CashflowFormDrawer({
           {/* Category Select */}
           {(
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Category
+              <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                <span>Category</span>
+                {!isAddingCategory && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCategory(true)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    + New
+                  </button>
+                )}
               </label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="h-12 text-base w-full">
-                  <SelectValue placeholder="Select category">
-                    {category && (() => {
-                      const catData = expenseCategories.find((c) => c.name === category)
-                      const config = catData ? getCategoryConfig(catData.name, catData.color as any, catData.icon) : getCategoryConfig(category)
-                      return (
-                        <span className="inline-flex items-center gap-1.5">
-                          <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
-                          {category}
-                        </span>
-                      )
-                    })()}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent position="popper" align="start">
-                  <ScrollArea className="h-[200px]">
-                    {expenseCategories.map((cat) => {
-                      const config = getCategoryConfig(cat.name, cat.color as any, cat.icon);
-                      return (
-                        <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
-                          <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
-                            <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
-                            {cat.name}
+
+              {isAddingCategory ? (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      placeholder="Category name"
+                      className="h-10 text-sm"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddCategory()
+                        if (e.key === "Escape") {
+                          setIsAddingCategory(false)
+                          setNewCatName("")
+                          setNewCatError(null)
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddCategory}
+                      disabled={createCategory.isPending || !newCatName.trim()}
+                      className="h-10 shrink-0"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {newCatError && (
+                    <p className="text-xs text-destructive">{newCatError}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingCategory(false)
+                      setNewCatName("")
+                      setNewCatError(null)
+                    }}
+                    className="text-xs text-muted-foreground hover:underline self-start"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="h-12 text-base w-full">
+                    <SelectValue placeholder="Select category">
+                      {category && (() => {
+                        const catData = expenseCategories.find((c) => c.name === category)
+                        const config = catData ? getCategoryConfig(catData.name, catData.color as any, catData.icon) : getCategoryConfig(category)
+                        return (
+                          <span className="inline-flex items-center gap-1.5">
+                            <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
+                            {category}
                           </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </ScrollArea>
-                </SelectContent>
-              </Select>
+                        )
+                      })()}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <ScrollArea className="h-[200px]">
+                      {expenseCategories.map((cat) => {
+                        const config = getCategoryConfig(cat.name, cat.color as any, cat.icon);
+                        return (
+                          <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
+                            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
+                              <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
+                              {cat.name}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </ScrollArea>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 
