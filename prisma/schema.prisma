@@ -85,6 +85,8 @@ model Verification {
 model Management {
   id        String   @id @default(uuid())
   name      String
+  image     String?
+  imageTheme Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

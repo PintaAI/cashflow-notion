@@ -15,6 +15,8 @@ export function SidebarTrigger({ className }: { className?: string }) {
     <Button
       variant="ghost"
       size="icon-sm"
+      type="button"
+      aria-label="Open navigation menu"
       className={cn("md:hidden", className)}
       onClick={() => ctx.setIsOpen(true)}
     >

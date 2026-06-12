@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AiChat01Icon, BellDotIcon, ColorsIcon, Edit02Icon, FlashIcon, Logout01Icon, PercentIcon, RefreshIcon, Tag01Icon, Wallet01Icon } from "@hugeicons/core-free-icons";
 import { getPalette } from "colorthief";
@@ -75,6 +75,7 @@ function SettingsSkeleton() {
 
 export function SettingTab() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, refetch, isPending } = useSession();
   const { currency, setCurrency, loading } = useCurrency();
   const [auditDrawerOpen, setAuditDrawerOpen] = useState(false);
@@ -179,6 +180,7 @@ export function SettingTab() {
   }
 
   const nameChanged = name.trim() !== visibleProfileUser?.name.trim();
+  const defaultSection = searchParams.get("section") === "management" ? "management" : undefined;
 
   useEffect(() => {
     if (!session?.user) return;
@@ -276,7 +278,7 @@ export function SettingTab() {
         </div>
       )}
 
-      <Accordion type="single" collapsible className="space-y-2 sm:space-y-3">
+      <Accordion type="single" collapsible defaultValue={defaultSection} className="space-y-2 sm:space-y-3">
         <AccordionItem value="theme">
           <AccordionTrigger>
             <span className="flex items-center gap-2">

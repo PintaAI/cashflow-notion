@@ -98,7 +98,7 @@ function ThemeSettings() {
     <div className="space-y-3">
       <div className="space-y-1">
         <p className="text-sm text-muted-foreground">
-          Tema baru dibuat otomatis dari warna foto profil saat Anda mengunggah foto baru. Maksimal 5 tema disimpan di perangkat ini; tema tertua akan dihapus saat melewati batas.
+          Hasil tema dari foto profil dan foto dompet. Maksimal 5 tema.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">

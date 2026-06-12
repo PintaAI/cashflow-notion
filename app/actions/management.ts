@@ -1,15 +1,24 @@
 "use server";
 
 import crypto from "crypto";
+import { put } from "@vercel/blob";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { getBlobOptions } from "@/lib/blob";
 import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
 import { getSession, resolveManagementId } from "@/lib/management";
+import { parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
+
+const MAX_MANAGEMENT_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_MANAGEMENT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export type ManagementWithMembers = {
   management: {
     id: string;
     name: string;
+    image: string | null;
+    imageTheme: GeneratedThemeColors | null;
     members: {
       id: string;
       role: string;
@@ -69,7 +78,15 @@ export async function getCurrentManagement(managementId?: string): Promise<Manag
     });
   }
 
-  return membership;
+  if (!membership) return null;
+
+  return {
+    ...membership,
+    management: {
+      ...membership.management,
+      imageTheme: parseThemeColors(membership.management.imageTheme),
+    },
+  };
 }
 
 export async function getUserManagements(activeManagementId?: string) {
@@ -96,6 +113,8 @@ export async function getUserManagements(activeManagementId?: string) {
   return memberships.map((m) => ({
     id: m.management.id,
     name: m.management.name,
+    image: m.management.image,
+    imageTheme: parseThemeColors(m.management.imageTheme),
     role: m.role,
     memberCount: m.management._count.members,
     isActive: m.management.id === (activeManagementId ?? user?.activeManagementId),
@@ -141,6 +160,96 @@ export async function renameManagement(name: string, managementId?: string) {
   revalidatePath("/", "layout");
 
   return { success: true, name: trimmed };
+}
+
+export type ManagementImageActionState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  management?: {
+    id: string;
+    image: string | null;
+    imageTheme: GeneratedThemeColors | null;
+  };
+};
+
+export async function updateManagementImage(
+  _prevState: ManagementImageActionState,
+  formData: FormData
+): Promise<ManagementImageActionState> {
+  const session = await getSession();
+  if (!session) {
+    return { status: "error", message: "Anda harus login terlebih dahulu." };
+  }
+
+  const rawManagementId = formData.get("managementId");
+  const targetManagementId = await resolveManagementId(typeof rawManagementId === "string" ? rawManagementId : undefined);
+
+  const membership = await prisma.managementMember.findFirst({
+    where: { userId: session.user.id, managementId: targetManagementId, role: "owner" },
+  });
+  if (!membership) {
+    return { status: "error", message: "Hanya pemilik yang bisa mengubah foto dompet." };
+  }
+
+  const file = formData.get("image");
+  if (!(file instanceof File) || file.size === 0) {
+    return { status: "error", message: "Pilih foto dompet terlebih dahulu." };
+  }
+
+  if (!ALLOWED_MANAGEMENT_IMAGE_TYPES.has(file.type)) {
+    return { status: "error", message: "Foto harus berupa JPG, PNG, WebP, atau GIF." };
+  }
+
+  if (file.size > MAX_MANAGEMENT_IMAGE_SIZE) {
+    return { status: "error", message: "Ukuran foto maksimal 5 MB." };
+  }
+
+  const rawTheme = formData.get("theme");
+  let imageTheme: GeneratedThemeColors | null = null;
+  if (typeof rawTheme === "string") {
+    try {
+      imageTheme = parseThemeColors(JSON.parse(rawTheme));
+    } catch {
+      imageTheme = null;
+    }
+  }
+
+  try {
+    const blobOptions = getBlobOptions();
+    if (!blobOptions) {
+      return { status: "error", message: "Upload foto gagal. Vercel Blob belum dikonfigurasi." };
+    }
+
+    const extension = file.type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+    const blob = await put(`managements/${targetManagementId}/${crypto.randomUUID()}.${extension}`, file, {
+      ...blobOptions,
+      access: "private",
+      contentType: file.type,
+    });
+
+    const management = await prisma.management.update({
+      where: { id: targetManagementId },
+      data: {
+        image: blob.pathname,
+        imageTheme: imageTheme ?? Prisma.JsonNull,
+      },
+      select: { id: true, image: true, imageTheme: true },
+    });
+
+    revalidatePath("/", "layout");
+
+    return {
+      status: "success",
+      message: imageTheme ? "Foto dan tema dompet tersimpan." : "Foto dompet tersimpan.",
+      management: {
+        id: management.id,
+        image: management.image,
+        imageTheme: parseThemeColors(management.imageTheme),
+      },
+    };
+  } catch {
+    return { status: "error", message: "Upload foto gagal. Pastikan Vercel Blob sudah dikonfigurasi." };
+  }
 }
 
 export async function createManagement(name: string) {

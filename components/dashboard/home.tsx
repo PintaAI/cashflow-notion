@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 const WALLET_CACHE_KEY = "cashflow_wallets";
 
 type WalletMeta = { id: string; name: string; isActive: boolean };
+type UserManagements = Awaited<ReturnType<typeof getUserManagements>>;
 
 function readWalletCache(): WalletMeta[] | null {
   if (typeof window === "undefined") return null;
@@ -33,6 +34,21 @@ function readWalletCache(): WalletMeta[] | null {
 function writeWalletCache(data: WalletMeta[]) {
   if (typeof window === "undefined") return;
   try { localStorage.setItem(WALLET_CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+}
+
+function getCachedManagements(managementId: string): UserManagements {
+  const cached = readWalletCache();
+  if (!cached || cached.length === 0) return [];
+
+  return cached.map((m) => ({
+    id: m.id,
+    name: m.name,
+    image: null,
+    imageTheme: null,
+    role: "" as never,
+    memberCount: 0,
+    isActive: m.id === managementId,
+  })) as UserManagements;
 }
 
 function getEmptySummary(): CashflowSummary {
@@ -142,26 +158,27 @@ export function HomeTab() {
   const today = toDateKey(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const runGeneration = useRunRecurringGeneration();
-  const [managements, setManagements] = useState<Awaited<ReturnType<typeof getUserManagements>>>([]);
+  const [managements, setManagements] = useState<UserManagements>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
-    const cached = readWalletCache();
-    if (cached && cached.length > 0) {
-      setManagements(
-        cached.map((m) => ({
-          id: m.id,
-          name: m.name,
-          role: "" as never,
-          memberCount: 0,
-          isActive: m.id === managementId,
-        })) as Awaited<ReturnType<typeof getUserManagements>>
-      );
-    }
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const cached = getCachedManagements(managementId);
+      if (cached.length > 0) setManagements(cached);
+    });
+
     getUserManagements(managementId).then((data) => {
+      if (cancelled) return;
       setManagements(data);
       writeWalletCache(data.map((m) => ({ id: m.id, name: m.name, isActive: m.isActive })));
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [managementId]);
 
   useEffect(() => {
@@ -241,7 +258,7 @@ export function HomeTab() {
 
       {summaryQuery.isLoading ? <StatsSkeleton /> : <Stats stats={toStatsData(summary)} />}
       <BudgetWarningCard />
-      {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} />}
+      {activityQuery.isLoading ? <ActivityHeatmapSkeleton /> : <ActivityHeatmap activity={activity} selectedDate={selectedDate} onDateSelect={setSelectedDate} />}
       <CashflowTable dateFilter={selectedDate} onDateFilterChange={setSelectedDate} />
     </>
   );

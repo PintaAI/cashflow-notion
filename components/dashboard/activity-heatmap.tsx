@@ -2,10 +2,13 @@
 
 import { useRef, useEffect, useState } from "react";
 import type { ActivityOverview } from "@/lib/analytics";
+import { parseDateKey, toDateKey } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 interface ActivityHeatmapProps {
   activity: ActivityOverview;
+  selectedDate: string;
+  onDateSelect: (date: string) => void;
 }
 
 const DAY_LABELS = ["Sen", "", "Rab", "", "Jum", "", ""];
@@ -21,13 +24,13 @@ function getLevel(count: number): number {
 function getCellClass(count: number): string {
   switch (getLevel(count)) {
     case 1:
-      return "bg-emerald-200 dark:bg-emerald-950";
+      return "bg-primary/20";
     case 2:
-      return "bg-emerald-400 dark:bg-emerald-800";
+      return "bg-primary/40";
     case 3:
-      return "bg-emerald-600 dark:bg-emerald-600";
+      return "bg-primary/70";
     case 4:
-      return "bg-emerald-800 dark:bg-emerald-400";
+      return "bg-primary";
     default:
       return "bg-muted";
   }
@@ -71,56 +74,69 @@ function getLocalTodayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function getMonthRangeDays(days: ActivityOverview["days"]): ActivityOverview["days"] {
+function getMonthRangeDays(days: ActivityOverview["days"], selectedDate: string): ActivityOverview["days"] {
+  const selected = parseDateKey(selectedDate);
   const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + 3);
+  const firstOfMonth = new Date(selected.getFullYear(), selected.getMonth(), 1);
+  const lastOfMonth = new Date(selected.getFullYear(), selected.getMonth() + 1, 0);
+  const endDate = selected.getFullYear() === today.getFullYear() && selected.getMonth() === today.getMonth()
+    ? new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3)
+    : lastOfMonth;
 
   const dayMap = new Map(days.map((d) => [d.date, d]));
 
   const range: ActivityOverview["days"] = [];
   const cursor = new Date(firstOfMonth);
   while (cursor <= endDate) {
-    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    const key = toDateKey(cursor);
     range.push(dayMap.get(key) || { date: key, count: 0 });
     cursor.setDate(cursor.getDate() + 1);
   }
   return range;
 }
 
-export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
+export function ActivityHeatmap({ activity, selectedDate, onDateSelect }: ActivityHeatmapProps) {
   const [view, setView] = useState<"grid" | "calendar">(getStoredView);
   const gridScrollRef = useRef<HTMLDivElement>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const todayKey = getLocalTodayKey();
   const hasLoggedToday = Boolean(activity.days.at(-1)?.count);
+  const scrollKey = `${view}:${selectedDate}`;
 
   useEffect(() => {
-    if (gridScrollRef.current && view === "grid") {
-      gridScrollRef.current.scrollLeft = gridScrollRef.current.scrollWidth;
-    }
-  }, [view]);
-
-  useEffect(() => {
-    if (calendarScrollRef.current && view === "calendar") {
+    if (gridScrollRef.current && scrollKey.startsWith("grid:")) {
       requestAnimationFrame(() => {
-        const todayEl = calendarScrollRef.current?.querySelector('[data-today="true"]') as HTMLElement | null;
-        if (todayEl) {
+        const selectedEl = gridScrollRef.current?.querySelector('[data-selected="true"]') as HTMLElement | null;
+        const container = gridScrollRef.current!;
+        if (selectedEl) {
+          const scrollTo = selectedEl.offsetLeft - container.clientWidth / 2 + selectedEl.clientWidth / 2;
+          container.scrollLeft = Math.max(0, scrollTo);
+          return;
+        }
+        container.scrollLeft = container.scrollWidth;
+      });
+    }
+  }, [scrollKey]);
+
+  useEffect(() => {
+    if (calendarScrollRef.current && scrollKey.startsWith("calendar:")) {
+      requestAnimationFrame(() => {
+        const selectedEl = calendarScrollRef.current?.querySelector('[data-selected="true"]') as HTMLElement | null;
+        if (selectedEl) {
           const container = calendarScrollRef.current!;
-          const scrollTo = todayEl.offsetLeft - container.clientWidth / 2 + todayEl.clientWidth / 2;
+          const scrollTo = selectedEl.offsetLeft - container.clientWidth / 2 + selectedEl.clientWidth / 2;
           container.scrollLeft = Math.max(0, scrollTo);
         }
       });
     }
-  }, [view]);
+  }, [scrollKey]);
 
   function handleViewChange(v: "grid" | "calendar") {
     setView(v);
     storeView(v);
   }
 
-  const calendarDays = getMonthRangeDays(activity.days);
+  const calendarDays = getMonthRangeDays(activity.days, selectedDate);
 
   return (
     <section className="mb-4 sm:mb-6">
@@ -155,7 +171,7 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
                 Calendar
               </button>
             </div>
-            <div className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+            <div className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
               {activity.currentStreak} day streak
             </div>
           </div>
@@ -200,17 +216,25 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
             ))}
           </div>
           <div className="grid w-max grid-flow-col grid-rows-7 gap-1">
-            {activity.days.map((day) => (
-              <div
-                key={day.date}
-                title={formatDayTitle(day)}
-                aria-label={formatDayTitle(day)}
-                className={cn(
-                  "size-3 rounded-[3px] ring-1 ring-border/30 transition-transform hover:scale-125 sm:size-3.5",
-                  getCellClass(day.count)
-                )}
-              />
-            ))}
+            {activity.days.map((day) => {
+              const isSelected = day.date === selectedDate;
+
+              return (
+                <button
+                  key={day.date}
+                  type="button"
+                  data-selected={isSelected ? "true" : undefined}
+                  onClick={() => onDateSelect(day.date)}
+                  title={formatDayTitle(day)}
+                  aria-label={formatDayTitle(day)}
+                  className={cn(
+                    "size-3 rounded-[3px] p-0 ring-1 ring-border/30 transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-3.5",
+                    isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                    getCellClass(day.count)
+                  )}
+                />
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -219,27 +243,30 @@ export function ActivityHeatmap({ activity }: ActivityHeatmapProps) {
               const d = new Date(`${day.date}T00:00:00`);
               const dowShort = d.toLocaleDateString("id-ID", { weekday: "short" });
               const isToday = day.date === todayKey;
+              const isSelected = day.date === selectedDate;
               const isPast = day.date < todayKey;
               return (
-                <div key={day.date} data-today={isToday ? "true" : undefined} className="flex shrink-0 flex-col items-center gap-0.5">
+                <div key={day.date} data-selected={isSelected ? "true" : undefined} className="flex shrink-0 flex-col items-center gap-0.5">
                   <span className={cn(
                     "text-[9px] font-medium",
-                    isToday ? "text-foreground" : isPast ? "text-muted-foreground" : "text-muted-foreground/50",
+                    isSelected ? "text-primary" : isToday ? "text-foreground" : isPast ? "text-muted-foreground" : "text-muted-foreground/50",
                   )}>
                     {dowShort}
                   </span>
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => onDateSelect(day.date)}
                     title={formatDayTitle(day)}
                     aria-label={formatDayTitle(day)}
                     className={cn(
-                      "flex items-center justify-center rounded-[3px] text-xs font-semibold w-11 h-8 transition-transform hover:scale-110",
-                      isToday ? "ring-2 ring-primary" : "ring-1 ring-border/30",
-                      day.count > 0 ? "text-emerald-950 dark:text-emerald-50" : "text-muted-foreground",
+                      "flex h-8 w-11 items-center justify-center rounded-[3px] p-0 text-xs font-semibold transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : isToday ? "ring-2 ring-foreground/60" : "ring-1 ring-border/30",
+                      day.count > 0 ? "text-primary-foreground" : "text-muted-foreground",
                       getCellClass(day.count)
                     )}
                   >
                     {getDayNumber(day.date)}
-                  </div>
+                  </button>
                 </div>
               );
             })}
