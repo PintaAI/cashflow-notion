@@ -96,7 +96,9 @@ export function SettingTab() {
   const themeExtractionRef = useRef<Promise<GeneratedThemeColors | null> | null>(null);
 
   useEffect(() => {
-    setName(visibleProfileUser?.name ?? "");
+    queueMicrotask(() => {
+      setName(visibleProfileUser?.name ?? "");
+    });
   }, [visibleProfileUser?.name]);
 
   async function extractThemeFromImageUrl(url: string) {
@@ -183,7 +185,7 @@ export function SettingTab() {
   const defaultSection = searchParams.get("section") === "management" ? "management" : undefined;
 
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user?.id) return;
     let cancelled = false;
     fetchProfileTheme()
       .then((theme) => {

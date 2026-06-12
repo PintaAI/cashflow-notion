@@ -4,10 +4,8 @@ import { prisma } from "@/lib/db";
 import {
   AUTH_CODE_EXPIRY_SECONDS,
   TOKEN_EXPIRY_SECONDS,
-  REFRESH_TOKEN_EXPIRY_SECONDS,
   SCOPES_SUPPORTED,
   parseScopeString,
-  createAuthInfo,
   isOAuthAccessToken,
   type AuthorizationRequest,
   type TokenResponse,

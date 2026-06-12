@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const PLACEHOLDER_KEY = "YOUR_MCP_API_KEY";
 
 export function McpConnectionGuide() {
-  const [baseUrl, setBaseUrl] = useState("");
-
-  useEffect(() => {
-    setBaseUrl(window.location.origin);
-  }, []);
+  const [baseUrl] = useState(() => (typeof window === "undefined" ? "" : window.location.origin));
 
   const apiKey = process.env.NEXT_PUBLIC_MCP_API_KEY || PLACEHOLDER_KEY;
   const chatGptUrl = `${baseUrl}/api/mcp?api_key=${apiKey}`;

@@ -173,7 +173,9 @@ function UsersTab() {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
+    queueMicrotask(() => {
+      void fetchUsers();
+    });
   }, [fetchUsers]);
 
   async function handleDeleteUser(userId: string, userName: string) {
@@ -269,10 +271,22 @@ function ManagementDetailView({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    getManagementDetails(managementId)
-      .then(setDetail)
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      setLoading(true);
+      getManagementDetails(managementId)
+        .then((data) => {
+          if (!cancelled) setDetail(data);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [managementId]);
 
   async function handleRoleChange(memberId: string, role: string) {
@@ -502,7 +516,9 @@ function ManagementsTab() {
   }, []);
 
   useEffect(() => {
-    fetchManagements();
+    queueMicrotask(() => {
+      void fetchManagements();
+    });
   }, [fetchManagements]);
 
   async function handleDeleteManagement(id: string, name: string) {

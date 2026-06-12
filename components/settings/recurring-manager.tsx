@@ -34,7 +34,6 @@ import type { RecurringEntryData } from "@/lib/db"
 import type { RecurringFrequency, IOType } from "@/lib/db"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/components/providers/currency-provider"
-import { formatCurrencyAmount } from "@/lib/currency"
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: "Harian",

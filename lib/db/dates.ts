@@ -1,5 +1,5 @@
 import type { BudgetPeriod } from "@/lib/db/types";
-import { getWeekNumber, getWeekStartEnd, toIsoDateKey } from "@/lib/date";
+import { getWeekStartEnd, toIsoDateKey } from "@/lib/date";
 
 export { getWeekNumber, getWeekStartEnd } from "@/lib/date";
 

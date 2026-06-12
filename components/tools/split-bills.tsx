@@ -800,6 +800,7 @@ export function SplitBills() {
 
       await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
       await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(managementId) });
       await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) });
       router.refresh();
       setExpenseMessage("Expense ditambahkan dari hasil split bill.");

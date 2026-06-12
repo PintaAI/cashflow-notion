@@ -170,7 +170,7 @@ export function QuickFillManager() {
             <SelectContent>
                   <SelectItem value="none">Tanpa kategori</SelectItem>
                   {categories.map((cat) => {
-                const config = getCategoryConfig(cat.name, cat.color as any, cat.icon)
+                const config = getCategoryConfig(cat.name, cat.color, cat.icon)
                 return (
                   <SelectItem key={cat.id} value={cat.id}>
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5", config.bgColor, config.color)}>
@@ -206,7 +206,7 @@ export function QuickFillManager() {
           ) : (
             presets.map((preset) => {
               const catData = preset.categoryId ? categories.find((c) => c.id === preset.categoryId) : null
-              const config = preset.category ? getCategoryConfig(preset.category, catData?.color as any, catData?.icon) : null
+              const config = preset.category ? getCategoryConfig(preset.category, catData?.color, catData?.icon) : null
               const isEditing = editingId === preset.id
 
               if (isEditing) {

@@ -293,13 +293,23 @@ export async function fetchActivityOverview(daysBack = 182, managementId: string
   const today = startOfDay(new Date());
   const startDate = addDays(today, -(daysBack - 1));
   const alignedStartDate = getMondayOfWeek(startDate);
-  const rows = await prisma.$queryRaw<ActivityRow[]>`
-    SELECT DATE(e."createdAt") AS "date", COUNT(*) AS "count"
-    FROM "Entry" e
-    WHERE e."createdAt" >= ${alignedStartDate} AND e."managementId" = ${managementId}
-    GROUP BY DATE(e."createdAt")
-    ORDER BY "date" ASC
-  `;
+  const alignedStartDateKey = toDateKey(alignedStartDate);
+  const [rows, streakRows] = await Promise.all([
+    prisma.$queryRaw<ActivityRow[]>`
+      SELECT e."date" AS "date", COUNT(*) AS "count"
+      FROM "Entry" e
+      WHERE e."date" >= ${alignedStartDateKey} AND e."managementId" = ${managementId}
+      GROUP BY e."date"
+      ORDER BY "date" ASC
+    `,
+    prisma.$queryRaw<ActivityRow[]>`
+      SELECT DATE(e."createdAt") AS "date", COUNT(*) AS "count"
+      FROM "Entry" e
+      WHERE e."createdAt" >= ${alignedStartDate} AND e."managementId" = ${managementId}
+      GROUP BY DATE(e."createdAt")
+      ORDER BY "date" ASC
+    `,
+  ]);
 
   const dayMap = new Map<string, ActivityDay>();
   for (const row of rows) {
@@ -318,12 +328,13 @@ export async function fetchActivityOverview(daysBack = 182, managementId: string
   }
 
   const activeDateKeys = new Set(days.filter((day) => day.count > 0).map((day) => day.date));
+  const createdDateKeys = new Set(streakRows.map((row) => (typeof row.date === "string" ? row.date : toDateKey(row.date))));
 
   return {
     days,
     totalEntries: days.reduce((total, day) => total + day.count, 0),
     activeDays: activeDateKeys.size,
-    currentStreak: getCurrentStreak(activeDateKeys, today),
+    currentStreak: getCurrentStreak(createdDateKeys, today),
   };
 }
 

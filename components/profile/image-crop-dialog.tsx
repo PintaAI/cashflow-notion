@@ -77,15 +77,19 @@ export function ImageCropDialog({
   useEffect(() => {
     if (open && file) {
       const url = URL.createObjectURL(file);
-      setImageSrc(url);
-      setCrop({ x: 0, y: 0 });
-      setZoom(1);
-      setCroppedAreaPixels(null);
+      queueMicrotask(() => {
+        setImageSrc(url);
+        setCrop({ x: 0, y: 0 });
+        setZoom(1);
+        setCroppedAreaPixels(null);
+      });
       return () => URL.revokeObjectURL(url);
     }
     if (!open) {
-      setImageSrc(null);
-      setCroppedAreaPixels(null);
+      queueMicrotask(() => {
+        setImageSrc(null);
+        setCroppedAreaPixels(null);
+      });
     }
   }, [open, file]);
 

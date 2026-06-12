@@ -8,7 +8,6 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Camera01Icon,
   Cancel01Icon,
-  Tick02Icon,
   RotateIcon
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"

@@ -347,6 +347,7 @@ export function useRunRecurringGeneration() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(managementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.budgetStatus(managementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.recurring(managementId) });
     },

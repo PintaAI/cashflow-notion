@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Edit02Icon, RefreshIcon } from "@hugeicons/core-free-icons";
-import { getPalette, getSwatches } from "colorthief";
+import { getPalette } from "colorthief";
 import { ImageCropDialog } from "@/components/profile";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";

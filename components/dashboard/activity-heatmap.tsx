@@ -100,7 +100,7 @@ export function ActivityHeatmap({ activity, selectedDate, onDateSelect }: Activi
   const gridScrollRef = useRef<HTMLDivElement>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const todayKey = getLocalTodayKey();
-  const hasLoggedToday = Boolean(activity.days.at(-1)?.count);
+  const hasLoggedToday = activity.currentStreak > 0;
   const scrollKey = `${view}:${selectedDate}`;
 
   useEffect(() => {

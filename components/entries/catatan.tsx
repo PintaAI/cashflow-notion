@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Calendar03Icon, Table01Icon } from "@hugeicons/core-free-icons";
 
@@ -11,14 +11,11 @@ import { cn } from "@/lib/utils"
 const VIEW_KEY = "cashflow.catatanView";
 
 export function CatatanTab() {
-  const [view, setView] = useState<"list" | "calendar">("list");
-
-  useEffect(() => {
+  const [view, setView] = useState<"list" | "calendar">(() => {
+    if (typeof window === "undefined") return "list";
     const saved = localStorage.getItem(VIEW_KEY);
-    if (saved === "list" || saved === "calendar") {
-      setView(saved);
-    }
-  }, []);
+    return saved === "list" || saved === "calendar" ? saved : "list";
+  });
 
   function handleChange(v: "list" | "calendar") {
     setView(v);

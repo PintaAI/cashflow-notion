@@ -44,16 +44,19 @@ export function AppTabProvider({
   pathname: string;
   searchParams: SearchParamsLike;
 }) {
-  const [activeTab, setActiveTabState] = useState(() => getTabFromParams(searchParams));
+  const [activeTab, setActiveTabState] = useState(() => {
+    const paramTab = getTabFromParams(searchParams);
+    if (paramTab !== "home" || typeof window === "undefined") return paramTab;
+    const saved = localStorage.getItem(DEFAULT_TAB_KEY);
+    return saved === "summary" || saved === "catatan" || saved === "setting" ? saved : paramTab;
+  });
 
   useEffect(() => {
     if (searchParams.get("tab")) return;
-    const saved = localStorage.getItem(DEFAULT_TAB_KEY);
-    if (saved === "summary" || saved === "catatan" || saved === "setting") {
-      setActiveTabState(saved);
-      window.history.replaceState(window.history.state, "", getTabUrl(pathname, saved));
+    if (activeTab !== "home") {
+      window.history.replaceState(window.history.state, "", getTabUrl(pathname, activeTab));
     }
-  }, []);
+  }, [activeTab, pathname, searchParams]);
 
   function setActiveTab(tab: AppTab) {
     setActiveTabState(tab);

@@ -57,9 +57,11 @@ export function WalletTransfer() {
 
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(managementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(toManagementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(toManagementId) });
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(toManagementId) });
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(toManagementId) });
 
       const destination = destinationWallets.find((wallet) => wallet.id === toManagementId);

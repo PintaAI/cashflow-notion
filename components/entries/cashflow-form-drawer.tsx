@@ -246,6 +246,7 @@ export function CashflowFormDrawer({
       setOpen(false)
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.entries(managementId) })
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) })
+      queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(managementId) })
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) })
       router.refresh()
       onSuccess?.()

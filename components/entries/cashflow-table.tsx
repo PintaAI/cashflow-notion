@@ -438,6 +438,7 @@ export function CashflowTable({ dateFilter, onDateFilterChange }: CashflowTableP
 
   const columns = React.useMemo(() => getColumns({ format, memberOptions, queryClient, managementId }), [format, memberOptions, queryClient, managementId]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table returns stable APIs managed by the library.
   const table = useReactTable({
     data: entries,
     columns,

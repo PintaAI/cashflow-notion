@@ -2,7 +2,6 @@
 
 import { prisma } from "@/lib/db";
 import { requireAdmin, isCurrentUserAdmin } from "@/lib/admin";
-import crypto from "crypto";
 
 export async function checkAdminStatus() {
   return isCurrentUserAdmin();
