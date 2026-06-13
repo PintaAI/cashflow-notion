@@ -5,6 +5,7 @@ import {
   buildEntryWhere,
   createEntry,
   deleteEntry,
+  getBudgetStatus,
   prisma,
   updateEntry,
   type IOType,
@@ -114,7 +115,25 @@ export function registerEntryTools(server: McpServer) {
         const entry = await createEntry({ name, nominal: idrNominal, category, date, io, managementId, userId: getUserId() });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
         console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}" nominal=${idrNominal} (IDR) management="${management?.name}"`);
-        return ok(`Created cashflow entry in ${management?.name ?? managementId}.`, { ...entry, managementName: management?.name ?? null });
+
+        let warnings: string | undefined;
+        if (io === "Expenses" && date) {
+          const status = await getBudgetStatus(managementId);
+          const relevant = status.filter(
+            (s) => (s.isWarning || s.isOverBudget) && (s.type === "overall" || s.name === entry.category),
+          );
+          if (relevant.length > 0) {
+            warnings = relevant
+              .map((s) => `⚠ ${s.isOverBudget ? "OVER" : "Near"} ${s.type === "overall" ? "total" : s.name} ${s.period} budget: ${s.percentage}% (${s.spent} / ${s.budgetAmount} IDR)`)
+              .join("\n");
+          }
+        }
+
+        const message = warnings
+          ? `Created cashflow entry in ${management?.name ?? managementId}.\n\nBudget Warnings:\n${warnings}`
+          : `Created cashflow entry in ${management?.name ?? managementId}.`;
+
+        return ok(message, { ...entry, managementName: management?.name ?? null, budgetWarnings: warnings ?? null });
       } catch (error) {
         console.error("MCP: create_entry failed", error instanceof Error ? error.message : error);
         return toolError(error);
