@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -222,7 +222,7 @@ function getPaidPlaces(personId: string, bills: Bill[]) {
 }
 
 export function SplitBills() {
-  const router = useRouter();
+
   const queryClient = useQueryClient();
   const management = useOptionalManagement();
   const managementId = management?.managementId;
@@ -808,7 +808,7 @@ export function SplitBills() {
       await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) });
       await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(managementId) });
       await queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) });
-      router.refresh();
+
       setExpenseMessage("Expense ditambahkan dari hasil split bill.");
     } catch (error) {
       setExpenseMessage(error instanceof Error ? error.message : "Gagal menambahkan expense.");

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+
 import { useQueryClient } from "@tanstack/react-query"
 import confetti from "canvas-confetti"
 import {
@@ -64,7 +64,7 @@ export function CashflowFormDrawer({
   onOpenChange: externalOnOpenChange,
   onSuccess,
 }: CashflowFormDrawerProps) {
-  const router = useRouter()
+
   const queryClient = useQueryClient()
   const { managementId } = useManagement()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -248,7 +248,7 @@ export function CashflowFormDrawer({
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.summary(managementId) })
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.activity(managementId) })
       queryClient.invalidateQueries({ queryKey: cashflowQueryKeys.analyticsRoot(managementId) })
-      router.refresh()
+
       onSuccess?.()
     } catch (error) {
       console.error(`Failed to ${isEdit ? "edit" : "add"} entry:`, error)
