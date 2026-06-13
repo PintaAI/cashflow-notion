@@ -9,7 +9,7 @@ import {
   updateEntry,
   type IOType,
 } from "@/lib/db";
-import { isValidDate, ok, toolError, getManagementId, getUserId, toIdrAmount, getUserCurrencyContext } from "@/lib/mcp/tools/utils";
+import { isValidDate, ok, toolError, getManagementId, getUserId, toIdrAmount } from "@/lib/mcp/tools/utils";
 
 const entryFields = {
   name: z.string().trim().min(1).describe("Entry name"),

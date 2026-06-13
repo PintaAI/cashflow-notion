@@ -1,13 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { registerAnalyticsTools } from "@/lib/mcp/tools/analytics";
+import { registerBudgetTools } from "@/lib/mcp/tools/budgets";
 import { registerCategoryTools } from "@/lib/mcp/tools/categories";
 import { registerEntryTools } from "@/lib/mcp/tools/entries";
-import { registerQuickFillTools } from "@/lib/mcp/tools/quick-fills";
+import { registerUserTools } from "@/lib/mcp/tools/user";
 
 export function registerCashflowTools(server: McpServer) {
-  registerAnalyticsTools(server);
+  registerUserTools(server);
   registerEntryTools(server);
+  registerAnalyticsTools(server);
   registerCategoryTools(server);
-  registerQuickFillTools(server);
+  registerBudgetTools(server);
 }
