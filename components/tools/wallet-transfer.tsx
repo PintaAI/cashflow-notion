@@ -19,6 +19,7 @@ import {
 import { useCurrency } from "@/components/providers/currency-provider";
 import { useManagement } from "@/components/providers/management-provider";
 import { cashflowQueryKeys } from "@/hooks/use-cashflow-data";
+import { formatCurrencyAmount } from "@/lib/currency";
 
 export function WalletTransfer() {
   const queryClient = useQueryClient();
@@ -37,6 +38,8 @@ export function WalletTransfer() {
   });
   const currentWallet = managementsQuery.data?.find((wallet) => wallet.id === managementId);
   const destinationWallets = (managementsQuery.data ?? []).filter((wallet) => wallet.id !== managementId);
+  const displayAmount = Number(amount);
+  const hasDestinationWallets = destinationWallets.length > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,71 +81,93 @@ export function WalletTransfer() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="rounded-2xl border bg-card p-4">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-            <HugeiconsIcon icon={MoneyExchange03Icon} strokeWidth={2} className="size-5" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">Transfer antar dompet</p>
-            <p className="text-xs text-muted-foreground">Dari {currentWallet?.name ?? "dompet aktif"}</p>
+      <div className="py-3 sm:py-4">
+        <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+          <span className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+            <HugeiconsIcon icon={MoneyExchange03Icon} strokeWidth={2} className="size-4" />
+            Transfer Dompet
+          </span>
+          <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <span className="truncate">{currentWallet?.name ?? "Dompet aktif"}</span>
+            <span className="text-muted-foreground/40">→</span>
+            <span className="truncate">
+              {destinationWallets.find((wallet) => wallet.id === toManagementId)?.name ?? "Tujuan"}
+            </span>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Dompet tujuan</p>
-            <Select value={toManagementId} onValueChange={setToManagementId}>
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Pilih dompet" />
-              </SelectTrigger>
-              <SelectContent>
-                {destinationWallets.map((wallet) => (
-                  <SelectItem key={wallet.id} value={wallet.id}>
-                    {wallet.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {destinationWallets.length === 0 && (
-              <p className="text-xs text-muted-foreground">Kamu belum tergabung di dompet lain.</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Nominal</p>
-            <Input
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <label className="sr-only" htmlFor="transfer-amount">Nominal</label>
+            <input
+              id="transfer-amount"
               inputMode="numeric"
+              aria-label="Nominal transfer"
               placeholder={`${option.symbol} 0`}
-              value={amount}
+              value={amount ? formatCurrencyAmount(displayAmount, currency) : ""}
               onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-              className="h-11"
+              className="w-full min-w-0 bg-transparent p-0 text-2xl font-bold tracking-tight outline-none transition-all placeholder:text-muted-foreground/40 focus-visible:ring-0 sm:text-3xl md:text-4xl"
             />
-            <p className="text-[11px] text-muted-foreground/70">Disimpan dalam nilai dasar {currency} kamu.</p>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Catatan opsional</p>
-            <Input
-              placeholder="contoh: alokasi tabungan"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="h-11"
-            />
+            <p className="mt-1 text-xs text-muted-foreground/70">
+              {amount ? `Akan dicatat sebagai transfer keluar dan masuk` : "Isi nominal transfer"}
+            </p>
           </div>
         </div>
       </div>
 
-      {status && <p className="text-sm text-green-700 dark:text-green-300">{status}</p>}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="divide-y border-y">
+        <div className="flex items-center gap-3 py-2.5">
+          <p className="shrink-0 text-xs text-muted-foreground">Ke dompet</p>
+          <Select value={toManagementId} onValueChange={setToManagementId} disabled={!hasDestinationWallets}>
+            <SelectTrigger className="mx-1 h-8 min-w-0 flex-1 border-0 bg-muted/40 px-3 text-right shadow-none focus:ring-0 focus:ring-offset-0">
+              <SelectValue placeholder={managementsQuery.isLoading ? "Memuat..." : "Pilih dompet"} />
+            </SelectTrigger>
+            <SelectContent>
+              {destinationWallets.map((wallet) => (
+                <SelectItem key={wallet.id} value={wallet.id}>
+                  {wallet.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-3 py-2.5">
+          <label className="shrink-0 text-xs text-muted-foreground" htmlFor="transfer-note">
+            Catatan
+          </label>
+          <Input
+            id="transfer-note"
+            placeholder="opsional"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="mx-1 h-8 min-w-0 flex-1 border-0 bg-muted/40 px-3 text-sm shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0"
+          />
+        </div>
+      </div>
+
+      {!managementsQuery.isLoading && !hasDestinationWallets ? (
+        <p className="rounded-lg border border-dashed bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
+          Kamu belum tergabung di dompet lain.
+        </p>
+      ) : null}
+
+      {status ? (
+        <p className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">{status}</p>
+      ) : null}
+      {error ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
 
       <Button
         type="submit"
-        className="h-12 w-full gap-2"
-        disabled={isSubmitting || !toManagementId || !amount || destinationWallets.length === 0}
+        className="w-full gap-2"
+        disabled={isSubmitting || !toManagementId || !amount || !hasDestinationWallets}
       >
         {isSubmitting ? "Menyimpan..." : "Simpan Transfer"}
-        {!isSubmitting && <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-5" />}
+        {!isSubmitting && <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" />}
       </Button>
     </form>
   );

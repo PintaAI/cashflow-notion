@@ -9,7 +9,7 @@ import { registerCashflowTools } from "@/lib/mcp/tools";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const handler = createMcpHandler(
+const rawMcpHandler = createMcpHandler(
   (server) => {
     registerCashflowTools(server);
   },
@@ -25,6 +25,17 @@ const handler = createMcpHandler(
     verboseLogs: process.env.NODE_ENV === "development",
   },
 );
+
+const handler = (req: Request) => {
+  const authInfo = (req as unknown as Record<string, unknown>).auth as AuthInfo | undefined;
+  const managementId = authInfo?.extra?.managementId as string | undefined;
+  const userId = (authInfo?.extra?.userId as string) || authInfo?.clientId;
+
+  if (managementId && userId) {
+    return managementContext.run({ managementId, userId }, () => rawMcpHandler(req));
+  }
+  return rawMcpHandler(req);
+};
 
 async function resolveActiveManagementId(userId: string): Promise<string | undefined> {
   const user = await prisma.user.findUnique({
@@ -93,6 +104,7 @@ async function verifyToken(
     token: bearerToken || "",
     clientId: userId,
     scopes,
+    extra: { managementId, userId },
   };
 }
 
@@ -151,6 +163,7 @@ async function scopedHandler(req: Request) {
   if (ctx) {
     return managementContext.run(ctx, () => authHandler(req));
   }
+  console.warn("MCP: resolveManagementId returned no context, falling back to auth handler");
   return authHandler(req);
 }
 

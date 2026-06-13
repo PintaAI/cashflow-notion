@@ -9,7 +9,7 @@ import {
   updateEntry,
   type IOType,
 } from "@/lib/db";
-import { isValidDate, ok, toolError, getManagementId } from "@/lib/mcp/tools/utils";
+import { isValidDate, ok, toolError, getManagementId, getUserId } from "@/lib/mcp/tools/utils";
 
 const entryFields = {
   name: z.string().trim().min(1).describe("Entry name"),
@@ -109,9 +109,11 @@ export function registerEntryTools(server: McpServer) {
       try {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
 
-        const entry = await createEntry({ name, nominal, category, date, io, managementId: getManagementId() });
+        const entry = await createEntry({ name, nominal, category, date, io, managementId: getManagementId(), userId: getUserId() });
+        console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}"`);
         return ok("Created cashflow entry.", entry);
       } catch (error) {
+        console.error("MCP: create_entry failed", error instanceof Error ? error.message : error);
         return toolError(error);
       }
     },

@@ -153,6 +153,7 @@ export async function createEntry(data: {
     include: { category: true, createdBy: { select: entryCreatorSelect } },
   });
 
+  console.log(`DB: Created entry id=${entry.id} name="${entry.name}" nominal=${entry.nominal} managementId=${data.managementId}`);
   return toEntry(entry);
 }
 

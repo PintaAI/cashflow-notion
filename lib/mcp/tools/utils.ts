@@ -34,7 +34,10 @@ export function isValidDate(value: string): boolean {
 
 export function getManagementId(): string {
   const ctx = managementContext.getStore();
-  if (!ctx) throw new Error("No management context");
+  if (!ctx) {
+    console.error("MCP: No management context available - managementId not set. Context may have been lost through async boundaries.");
+    throw new Error("No management context");
+  }
   return ctx.managementId;
 }
 
