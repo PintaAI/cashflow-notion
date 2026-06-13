@@ -3,15 +3,10 @@
 import { Suspense } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { SidebarContent, MobileBottomNav, type AppTab } from "@/components/layout";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar, MobileBottomNav, type AppTab } from "@/components/layout";
 import { AppTabProvider, useAppTab } from "@/components/providers/app-tab-provider";
 import { ManagementProvider } from "@/components/providers/management-provider";
-import { SidebarProvider, useSidebar } from "@/components/providers/sidebar-provider";
 
 function AppShellContent({
   children,
@@ -25,7 +20,6 @@ function AppShellContent({
   pathname: string;
 }) {
   const { activeTab, setActiveTab } = useAppTab();
-  const { isOpen, setIsOpen } = useSidebar();
   const router = useRouter();
 
   function handleTabChange(tab: AppTab) {
@@ -40,24 +34,13 @@ function AppShellContent({
 
   return (
     <>
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent side="left" showCloseButton={true} className="w-72 p-0">
-          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
-          <div className="flex h-full flex-col px-4 py-5">
-            <SidebarContent onNavigate={() => setIsOpen(false)} />
-          </div>
-        </SheetContent>
-      </Sheet>
+      <AppSidebar />
 
-      <div className="flex min-h-dvh w-full">
-        <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r bg-background/95 px-4 py-5 md:flex md:flex-col">
-          <SidebarContent />
-        </aside>
-
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 pb-24 sm:py-8 md:pb-8">
+      <SidebarInset>
+        <div className="mx-auto w-full max-w-7xl px-4 py-4 pb-24 sm:py-8 md:pb-8">
           {children}
-        </main>
-      </div>
+        </div>
+      </SidebarInset>
 
       {managementId && <MobileBottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
     </>

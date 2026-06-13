@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MoneyExchange03Icon } from "@hugeicons/core-free-icons";
 import { convertCurrency } from "@/app/actions/currency-converter";
@@ -16,6 +16,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+type ConversionHistoryItem = {
+  id: string;
+  amount: string;
+  from: string;
+  to: string;
+  result: number;
+  rate: number;
+  time: string;
+};
+
 export function CurrencyConverter() {
   const { currency: userCurrency } = useCurrency();
   const [amount, setAmount] = useState("1");
@@ -23,45 +33,68 @@ export function CurrencyConverter() {
   const [to, setTo] = useState("IDR");
   const [result, setResult] = useState<number | null>(null);
   const [rate, setRate] = useState<number | null>(null);
+  const [history, setHistory] = useState<ConversionHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function scheduleConvert(amt: string, src: string, dst: string) {
+  useEffect(() => {
+    let cancelled = false;
+
     if (timerRef.current) clearTimeout(timerRef.current);
-    const parsed = Number.parseFloat(amt);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      setResult(null);
-      setRate(null);
-      return;
-    }
     timerRef.current = setTimeout(async () => {
+      const parsed = Number.parseFloat(amount);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        setResult(null);
+        setRate(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        const data = await convertCurrency(parsed, src, dst);
+        const data = await convertCurrency(parsed, from, to);
+        if (cancelled) return;
         setResult(data.result);
         setRate(data.rate);
+        setHistory((prev) => [
+          {
+            id: `${Date.now()}-${from}-${to}`,
+            amount,
+            from,
+            to,
+            result: data.result,
+            rate: data.rate,
+            time: new Intl.DateTimeFormat("id-ID", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date()),
+          },
+          ...prev,
+        ].slice(0, 5));
       } catch {
         // silent
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }, 300);
-  }
+
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [amount, from, to]);
 
   function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
     const next = e.target.value;
     setAmount(next);
-    scheduleConvert(next, from, to);
   }
 
   function handleFromChange(next: string) {
     setFrom(next);
-    scheduleConvert(amount, next, to);
   }
 
   function handleToChange(next: string) {
     setTo(next);
-    scheduleConvert(amount, from, next);
   }
 
   function handleSwap() {
@@ -69,7 +102,6 @@ export function CurrencyConverter() {
     const nextTo = from;
     setFrom(nextFrom);
     setTo(nextTo);
-    scheduleConvert(amount, nextFrom, nextTo);
   }
 
   return (
@@ -77,8 +109,14 @@ export function CurrencyConverter() {
       <div className="py-3 sm:py-4">
         <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
-            Convert Duit
+            Cek Krus
           </span>
+          {rate !== null && (
+            <div className="min-w-0 text-right text-[11px] leading-snug text-muted-foreground/75">
+              <p className="truncate">1 {from} = {formatCurrencyAmount(rate, to, { compact: true })}</p>
+              <p className="truncate">1 {to} = {formatCurrencyAmount(1 / rate, from, { compact: true })}</p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-end justify-between gap-3">
@@ -118,11 +156,11 @@ export function CurrencyConverter() {
         </div>
       </div>
 
-      <div className="flex items-end gap-2">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
         <div className="flex-1 space-y-2">
           <p className="text-xs text-muted-foreground">Dari</p>
           <Select value={from} onValueChange={handleFromChange}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="h-9 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -135,14 +173,14 @@ export function CurrencyConverter() {
           </Select>
         </div>
 
-        <Button variant="outline" size="icon" className="shrink-0 mb-0.5" onClick={handleSwap}>
+        <Button variant="outline" size="icon" className="mb-0 h-9 w-9 shrink-0" onClick={handleSwap}>
           <HugeiconsIcon icon={MoneyExchange03Icon} strokeWidth={2} className="size-4" />
         </Button>
 
         <div className="flex-1 space-y-2">
           <p className="text-xs text-muted-foreground">Ke</p>
           <Select value={to} onValueChange={handleToChange}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="h-9 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -169,12 +207,37 @@ export function CurrencyConverter() {
         />
       </div>
 
-      {rate !== null && (
-        <div className="space-y-1 rounded-lg border bg-muted/30 p-4 text-xs text-muted-foreground">
-          <p>1 {from} = {formatCurrencyAmount(rate, to, { compact: true })}</p>
-          <p>1 {to} = {formatCurrencyAmount(1 / rate, from, { compact: true })}</p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">History</p>
+          {history.length > 0 && (
+            <p className="text-[11px] text-muted-foreground/60">5 terakhir</p>
+          )}
         </div>
-      )}
+        {history.length > 0 ? (
+          <div className="overflow-hidden rounded-lg border bg-muted/20">
+            {history.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 border-b px-3 py-2.5 text-xs last:border-b-0">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">
+                    {item.amount} {getCurrencyOption(item.from).symbol}{item.from}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                    {item.time} · 1 {item.from} = {formatCurrencyAmount(item.rate, item.to, { compact: true })}
+                  </p>
+                </div>
+                <p className="shrink-0 font-semibold text-foreground" title={formatCurrencyAmount(item.result, item.to)}>
+                  {formatCurrencyAmount(item.result, item.to, { compact: true })}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
+            History konversi bakal muncul di sini.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,8 +1,5 @@
-import { redirect } from "next/navigation";
-
-import { getCurrentManagementId } from "@/lib/management";
+import { ToolsPageContent } from "@/components/tools/tools-page-content";
 
 export default async function ToolsPage() {
-  const managementId = await getCurrentManagementId();
-  redirect(`/dompet/${managementId}/tools`);
+  return <ToolsPageContent />;
 }

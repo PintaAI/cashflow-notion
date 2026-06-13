@@ -93,3 +93,7 @@ export function useManagement() {
   }
   return context;
 }
+
+export function useOptionalManagement() {
+  return useContext(ManagementContext);
+}

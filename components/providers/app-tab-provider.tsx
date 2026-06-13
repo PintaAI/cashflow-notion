@@ -46,10 +46,21 @@ export function AppTabProvider({
 }) {
   const [activeTab, setActiveTabState] = useState(() => {
     const paramTab = getTabFromParams(searchParams);
-    if (paramTab !== "home" || typeof window === "undefined") return paramTab;
-    const saved = localStorage.getItem(DEFAULT_TAB_KEY);
-    return saved === "summary" || saved === "catatan" || saved === "setting" ? saved : paramTab;
+    return paramTab;
   });
+
+  useEffect(() => {
+    if (searchParams.get("tab") || activeTab !== "home") return;
+
+    const timeout = window.setTimeout(() => {
+      const saved = localStorage.getItem(DEFAULT_TAB_KEY);
+      if (saved === "summary" || saved === "catatan" || saved === "setting") {
+        setActiveTabState(saved);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [activeTab, searchParams]);
 
   useEffect(() => {
     if (searchParams.get("tab")) return;

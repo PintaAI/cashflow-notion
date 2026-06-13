@@ -212,7 +212,7 @@ export function OvertimeTracker() {
           <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
-                Lembur Tracker
+                Catat Lemburan
               </span>
             </div>
 

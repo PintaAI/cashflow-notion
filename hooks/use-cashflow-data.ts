@@ -38,7 +38,7 @@ import {
   performAudit,
 } from "@/app/actions/audit";
 import { getCurrentManagement } from "@/app/actions/management";
-import { useManagement } from "@/components/providers/management-provider";
+import { useManagement, useOptionalManagement } from "@/components/providers/management-provider";
 import type { BudgetPeriod, RecurringFrequency, IOType } from "@/lib/db";
 
 export const cashflowQueryKeys = {
@@ -134,13 +134,17 @@ export function useManagementMembers() {
   });
 }
 
-export function useCategoriesWithDetails(options?: { enabled?: boolean }) {
-  const { managementId } = useManagement();
+export function useCategoriesWithDetails(options?: { enabled?: boolean; managementId?: string }) {
+  const management = useOptionalManagement();
+  const managementId = options?.managementId ?? management?.managementId;
   return useQuery({
-    queryKey: cashflowQueryKeys.categoriesWithDetails(managementId),
-    queryFn: () => fetchCategoriesWithDetails(managementId),
+    queryKey: managementId ? cashflowQueryKeys.categoriesWithDetails(managementId) : ["management", "none", "cashflow-categories-details"],
+    queryFn: () => {
+      if (!managementId) throw new Error("Management ID is required");
+      return fetchCategoriesWithDetails(managementId);
+    },
+    enabled: Boolean(managementId) && (options?.enabled ?? true),
     staleTime: CATEGORY_STALE_TIME,
-    ...options,
   });
 }
 

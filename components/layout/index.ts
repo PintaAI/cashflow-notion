@@ -1,5 +1,4 @@
-export { SidebarContent, type AppTab } from "./sidebar-content"
-export { SidebarNav } from "./sidebar-nav"
+export { AppSidebar, type AppTab } from "./sidebar-content"
 export { SidebarTrigger } from "./sidebar-trigger"
 export { MobileBottomNav } from "./mobile-bottom-nav"
 export { PageHeader } from "./page-header"

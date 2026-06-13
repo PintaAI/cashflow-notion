@@ -16,5 +16,5 @@ export default async function ManagementToolsPage({
     notFound();
   }
 
-  return <ToolsPageContent />;
+  return <ToolsPageContent includeTransfer />;
 }

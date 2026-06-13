@@ -17,7 +17,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { CameraCapture } from "@/components/utils";
 import { useCurrency } from "@/components/providers/currency-provider";
-import { useManagement } from "@/components/providers/management-provider";
+import { useOptionalManagement } from "@/components/providers/management-provider";
 import { UserAvatar, getUserDisplayName } from "@/components/profile";
 import { addEntry } from "@/app/actions/cashflow";
 import { searchRegisteredUsers } from "@/app/actions/users";
@@ -224,11 +224,12 @@ function getPaidPlaces(personId: string, bills: Bill[]) {
 export function SplitBills() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { managementId } = useManagement();
+  const management = useOptionalManagement();
+  const managementId = management?.managementId;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { currency, setCurrency, toIdr } = useCurrency();
   const { data: session } = useSession();
-  const categoriesQuery = useCategoriesWithDetails();
+  const categoriesQuery = useCategoriesWithDetails({ enabled: Boolean(managementId) });
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [bills, setBills] = useState<Bill[]>(initialBills);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
@@ -292,7 +293,7 @@ export function SplitBills() {
   }, [session?.user]);
 
   useEffect(() => {
-    if (userSearch.trim().length < 2) {
+    if (!session?.user || userSearch.trim().length < 2) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- clear private search results when query is too short
       setRegisteredUsers([]);
       setUserSearchError(null);
@@ -321,7 +322,7 @@ export function SplitBills() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [userSearch]);
+  }, [session?.user, userSearch]);
 
   useEffect(() => {
     if (expenseCategory || !categories || categories.length === 0) return;
@@ -773,6 +774,11 @@ export function SplitBills() {
   }
 
   async function addExpenseFromResult() {
+    if (!managementId) {
+      setExpenseMessage("Pilih dompet dulu untuk menambahkan expense.");
+      return;
+    }
+
     if (!currentUserSummary || currentUserSummary.share <= 0) {
       setExpenseMessage("Tidak ada nominal expense untuk profil kamu.");
       return;
@@ -1160,6 +1166,7 @@ export function SplitBills() {
             )}
           </section>
 
+          {managementId ? (
           <section className="space-y-3 rounded-lg border p-4">
             <div>
               <p className="text-sm font-semibold">Tambah expense dari hasil ini?</p>
@@ -1220,6 +1227,7 @@ export function SplitBills() {
               )}
             </Button>
           </section>
+          ) : null}
         </div>
       ) : null}
 
