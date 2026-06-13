@@ -3,23 +3,9 @@ import { z } from "zod";
 
 import { fetchActivityOverview, fetchAnalytics, type AnalyticsData } from "@/lib/analytics";
 import type { CashflowSummary } from "@/lib/db";
-import { getSummary, prisma } from "@/lib/db";
+import { getSummary } from "@/lib/db";
 import { convertFromIdr } from "@/lib/currency";
-import { getAllRates } from "@/lib/exchange-rates";
-import { isValidDate, ok, toolError, getManagementId, getUserId } from "@/lib/mcp/tools/utils";
-
-async function getUserCurrencyContext(): Promise<{ currency: string; rate: number }> {
-  const userId = getUserId();
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { currency: true },
-  });
-  const currency = user?.currency ?? "IDR";
-  if (currency === "IDR") return { currency, rate: 1 };
-
-  const rates = await getAllRates();
-  return { currency, rate: rates[currency] ?? 1 };
-}
+import { isValidDate, ok, toolError, getManagementId, getUserCurrencyContext } from "@/lib/mcp/tools/utils";
 
 function convertSummary(summary: CashflowSummary, ctx: { currency: string; rate: number }): CashflowSummary {
   if (ctx.rate === 1) return summary;

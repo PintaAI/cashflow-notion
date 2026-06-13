@@ -1,5 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { prisma } from "@/lib/db";
+import { getAllRates } from "@/lib/exchange-rates";
+import { convertToIdr } from "@/lib/currency";
 
 interface MCPContext {
   managementId: string;
@@ -45,4 +48,23 @@ export function getUserId(): string {
   const ctx = managementContext.getStore();
   if (!ctx) throw new Error("No management context");
   return ctx.userId;
+}
+
+export async function getUserCurrencyContext(): Promise<{ currency: string; rate: number }> {
+  const userId = getUserId();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { currency: true },
+  });
+  const currency = user?.currency ?? "IDR";
+  if (currency === "IDR") return { currency, rate: 1 };
+
+  const rates = await getAllRates();
+  return { currency, rate: rates[currency] ?? 1 };
+}
+
+export async function toIdrAmount(nominal: number): Promise<number> {
+  const { currency, rate } = await getUserCurrencyContext();
+  if (currency === "IDR") return nominal;
+  return Math.round(convertToIdr(nominal, currency, rate));
 }

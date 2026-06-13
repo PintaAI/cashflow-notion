@@ -9,11 +9,11 @@ import {
   updateEntry,
   type IOType,
 } from "@/lib/db";
-import { isValidDate, ok, toolError, getManagementId, getUserId } from "@/lib/mcp/tools/utils";
+import { isValidDate, ok, toolError, getManagementId, getUserId, toIdrAmount, getUserCurrencyContext } from "@/lib/mcp/tools/utils";
 
 const entryFields = {
   name: z.string().trim().min(1).describe("Entry name"),
-  nominal: z.number().positive().describe("Amount of money"),
+  nominal: z.number().positive().describe("Amount of money in the user's preferred currency"),
   category: z.string().trim().min(1).optional().describe("Category name"),
   date: z.string().optional().describe("Entry date in YYYY-MM-DD format"),
   io: z.enum(["Income", "Expenses"]).describe("Whether this entry is Income or Expenses"),
@@ -110,9 +110,10 @@ export function registerEntryTools(server: McpServer) {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
 
         const managementId = getManagementId();
-        const entry = await createEntry({ name, nominal, category, date, io, managementId, userId: getUserId() });
+        const idrNominal = await toIdrAmount(nominal);
+        const entry = await createEntry({ name, nominal: idrNominal, category, date, io, managementId, userId: getUserId() });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
-        console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}" management="${management?.name}"`);
+        console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}" nominal=${idrNominal} (IDR) management="${management?.name}"`);
         return ok(`Created cashflow entry in ${management?.name ?? managementId}.`, { ...entry, managementName: management?.name ?? null });
       } catch (error) {
         console.error("MCP: create_entry failed", error instanceof Error ? error.message : error);
@@ -139,7 +140,8 @@ export function registerEntryTools(server: McpServer) {
       try {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
         const managementId = getManagementId();
-        const entry = await updateEntry(id, { name, nominal, category, date, io, managementId });
+        const idrNominal = nominal !== undefined ? await toIdrAmount(nominal) : undefined;
+        const entry = await updateEntry(id, { name, nominal: idrNominal, category, date, io, managementId });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
         return ok(`Updated cashflow entry in ${management?.name ?? managementId}.`, entry);
       } catch (error) {
