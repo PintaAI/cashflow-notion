@@ -149,7 +149,7 @@ export function registerEntryTools(server: McpServer) {
       inputSchema: {
         id: z.string().min(1).describe("Entry ID"),
         name: z.string().trim().min(1).optional(),
-        nominal: z.number().positive().optional(),
+        nominal: z.number().positive().optional().describe("Amount of money in the user's preferred currency"),
         category: z.string().trim().min(1).optional(),
         date: z.string().optional().describe("Entry date in YYYY-MM-DD format"),
         io: z.enum(["Income", "Expenses"]).optional(),
