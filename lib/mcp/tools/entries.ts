@@ -15,7 +15,7 @@ import { isValidDate, ok, toolError, getManagementId, getUserId, toIdrAmount } f
 const entryFields = {
   name: z.string().trim().min(1).describe("Entry name"),
   nominal: z.number().positive().describe("Amount of money in the user's preferred currency"),
-  category: z.string().trim().min(1).optional().describe("Category name"),
+  category: z.string().trim().min(1).optional().describe("Category name — use list_categories to see available categories"),
   date: z.string().optional().describe("Entry date in YYYY-MM-DD format"),
   io: z.enum(["Income", "Expenses"]).describe("Whether this entry is Income or Expenses"),
 };
@@ -40,7 +40,7 @@ export function registerEntryTools(server: McpServer) {
       description: "List income and expense entries with optional filters and pagination.",
       inputSchema: {
         io: z.enum(["Income", "Expenses"]).optional(),
-        category: z.string().trim().min(1).optional(),
+        category: z.string().trim().min(1).optional().describe("Filter by category name — use list_categories to see available categories"),
         date: z.string().optional().describe("Date in YYYY-MM-DD format"),
         pageSize: z.number().int().min(1).max(100).optional(),
         skip: z.number().int().min(0).optional(),
@@ -150,8 +150,8 @@ export function registerEntryTools(server: McpServer) {
         id: z.string().min(1).describe("Entry ID"),
         name: z.string().trim().min(1).optional(),
         nominal: z.number().positive().optional().describe("Amount of money in the user's preferred currency"),
-        category: z.string().trim().min(1).optional(),
-  date: z.string().optional().describe("Entry date in YYYY-MM-DD format (defaults to today)"),
+        category: z.string().trim().min(1).optional().describe("Category name — use list_categories to see available categories"),
+        date: z.string().optional().describe("Entry date in YYYY-MM-DD format"),
         io: z.enum(["Income", "Expenses"]).optional(),
       },
     },
