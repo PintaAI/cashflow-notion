@@ -3,7 +3,7 @@ import { useState, useSyncExternalStore, useTransition } from "react";
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { LOCAL_THEME_CHANGED_EVENT, LOCAL_THEMES_KEY, SELECTED_LOCAL_THEME_KEY, type LocalTheme } from "@/components/layout";
+import { LOCAL_THEME_CHANGED_EVENT, LOCAL_THEMES_KEY, SELECTED_LOCAL_THEME_KEY, getPreferredLocalTheme, type LocalTheme } from "@/components/layout";
 import { cn } from "@/lib/utils"
 import { parseThemeColors } from "@/lib/theme-palettes";
 
@@ -64,15 +64,16 @@ function ThemeSettings() {
   const selectedThemeSnapshot = useSyncExternalStore(subscribeLocalThemes, getSelectedLocalThemeSnapshot, getEmptySelectedLocalThemeSnapshot);
   const themes = parseLocalThemesSnapshot(themesSnapshot);
   const selectedThemeId = selectedThemeSnapshot || null;
+  const activeThemeId = getPreferredLocalTheme(themes, selectedThemeId)?.id ?? null;
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function handleThemeChange(value: string) {
-    const nextThemeId = value === "default" ? null : value;
+    const nextTheme = value === "default" ? getPreferredLocalTheme(themes, null) : getPreferredLocalTheme(themes, value);
     setMessage("");
     startTransition(() => {
-      if (nextThemeId) {
-        window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, nextThemeId);
+      if (nextTheme) {
+        window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, nextTheme.id);
       } else {
         window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
       }
@@ -85,8 +86,11 @@ function ThemeSettings() {
     setMessage("");
     startTransition(() => {
       const nextThemes = getLocalThemes().filter((theme) => theme.id !== themeId);
+      const nextTheme = getPreferredLocalTheme(nextThemes, selectedThemeId === themeId ? null : selectedThemeId);
       window.localStorage.setItem(LOCAL_THEMES_KEY, JSON.stringify(nextThemes));
-      if (selectedThemeId === themeId) {
+      if (nextTheme) {
+        window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, nextTheme.id);
+      } else {
         window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
       }
       window.dispatchEvent(new Event(LOCAL_THEME_CHANGED_EVENT));
@@ -107,14 +111,16 @@ function ThemeSettings() {
           onClick={() => handleThemeChange("default")}
           className={cn(
             "rounded-lg border p-3 text-left transition-colors hover:bg-accent/60",
-            !selectedThemeId && "border-primary bg-primary/5"
+            activeThemeId && "cursor-not-allowed opacity-60 hover:bg-transparent",
+            !activeThemeId && "border-primary bg-primary/5"
           )}
-          disabled={isPending}
+          disabled={isPending || Boolean(activeThemeId)}
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="truncate text-sm font-medium">Tema bawaan</p>
-            {!selectedThemeId && <span className="text-xs text-primary">Aktif</span>}
+            {!activeThemeId && <span className="text-xs text-primary">Aktif</span>}
           </div>
+          {activeThemeId ? <p className="mb-2 text-xs text-muted-foreground">Dipakai hanya jika tidak ada tema foto.</p> : null}
           <div className="flex overflow-hidden rounded-md border">
             <span className="h-8 flex-1 bg-[#ffffff]" />
             <span className="h-8 flex-1 bg-[#f4f4f5]" />
@@ -128,7 +134,7 @@ function ThemeSettings() {
             key={theme.id}
             className={cn(
               "rounded-lg border p-3 transition-colors hover:bg-accent/60",
-              selectedThemeId === theme.id && "border-primary bg-primary/5"
+              activeThemeId === theme.id && "border-primary bg-primary/5"
             )}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -141,7 +147,7 @@ function ThemeSettings() {
                 <p className="truncate text-sm font-medium">{theme.name}</p>
               </button>
               <div className="flex shrink-0 items-center gap-1">
-                {selectedThemeId === theme.id && <span className="text-xs text-primary">Aktif</span>}
+                {activeThemeId === theme.id && <span className="text-xs text-primary">Aktif</span>}
                 <Button
                   type="button"
                   variant="ghost"

@@ -25,19 +25,32 @@ function getLocalThemes(): LocalTheme[] {
   }
 }
 
+export function getPreferredLocalTheme(themes: LocalTheme[], selectedThemeId: string | null) {
+  const selectedTheme = selectedThemeId ? themes.find((item) => item.id === selectedThemeId) : null;
+  if (selectedTheme && parseThemeColors(selectedTheme.colors)) return selectedTheme;
+
+  return themes.find((item) => parseThemeColors(item.colors)) ?? null;
+}
+
 function applySelectedTheme() {
   const selectedThemeId = window.localStorage.getItem(SELECTED_LOCAL_THEME_KEY);
   const style = document.getElementById("user-theme") ?? document.createElement("style");
   style.id = "user-theme";
+  const theme = getPreferredLocalTheme(getLocalThemes(), selectedThemeId);
 
-  if (!selectedThemeId) {
+  if (!theme) {
     style.textContent = "";
+    if (selectedThemeId) {
+      window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
+    }
     return;
   }
 
-  const theme = getLocalThemes().find((item) => item.id === selectedThemeId);
-  const colors = parseThemeColors(theme?.colors);
-  style.textContent = colors ? themeToCss(colors) : "";
+  if (theme.id !== selectedThemeId) {
+    window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, theme.id);
+  }
+
+  style.textContent = themeToCss(parseThemeColors(theme.colors)!);
 
   if (!style.parentNode) {
     document.head.appendChild(style);

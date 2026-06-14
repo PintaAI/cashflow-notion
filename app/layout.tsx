@@ -28,17 +28,11 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mon
 const localThemeScript = `(() => {
   try {
     const selectedThemeId = window.localStorage.getItem("cashflow.selectedThemeId");
-    if (!selectedThemeId) return;
-
     const rawThemes = window.localStorage.getItem("cashflow.themes");
     if (!rawThemes) return;
 
     const themes = JSON.parse(rawThemes);
     if (!Array.isArray(themes)) return;
-
-    const theme = themes.find((item) => item && item.id === selectedThemeId);
-    const colors = theme && theme.colors;
-    if (!colors || typeof colors !== "object" || Array.isArray(colors) || !colors.light || !colors.dark) return;
 
     const cssVariables = new Set(${JSON.stringify(CSS_VARIABLE_NAMES)});
     const serialize = (mode) => {
@@ -49,13 +43,31 @@ const localThemeScript = `(() => {
         .join("\\n");
     };
 
-    const light = serialize(colors.light);
-    const dark = serialize(colors.dark);
-    if (!light && !dark) return;
+    const getThemeCss = (theme) => {
+      const colors = theme && theme.colors;
+      if (!colors || typeof colors !== "object" || Array.isArray(colors) || !colors.light || !colors.dark) return null;
+
+      const light = serialize(colors.light);
+      const dark = serialize(colors.dark);
+      if (!light && !dark) return null;
+
+      return ":root {\\n" + light + "\\n}\\n.dark {\\n" + dark + "\\n}";
+    };
+
+    const selectedTheme = selectedThemeId ? themes.find((item) => item && item.id === selectedThemeId) : null;
+    let theme = selectedTheme && getThemeCss(selectedTheme) ? selectedTheme : null;
+    if (!theme) theme = themes.find((item) => item && getThemeCss(item));
+    const themeCss = getThemeCss(theme);
+    if (!themeCss) {
+      if (selectedThemeId) window.localStorage.removeItem("cashflow.selectedThemeId");
+      return;
+    }
+
+    if (theme.id !== selectedThemeId) window.localStorage.setItem("cashflow.selectedThemeId", theme.id);
 
     const style = document.getElementById("user-theme") || document.createElement("style");
     style.id = "user-theme";
-    style.textContent = ":root {\\n" + light + "\\n}\\n.dark {\\n" + dark + "\\n}";
+    style.textContent = themeCss;
     if (!style.parentNode) document.head.appendChild(style);
   } catch {}
 })();`;

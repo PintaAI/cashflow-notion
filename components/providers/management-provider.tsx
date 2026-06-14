@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect } from "react";
-import { LOCAL_THEME_CHANGED_EVENT, LOCAL_THEMES_KEY, SELECTED_LOCAL_THEME_KEY, type LocalTheme } from "@/components/layout";
+import { LOCAL_THEME_CHANGED_EVENT, LOCAL_THEMES_KEY, SELECTED_LOCAL_THEME_KEY, getPreferredLocalTheme, type LocalTheme } from "@/components/layout";
 
 const CURRENT_MANAGEMENT_CACHE_PREFIX = "cashflow_current_management:";
 const WALLET_CACHE_KEY = "cashflow_wallets";
@@ -25,7 +25,12 @@ function saveManagementTheme(theme: LocalTheme) {
 }
 
 function clearManagementTheme() {
-  window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
+  const fallbackTheme = getPreferredLocalTheme(getLocalThemes(), null);
+  if (fallbackTheme) {
+    window.localStorage.setItem(SELECTED_LOCAL_THEME_KEY, fallbackTheme.id);
+  } else {
+    window.localStorage.removeItem(SELECTED_LOCAL_THEME_KEY);
+  }
   window.dispatchEvent(new Event(LOCAL_THEME_CHANGED_EVENT));
 }
 
