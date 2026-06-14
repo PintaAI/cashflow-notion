@@ -145,7 +145,7 @@ export async function createEntry(data: {
       name: data.name,
       nominal: data.nominal,
       categoryId: category?.id ?? null,
-      date: data.date ?? null,
+      date: data.date ?? formatDate(new Date()),
       io: data.io ?? null,
       managementId: data.managementId,
       createdById: data.userId ?? null,

@@ -117,7 +117,7 @@ export function registerEntryTools(server: McpServer) {
         console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}" nominal=${idrNominal} (IDR) management="${management?.name}"`);
 
         let warnings: string | undefined;
-        if (io === "Expenses" && date) {
+        if (io === "Expenses") {
           const status = await getBudgetStatus(managementId);
           const relevant = status.filter(
             (s) => (s.isWarning || s.isOverBudget) && (s.type === "overall" || s.name === entry.category),
@@ -151,7 +151,7 @@ export function registerEntryTools(server: McpServer) {
         name: z.string().trim().min(1).optional(),
         nominal: z.number().positive().optional().describe("Amount of money in the user's preferred currency"),
         category: z.string().trim().min(1).optional(),
-        date: z.string().optional().describe("Entry date in YYYY-MM-DD format"),
+  date: z.string().optional().describe("Entry date in YYYY-MM-DD format (defaults to today)"),
         io: z.enum(["Income", "Expenses"]).optional(),
       },
     },
