@@ -10,22 +10,33 @@ import {
   updateEntry,
   type IOType,
 } from "@/lib/db";
-import { isValidDate, ok, toolError, getManagementId, getUserId, toIdrAmount } from "@/lib/mcp/tools/utils";
+import {
+  fromIdrAmount,
+  getManagementId,
+  getUserCurrencyContext,
+  getUserId,
+  isValidDate,
+  ok,
+  toIdrAmount,
+  toolError,
+  type UserCurrencyContext,
+} from "@/lib/mcp/tools/utils";
 
 const entryFields = {
   name: z.string().trim().min(1).describe("Entry name"),
   nominal: z.number().positive().describe("Amount of money in the user's preferred currency"),
-  category: z.string().trim().min(1).optional().describe("Category name — use list_categories to see available categories"),
-  date: z.string().optional().describe("Entry date in YYYY-MM-DD format"),
+  category: z.string().trim().min(1).describe("Required category name. Must exactly match an existing category from list_categories. If missing or unclear, ask the user to choose a category before calling this tool."),
+  date: z.string().describe("Required entry date in YYYY-MM-DD format. If missing, relative, or ambiguous, ask the user to clarify the exact date before calling this tool."),
   io: z.enum(["Income", "Expenses"]).describe("Whether this entry is Income or Expenses"),
 };
 
-function toEntry(entry: Awaited<ReturnType<typeof prisma.entry.findFirst>> & { category?: { name: string } | null }) {
+function toEntry(entry: Awaited<ReturnType<typeof prisma.entry.findFirst>> & { category?: { name: string } | null }, ctx: UserCurrencyContext) {
   if (!entry) return null;
   return {
     id: entry.id,
     name: entry.name,
-    nominal: entry.nominal,
+    nominal: fromIdrAmount(entry.nominal, ctx),
+    currency: ctx.currency,
     category: entry.category?.name ?? null,
     date: entry.date,
     io: entry.io,
@@ -51,6 +62,7 @@ export function registerEntryTools(server: McpServer) {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
 
         const mid = getManagementId();
+        const ctx = await getUserCurrencyContext();
         const entries = await prisma.entry.findMany({
           where: { managementId: mid, ...buildEntryWhere({ io: io as IOType | undefined, category, date }) },
           include: { category: true },
@@ -61,7 +73,8 @@ export function registerEntryTools(server: McpServer) {
         const items = entries.slice(0, pageSize).map((entry) => ({
           id: entry.id,
           name: entry.name,
-          nominal: entry.nominal,
+          nominal: fromIdrAmount(entry.nominal, ctx),
+          currency: ctx.currency,
           category: entry.category?.name ?? null,
           date: entry.date,
           io: entry.io,
@@ -69,6 +82,7 @@ export function registerEntryTools(server: McpServer) {
 
         return ok(`Found ${items.length} cashflow entr${items.length === 1 ? "y" : "ies"}.`, {
           entries: items,
+          currency: ctx.currency,
           hasMore: entries.length > pageSize,
           nextSkip: entries.length > pageSize ? skip + pageSize : null,
         });
@@ -92,7 +106,8 @@ export function registerEntryTools(server: McpServer) {
           include: { category: true },
         });
         if (!entry) throw new Error(`Entry with ID "${id}" not found`);
-        return ok("Found cashflow entry.", toEntry(entry));
+        const ctx = await getUserCurrencyContext();
+        return ok("Found cashflow entry.", toEntry(entry, ctx));
       } catch (error) {
         return toolError(error);
       }
@@ -103,15 +118,16 @@ export function registerEntryTools(server: McpServer) {
     "create_entry",
     {
       title: "Create Cashflow Entry",
-      description: "Create a new income or expense entry.",
+      description: "Create a new income or expense entry. Do not guess date or category: date is required as YYYY-MM-DD, and category must exactly match list_categories. If either is missing or ambiguous, ask the user for clarification before calling this tool.",
       inputSchema: entryFields,
     },
     async ({ name, nominal, category, date, io }) => {
       try {
-        if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
+        if (!isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
 
         const managementId = getManagementId();
-        const idrNominal = await toIdrAmount(nominal);
+        const ctx = await getUserCurrencyContext();
+        const idrNominal = await toIdrAmount(nominal, ctx);
         const entry = await createEntry({ name, nominal: idrNominal, category, date, io, managementId, userId: getUserId() });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
         console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}" nominal=${idrNominal} (IDR) management="${management?.name}"`);
@@ -124,7 +140,7 @@ export function registerEntryTools(server: McpServer) {
           );
           if (relevant.length > 0) {
             warnings = relevant
-              .map((s) => `⚠ ${s.isOverBudget ? "OVER" : "Near"} ${s.type === "overall" ? "total" : s.name} ${s.period} budget: ${s.percentage}% (${s.spent} / ${s.budgetAmount} IDR)`)
+              .map((s) => `⚠ ${s.isOverBudget ? "OVER" : "Near"} ${s.type === "overall" ? "total" : s.name} ${s.period} budget: ${s.percentage}% (${fromIdrAmount(s.spent, ctx)} / ${fromIdrAmount(s.budgetAmount, ctx)} ${ctx.currency})`)
               .join("\n");
           }
         }
@@ -133,9 +149,99 @@ export function registerEntryTools(server: McpServer) {
           ? `Created cashflow entry in ${management?.name ?? managementId}.\n\nBudget Warnings:\n${warnings}`
           : `Created cashflow entry in ${management?.name ?? managementId}.`;
 
-        return ok(message, { ...entry, managementName: management?.name ?? null, budgetWarnings: warnings ?? null });
+        return ok(message, {
+          ...entry,
+          nominal: fromIdrAmount(entry.nominal, ctx),
+          currency: ctx.currency,
+          managementName: management?.name ?? null,
+          budgetWarnings: warnings ?? null,
+        });
       } catch (error) {
         console.error("MCP: create_entry failed", error instanceof Error ? error.message : error);
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_entries",
+    {
+      title: "Create Multiple Cashflow Entries",
+      description: "Create multiple income or expense entries in one call. Amounts are in the user's preferred currency. Do not guess dates or categories: every entry must include date as YYYY-MM-DD and a category that exactly matches list_categories. If any entry is missing or ambiguous, ask the user for clarification before calling this tool.",
+      inputSchema: {
+        entries: z.array(z.object(entryFields)).min(1).max(50).describe("Entries to create"),
+      },
+    },
+    async ({ entries }) => {
+      try {
+        for (const [index, entry] of entries.entries()) {
+          if (!isValidDate(entry.date)) {
+            throw new Error(`Entry ${index + 1}: date must be a valid YYYY-MM-DD value`);
+          }
+        }
+
+        const managementId = getManagementId();
+        const userId = getUserId();
+        const ctx = await getUserCurrencyContext();
+        const categories = [...new Set(entries.map((entry) => entry.category).filter((category): category is string => Boolean(category)))];
+
+        if (categories.length > 0) {
+          const existingCategories = await prisma.category.findMany({
+            where: { managementId, name: { in: categories } },
+            select: { name: true },
+          });
+          const existingNames = new Set(existingCategories.map((category) => category.name));
+          const missingCategories = categories.filter((category) => !existingNames.has(category));
+          if (missingCategories.length > 0) {
+            throw new Error(`Categories not found: ${missingCategories.join(", ")}`);
+          }
+        }
+
+        const idrNominals = await Promise.all(entries.map((entry) => toIdrAmount(entry.nominal, ctx)));
+        const created = [];
+        for (const [index, entry] of entries.entries()) {
+          created.push(await createEntry({
+            name: entry.name,
+            nominal: idrNominals[index],
+            category: entry.category,
+            date: entry.date,
+            io: entry.io,
+            managementId,
+            userId,
+          }));
+        }
+
+        const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
+        let warnings: string | undefined;
+        const expenseCategories = new Set(created.filter((entry) => entry.io === "Expenses").map((entry) => entry.category));
+        if (expenseCategories.size > 0) {
+          const status = await getBudgetStatus(managementId);
+          const relevant = status.filter(
+            (s) => (s.isWarning || s.isOverBudget) && (s.type === "overall" || expenseCategories.has(s.name)),
+          );
+          if (relevant.length > 0) {
+            warnings = relevant
+              .map((s) => `⚠ ${s.isOverBudget ? "OVER" : "Near"} ${s.type === "overall" ? "total" : s.name} ${s.period} budget: ${s.percentage}% (${fromIdrAmount(s.spent, ctx)} / ${fromIdrAmount(s.budgetAmount, ctx)} ${ctx.currency})`)
+              .join("\n");
+          }
+        }
+
+        const message = warnings
+          ? `Created ${created.length} cashflow entries in ${management?.name ?? managementId}.\n\nBudget Warnings:\n${warnings}`
+          : `Created ${created.length} cashflow entries in ${management?.name ?? managementId}.`;
+
+        return ok(message, {
+          entries: created.map((entry) => ({
+            ...entry,
+            nominal: fromIdrAmount(entry.nominal, ctx),
+            currency: ctx.currency,
+          })),
+          currency: ctx.currency,
+          managementName: management?.name ?? null,
+          budgetWarnings: warnings ?? null,
+        });
+      } catch (error) {
+        console.error("MCP: create_entries failed", error instanceof Error ? error.message : error);
         return toolError(error);
       }
     },
@@ -159,10 +265,15 @@ export function registerEntryTools(server: McpServer) {
       try {
         if (date && !isValidDate(date)) throw new Error("Date must be a valid YYYY-MM-DD value");
         const managementId = getManagementId();
-        const idrNominal = nominal !== undefined ? await toIdrAmount(nominal) : undefined;
+        const ctx = await getUserCurrencyContext();
+        const idrNominal = nominal !== undefined ? await toIdrAmount(nominal, ctx) : undefined;
         const entry = await updateEntry(id, { name, nominal: idrNominal, category, date, io, managementId });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
-        return ok(`Updated cashflow entry in ${management?.name ?? managementId}.`, entry);
+        return ok(`Updated cashflow entry in ${management?.name ?? managementId}.`, {
+          ...entry,
+          nominal: fromIdrAmount(entry.nominal, ctx),
+          currency: ctx.currency,
+        });
       } catch (error) {
         return toolError(error);
       }

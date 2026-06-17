@@ -2,11 +2,16 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { prisma } from "@/lib/db";
 import { getAllRates } from "@/lib/exchange-rates";
-import { convertToIdr } from "@/lib/currency";
+import { convertFromIdr, convertToIdr } from "@/lib/currency";
 
 interface MCPContext {
   managementId: string;
   userId: string;
+}
+
+export interface UserCurrencyContext {
+  currency: string;
+  rate: number;
 }
 
 export const managementContext = new AsyncLocalStorage<MCPContext>();
@@ -50,7 +55,7 @@ export function getUserId(): string {
   return ctx.userId;
 }
 
-export async function getUserCurrencyContext(): Promise<{ currency: string; rate: number }> {
+export async function getUserCurrencyContext(): Promise<UserCurrencyContext> {
   const userId = getUserId();
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -63,8 +68,13 @@ export async function getUserCurrencyContext(): Promise<{ currency: string; rate
   return { currency, rate: rates[currency] ?? 1 };
 }
 
-export async function toIdrAmount(nominal: number): Promise<number> {
-  const { currency, rate } = await getUserCurrencyContext();
+export async function toIdrAmount(nominal: number, ctx?: UserCurrencyContext): Promise<number> {
+  const { currency, rate } = ctx ?? await getUserCurrencyContext();
   if (currency === "IDR") return nominal;
   return Math.round(convertToIdr(nominal, currency, rate));
+}
+
+export function fromIdrAmount(amount: number, ctx: UserCurrencyContext): number {
+  if (ctx.currency === "IDR") return amount;
+  return convertFromIdr(amount, ctx.currency, ctx.rate);
 }

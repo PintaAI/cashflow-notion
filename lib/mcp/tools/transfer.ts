@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import type { IOType } from "@/lib/db";
-import { ok, toolError, getManagementId, getUserId, toIdrAmount } from "@/lib/mcp/tools/utils";
+import { fromIdrAmount, getManagementId, getUserCurrencyContext, getUserId, ok, toIdrAmount, toolError } from "@/lib/mcp/tools/utils";
 
 async function ensureTransferCategory(managementId: string, name: string, io: IOType) {
   const existing = await prisma.category.findFirst({
@@ -41,6 +41,7 @@ export function registerTransferTools(server: McpServer) {
       try {
         const fromManagementId = getManagementId();
         const userId = getUserId();
+        const ctx = await getUserCurrencyContext();
 
         if (fromManagementId === toManagementId) {
           throw new Error("Destination wallet must be different from the current one");
@@ -100,10 +101,11 @@ export function registerTransferTools(server: McpServer) {
         ]);
 
         return ok(
-          `Transferred ${idrAmount} IDR from ${fromManagement.name} to ${toManagement.name}.`,
+          `Transferred ${fromIdrAmount(idrAmount, ctx)} ${ctx.currency} from ${fromManagement.name} to ${toManagement.name}.`,
           {
-            fromEntry: { id: fromEntry.id, name: fromEntry.name, nominal: fromEntry.nominal, io: fromEntry.io, date: fromEntry.date, managementName: fromManagement.name },
-            toEntry: { id: toEntry.id, name: toEntry.name, nominal: toEntry.nominal, io: toEntry.io, date: toEntry.date, managementName: toManagement.name },
+            fromEntry: { id: fromEntry.id, name: fromEntry.name, nominal: fromIdrAmount(fromEntry.nominal, ctx), currency: ctx.currency, io: fromEntry.io, date: fromEntry.date, managementName: fromManagement.name },
+            toEntry: { id: toEntry.id, name: toEntry.name, nominal: fromIdrAmount(toEntry.nominal, ctx), currency: ctx.currency, io: toEntry.io, date: toEntry.date, managementName: toManagement.name },
+            currency: ctx.currency,
           },
         );
       } catch (error) {
