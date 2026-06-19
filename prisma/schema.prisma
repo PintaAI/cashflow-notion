@@ -194,6 +194,10 @@ model Entry {
   notionId         String?   @unique
   name             String
   nominal          Float
+  originalNominal  Float?
+  originalCurrency String?
+  exchangeRateToIdr Float?
+  exchangeRateAt   DateTime?
   categoryId       String?
   category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   date             String?

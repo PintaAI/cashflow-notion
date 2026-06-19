@@ -107,3 +107,16 @@ export function formatCurrencyAmount(
     maximumFractionDigits: fractionDigits,
   }).format(amount);
 }
+
+export function formatEntryAmount(
+  entry: { nominal: number; originalNominal?: number | null; originalCurrency?: string | null },
+  currency: string,
+  formatIdr: (amountIdr: number, opts?: { compact?: boolean }) => string,
+  options?: { compact?: boolean },
+): string {
+  if (entry.originalNominal !== null && entry.originalNominal !== undefined && entry.originalCurrency === currency) {
+    return formatCurrencyAmount(entry.originalNominal, entry.originalCurrency, options);
+  }
+
+  return formatIdr(entry.nominal, options);
+}

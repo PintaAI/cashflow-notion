@@ -19,6 +19,7 @@ import { CashflowFormDrawer } from "@/components/entries";
 import { useCalendarEntries, useCategories } from "@/hooks/use-cashflow-data";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/components/providers/currency-provider";
+import { formatEntryAmount } from "@/lib/currency";
 import { toDateKey } from "@/lib/date";
 
 function formatCompactAmount(amount: number, format: (amountIdr: number, opts?: { compact?: boolean }) => string): string {
@@ -182,7 +183,7 @@ export function CashflowCalendar() {
   const [ioFilter, setIoFilter] = React.useState<string>("all");
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
   const [editingEntry, setEditingEntry] = React.useState<CashflowEntry | null>(null);
-  const { format } = useCurrency();
+  const { currency, format } = useCurrency();
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -378,7 +379,7 @@ export function CashflowCalendar() {
                     "text-sm font-semibold tabular-nums shrink-0",
                     isIncome ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500",
                   )}>
-                    {isIncome ? "+" : "-"}{formatCompactAmount(entry.nominal, format)}
+                    {isIncome ? "+" : "-"}{formatEntryAmount(entry, currency, format, { compact: true })}
                   </span>
                 </button>
               );

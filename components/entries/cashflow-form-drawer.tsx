@@ -69,7 +69,7 @@ export function CashflowFormDrawer({
   const { managementId } = useManagement()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isEdit = mode === "edit"
-  const { currency, toIdr, toDisplay, denominations, option } = useCurrency()
+  const { currency, rates, toIdr, toDisplay, denominations, option } = useCurrency()
 
   const [internalOpen, setInternalOpen] = useState(false)
   const open = externalOpen ?? internalOpen
@@ -80,19 +80,24 @@ export function CashflowFormDrawer({
   const [showCamera, setShowCamera] = useState(false)
   const [name, setName] = useState(() => isEdit ? (entry?.name ?? "") : "")
   const [nominal, setNominal] = useState("")
+  const [initialNominal, setInitialNominal] = useState("")
   const [category, setCategory] = useState<CategoryType>(() => isEdit ? (entry?.category ?? "") : "")
   const [date, setDate] = useState<Date | undefined>(() => isEdit && entry?.date ? new Date(entry.date) : new Date())
   const [io, setIo] = useState<IOType>(() => isEdit ? (entry?.io ?? "Expenses") : "Expenses")
   useEffect(() => {
     if (isEdit && entry) {
+      const displayNominal = entry.originalCurrency === currency && entry.originalNominal !== null
+        ? entry.originalNominal
+        : toDisplay(entry.nominal)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- initialization from async conversion
       setName(entry.name)
-      setNominal(String(Math.round(toDisplay(entry.nominal))))
+      setNominal(String(Math.round(displayNominal)))
+      setInitialNominal(String(Math.round(displayNominal)))
       setCategory(entry.category ?? "")
       setDate(entry.date ? new Date(entry.date) : new Date())
       setIo(entry.io ?? "Expenses")
     }
-  }, [isEdit, entry, toDisplay])
+  }, [isEdit, entry, currency, toDisplay])
 
   const formatNominal = (value: string) => {
     if (!value) return ""
@@ -205,12 +210,18 @@ export function CashflowFormDrawer({
     setIsSubmitting(true)
     try {
       const nominalIdr = Math.round(toIdr(Number(nominal)))
+      const sourceRate = currency === "IDR" ? 1 : (rates[currency] ?? 1)
+      const exchangeRateToIdr = currency === "IDR" ? 1 : 1 / sourceRate
       const formattedDate = date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : undefined
 
       if (isEdit && entry) {
         const payload: {
           name: string
-          nominal: number
+          nominal?: number
+          originalNominal?: number
+          originalCurrency?: string
+          exchangeRateToIdr?: number
+          exchangeRateAt?: Date
           category?: CategoryType
           date?: string
           io: IOType
@@ -218,11 +229,17 @@ export function CashflowFormDrawer({
           managementId: string
         } = {
           name: name.trim(),
-          nominal: nominalIdr,
           category: category || undefined,
           date: formattedDate,
           io,
           managementId,
+        }
+        if (nominal !== initialNominal) {
+          payload.nominal = nominalIdr
+          payload.originalNominal = Number(nominal)
+          payload.originalCurrency = currency
+          payload.exchangeRateToIdr = exchangeRateToIdr
+          payload.exchangeRateAt = new Date()
         }
 
         await editEntry(entry.id, payload)
@@ -231,6 +248,10 @@ export function CashflowFormDrawer({
           managementId,
           name: name.trim(),
           nominal: nominalIdr,
+          originalNominal: Number(nominal),
+          originalCurrency: currency,
+          exchangeRateToIdr,
+          exchangeRateAt: new Date(),
           category: category || undefined,
           date: formattedDate,
           io,
@@ -240,6 +261,7 @@ export function CashflowFormDrawer({
       celebrateSave()
       setName("")
       setNominal("")
+      setInitialNominal("")
       setCategory("")
       setDate(new Date())
       setIo("Expenses")

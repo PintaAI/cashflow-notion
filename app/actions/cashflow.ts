@@ -17,6 +17,9 @@ import { assertManagementAccess, resolveManagementId, getSession } from "@/lib/m
 import { checkBudgetAlerts } from "@/lib/budget-alerts";
 import { prisma } from "@/lib/db";
 import { entryCreatorSelect, toEntry as mapDbEntry } from "@/lib/db/entries";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+
+const VALID_CURRENCIES = new Set(SUPPORTED_CURRENCIES.map((currency) => currency.code));
 
 export async function fetchAllEntries(managementId?: string): Promise<CashflowEntry[]> {
   managementId = await resolveManagementId(managementId);
@@ -137,6 +140,10 @@ export async function addEntry(data: {
   managementId?: string;
   name: string;
   nominal: number;
+  originalNominal?: number;
+  originalCurrency?: string;
+  exchangeRateToIdr?: number;
+  exchangeRateAt?: Date;
   category?: CategoryType;
   date?: string;
   io?: IOType;
@@ -161,6 +168,10 @@ export async function editEntry(
     managementId: string;
     name: string;
     nominal: number;
+    originalNominal: number;
+    originalCurrency: string;
+    exchangeRateToIdr: number;
+    exchangeRateAt: Date;
     category: CategoryType;
     date: string;
     io: IOType;
@@ -218,6 +229,10 @@ export async function transferBetweenManagements(data: {
   fromManagementId?: string;
   toManagementId: string;
   nominal: number;
+  originalNominal?: number;
+  originalCurrency?: string;
+  exchangeRateToIdr?: number;
+  exchangeRateAt?: Date;
   date?: string;
   note?: string;
 }): Promise<{ fromEntry: CashflowEntry; toEntry: CashflowEntry }> {
@@ -241,6 +256,20 @@ export async function transferBetweenManagements(data: {
   const note = data.note?.trim();
   const fromName = note || `Transfer to ${toManagement.name}`;
   const toName = note || `Transfer from ${fromManagement.name}`;
+  const originalNominal = data.originalNominal ?? data.nominal;
+  const originalCurrency = data.originalCurrency ?? "IDR";
+  const exchangeRateToIdr = data.exchangeRateToIdr ?? 1;
+  const exchangeRateAt = data.exchangeRateAt ?? new Date();
+
+  if (!Number.isFinite(originalNominal) || originalNominal <= 0) {
+    throw new Error("Original amount must be greater than 0");
+  }
+  if (!VALID_CURRENCIES.has(originalCurrency)) {
+    throw new Error("Invalid original currency");
+  }
+  if (!Number.isFinite(exchangeRateToIdr) || exchangeRateToIdr <= 0) {
+    throw new Error("Exchange rate must be greater than 0");
+  }
 
   const [fromCategoryId, toCategoryId] = await Promise.all([
     ensureTransferCategory(fromManagementId, "Transfer Out", "Expenses"),
@@ -253,6 +282,10 @@ export async function transferBetweenManagements(data: {
         managementId: fromManagementId,
         name: fromName,
         nominal: data.nominal,
+        originalNominal,
+        originalCurrency,
+        exchangeRateToIdr,
+        exchangeRateAt,
         categoryId: fromCategoryId,
         date,
         io: "Expenses",
@@ -265,6 +298,10 @@ export async function transferBetweenManagements(data: {
         managementId: data.toManagementId,
         name: toName,
         nominal: data.nominal,
+        originalNominal,
+        originalCurrency,
+        exchangeRateToIdr,
+        exchangeRateAt,
         categoryId: toCategoryId,
         date,
         io: "Income",

@@ -46,6 +46,7 @@ import type { AnalyticsData, CategoryAnalytics } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 import { getCategoryConfig } from "@/lib/categories";
 import { useCurrency } from "@/components/providers/currency-provider";
+import { formatEntryAmount } from "@/lib/currency";
 import { useManagement } from "@/components/providers/management-provider";
 import { cn } from "@/lib/utils";
 import { formatLocalizedDate } from "@/lib/date";
@@ -488,7 +489,7 @@ function CategoryDetailDrawer({
   filters: AnalyticsChartsProps["filters"];
   onOpenChange: (open: boolean) => void;
 }) {
-  const { format } = useCurrency();
+  const { currency, format } = useCurrency();
   const queryClient = useQueryClient();
   const { managementId } = useManagement();
   const detailQuery = useAnalytics({ ...filters, category: category.category });
@@ -580,7 +581,7 @@ function CategoryDetailDrawer({
                             <p className="truncate text-xs font-medium">{entry.name}</p>
                             <p className="text-[10px] text-muted-foreground">{entry.date}</p>
                           </div>
-                          <span className="shrink-0 text-xs font-semibold tabular-nums">{format(entry.nominal)}</span>
+                          <span className="shrink-0 text-xs font-semibold tabular-nums">{formatEntryAmount(entry, currency, format)}</span>
                           {targetCategories.length > 0 && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

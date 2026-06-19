@@ -32,11 +32,14 @@ const entryFields = {
 
 function toEntry(entry: Awaited<ReturnType<typeof prisma.entry.findFirst>> & { category?: { name: string } | null }, ctx: UserCurrencyContext) {
   if (!entry) return null;
+  const currency = entry.originalCurrency ?? ctx.currency;
   return {
     id: entry.id,
     name: entry.name,
-    nominal: fromIdrAmount(entry.nominal, ctx),
-    currency: ctx.currency,
+    nominal: entry.originalNominal ?? fromIdrAmount(entry.nominal, ctx),
+    currency,
+    nominalIdr: entry.nominal,
+    exchangeRateToIdr: entry.exchangeRateToIdr,
     category: entry.category?.name ?? null,
     date: entry.date,
     io: entry.io,
@@ -70,15 +73,7 @@ export function registerEntryTools(server: McpServer) {
           skip,
           take: pageSize + 1,
         });
-        const items = entries.slice(0, pageSize).map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          nominal: fromIdrAmount(entry.nominal, ctx),
-          currency: ctx.currency,
-          category: entry.category?.name ?? null,
-          date: entry.date,
-          io: entry.io,
-        }));
+        const items = entries.slice(0, pageSize).map((entry) => toEntry(entry, ctx));
 
         return ok(`Found ${items.length} cashflow entr${items.length === 1 ? "y" : "ies"}.`, {
           entries: items,
@@ -127,8 +122,21 @@ export function registerEntryTools(server: McpServer) {
 
         const managementId = getManagementId();
         const ctx = await getUserCurrencyContext();
+        const exchangeRateToIdr = ctx.currency === "IDR" ? 1 : 1 / ctx.rate;
         const idrNominal = await toIdrAmount(nominal, ctx);
-        const entry = await createEntry({ name, nominal: idrNominal, category, date, io, managementId, userId: getUserId() });
+        const entry = await createEntry({
+          name,
+          nominal: idrNominal,
+          originalNominal: nominal,
+          originalCurrency: ctx.currency,
+          exchangeRateToIdr,
+          exchangeRateAt: new Date(),
+          category,
+          date,
+          io,
+          managementId,
+          userId: getUserId(),
+        });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
         console.log(`MCP: create_entry succeeded id=${entry.id} name="${entry.name}" nominal=${idrNominal} (IDR) management="${management?.name}"`);
 
@@ -151,8 +159,9 @@ export function registerEntryTools(server: McpServer) {
 
         return ok(message, {
           ...entry,
-          nominal: fromIdrAmount(entry.nominal, ctx),
-          currency: ctx.currency,
+          nominal: entry.originalNominal ?? fromIdrAmount(entry.nominal, ctx),
+          currency: entry.originalCurrency ?? ctx.currency,
+          nominalIdr: entry.nominal,
           managementName: management?.name ?? null,
           budgetWarnings: warnings ?? null,
         });
@@ -183,6 +192,7 @@ export function registerEntryTools(server: McpServer) {
         const managementId = getManagementId();
         const userId = getUserId();
         const ctx = await getUserCurrencyContext();
+        const exchangeRateToIdr = ctx.currency === "IDR" ? 1 : 1 / ctx.rate;
         const categories = [...new Set(entries.map((entry) => entry.category).filter((category): category is string => Boolean(category)))];
 
         if (categories.length > 0) {
@@ -203,6 +213,10 @@ export function registerEntryTools(server: McpServer) {
           created.push(await createEntry({
             name: entry.name,
             nominal: idrNominals[index],
+            originalNominal: entry.nominal,
+            originalCurrency: ctx.currency,
+            exchangeRateToIdr,
+            exchangeRateAt: new Date(),
             category: entry.category,
             date: entry.date,
             io: entry.io,
@@ -233,8 +247,9 @@ export function registerEntryTools(server: McpServer) {
         return ok(message, {
           entries: created.map((entry) => ({
             ...entry,
-            nominal: fromIdrAmount(entry.nominal, ctx),
-            currency: ctx.currency,
+            nominal: entry.originalNominal ?? fromIdrAmount(entry.nominal, ctx),
+            currency: entry.originalCurrency ?? ctx.currency,
+            nominalIdr: entry.nominal,
           })),
           currency: ctx.currency,
           managementName: management?.name ?? null,
@@ -267,12 +282,29 @@ export function registerEntryTools(server: McpServer) {
         const managementId = getManagementId();
         const ctx = await getUserCurrencyContext();
         const idrNominal = nominal !== undefined ? await toIdrAmount(nominal, ctx) : undefined;
-        const entry = await updateEntry(id, { name, nominal: idrNominal, category, date, io, managementId });
+        const exchangeRateToIdr = ctx.currency === "IDR" ? 1 : 1 / ctx.rate;
+        const entry = await updateEntry(id, {
+          name,
+          nominal: idrNominal,
+          ...(nominal !== undefined
+            ? {
+                originalNominal: nominal,
+                originalCurrency: ctx.currency,
+                exchangeRateToIdr,
+                exchangeRateAt: new Date(),
+              }
+            : {}),
+          category,
+          date,
+          io,
+          managementId,
+        });
         const management = await prisma.management.findUnique({ where: { id: managementId }, select: { name: true } });
         return ok(`Updated cashflow entry in ${management?.name ?? managementId}.`, {
           ...entry,
-          nominal: fromIdrAmount(entry.nominal, ctx),
-          currency: ctx.currency,
+          nominal: entry.originalNominal ?? fromIdrAmount(entry.nominal, ctx),
+          currency: entry.originalCurrency ?? ctx.currency,
+          nominalIdr: entry.nominal,
         });
       } catch (error) {
         return toolError(error);

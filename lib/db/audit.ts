@@ -47,6 +47,10 @@ export async function createAuditSnapshot(params: {
       data: {
         name: `Penyesuaian audit ${today}`,
         nominal: Math.abs(difference),
+        originalNominal: Math.abs(difference),
+        originalCurrency: "IDR",
+        exchangeRateToIdr: 1,
+        exchangeRateAt: new Date(),
         categoryId,
         date: today,
         io,

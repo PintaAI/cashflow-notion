@@ -24,7 +24,7 @@ import { formatCurrencyAmount } from "@/lib/currency";
 export function WalletTransfer() {
   const queryClient = useQueryClient();
   const { managementId } = useManagement();
-  const { currency, option, toIdr } = useCurrency();
+  const { currency, rates, option, toIdr } = useCurrency();
   const [toManagementId, setToManagementId] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -51,10 +51,15 @@ export function WalletTransfer() {
 
     try {
       const nominal = Math.round(toIdr(Number(amount)));
+      const sourceRate = currency === "IDR" ? 1 : (rates[currency] ?? 1);
       await transferBetweenManagements({
         fromManagementId: managementId,
         toManagementId,
         nominal,
+        originalNominal: Number(amount),
+        originalCurrency: currency,
+        exchangeRateToIdr: currency === "IDR" ? 1 : 1 / sourceRate,
+        exchangeRateAt: new Date(),
         note: note.trim() || undefined,
       });
 

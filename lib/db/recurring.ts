@@ -190,6 +190,10 @@ export async function generateRecurringEntries(managementId: string): Promise<nu
       data: {
         name: recurring.name,
         nominal: recurring.nominal,
+        originalNominal: recurring.nominal,
+        originalCurrency: "IDR",
+        exchangeRateToIdr: 1,
+        exchangeRateAt: new Date(),
         categoryId: recurring.categoryId,
         date: today,
         io: recurring.io,

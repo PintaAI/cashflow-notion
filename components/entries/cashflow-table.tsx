@@ -67,15 +67,17 @@ import { beginCashflowPending, useCashflowPending } from "@/lib/cashflow-pending
 import { cashflowQueryKeys, useCategories, useManagementMembers } from "@/hooks/use-cashflow-data";
 import { useManagement } from "@/components/providers/management-provider";
 import { useCurrency } from "@/components/providers/currency-provider";
+import { formatEntryAmount } from "@/lib/currency";
 import { addDaysToDateKey, parseDateKey } from "@/lib/date";
 
 function getColumns(deps: {
+  currency: string;
   format: (amountIdr: number, opts?: { compact?: boolean }) => string;
   memberOptions: Array<{ id: string; role: string; user: { id: string; name: string | null; email: string; image: string | null } }>;
   queryClient: ReturnType<typeof useQueryClient>;
   managementId: string;
 }): ColumnDef<CashflowEntry>[] {
-  const { format, memberOptions, queryClient, managementId } = deps;
+  const { currency, format, memberOptions, queryClient, managementId } = deps;
   return [
   {
     id: "select",
@@ -137,13 +139,12 @@ function getColumns(deps: {
       </button>
     ),
     cell: ({ row }) => {
-      const amount = row.getValue("nominal") as number;
       const io = row.getValue("io") as IOType | null;
       const isIncome = io === "Income";
 
       return (
         <div className={`text-right font-medium ${isIncome ? "text-green-600 dark:text-green-400" : "text-red-900 dark:text-red-500"}`}>
-          {format(amount, { compact: true })}
+          {formatEntryAmount(row.original, currency, format, { compact: true })}
         </div>
       );
     },
@@ -353,7 +354,7 @@ export function CashflowTable({ dateFilter, onDateFilterChange }: CashflowTableP
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "date", desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
-  const { format } = useCurrency();
+  const { currency, format } = useCurrency();
   
   // Separate state for I/O filter to drive the query
   const [ioQueryFilter, setIoQueryFilter] = React.useState<string>("all");
@@ -436,7 +437,7 @@ export function CashflowTable({ dateFilter, onDateFilterChange }: CashflowTableP
     return data.pages.flatMap((page) => page.entries);
   }, [data]);
 
-  const columns = React.useMemo(() => getColumns({ format, memberOptions, queryClient, managementId }), [format, memberOptions, queryClient, managementId]);
+  const columns = React.useMemo(() => getColumns({ currency, format, memberOptions, queryClient, managementId }), [currency, format, memberOptions, queryClient, managementId]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table returns stable APIs managed by the library.
   const table = useReactTable({

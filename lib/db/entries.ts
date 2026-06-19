@@ -1,8 +1,27 @@
 import { Prisma } from "@prisma/client";
 
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { prisma } from "@/lib/db/client";
 import { formatDate } from "@/lib/db/dates";
 import type { CalendarDayData, CashflowEntry, CategoryType, EntryForMapping, EntryWhereInput, IOType } from "@/lib/db/types";
+
+const VALID_CURRENCIES = new Set(SUPPORTED_CURRENCIES.map((currency) => currency.code));
+
+function assertValidSnapshot(data: {
+  originalNominal?: number;
+  originalCurrency?: string;
+  exchangeRateToIdr?: number;
+}) {
+  if (data.originalNominal !== undefined && (!Number.isFinite(data.originalNominal) || data.originalNominal <= 0)) {
+    throw new Error("Original amount must be greater than 0");
+  }
+  if (data.originalCurrency !== undefined && !VALID_CURRENCIES.has(data.originalCurrency)) {
+    throw new Error("Invalid original currency");
+  }
+  if (data.exchangeRateToIdr !== undefined && (!Number.isFinite(data.exchangeRateToIdr) || data.exchangeRateToIdr <= 0)) {
+    throw new Error("Exchange rate must be greater than 0");
+  }
+}
 
 export const entryCreatorSelect = {
   id: true,
@@ -16,6 +35,10 @@ export function toEntry(entry: EntryForMapping): CashflowEntry {
     id: entry.id,
     name: entry.name,
     nominal: entry.nominal,
+    originalNominal: entry.originalNominal,
+    originalCurrency: entry.originalCurrency,
+    exchangeRateToIdr: entry.exchangeRateToIdr,
+    exchangeRateAt: entry.exchangeRateAt,
     category: entry.category?.name ?? null,
     date: entry.date,
     io: entry.io,
@@ -129,12 +152,17 @@ async function findCategory(name: CategoryType | undefined, managementId: string
 export async function createEntry(data: {
   name: string;
   nominal: number;
+  originalNominal?: number;
+  originalCurrency?: string;
+  exchangeRateToIdr?: number;
+  exchangeRateAt?: Date;
   category?: CategoryType;
   date?: string;
   io?: IOType;
   managementId: string;
   userId?: string;
 }): Promise<CashflowEntry> {
+  assertValidSnapshot(data);
   const category = await findCategory(data.category, data.managementId);
   if (data.category && !category) {
     throw new Error(`Category "${data.category}" not found`);
@@ -144,6 +172,10 @@ export async function createEntry(data: {
     data: {
       name: data.name,
       nominal: data.nominal,
+      originalNominal: data.originalNominal ?? data.nominal,
+      originalCurrency: data.originalCurrency ?? "IDR",
+      exchangeRateToIdr: data.exchangeRateToIdr ?? 1,
+      exchangeRateAt: data.exchangeRateAt ?? new Date(),
       categoryId: category?.id ?? null,
       date: data.date ?? formatDate(new Date()),
       io: data.io ?? null,
@@ -162,6 +194,10 @@ export async function updateEntry(
   data: Partial<{
     name: string;
     nominal: number;
+    originalNominal: number;
+    originalCurrency: string;
+    exchangeRateToIdr: number;
+    exchangeRateAt: Date;
     category: CategoryType;
     date: string;
     io: IOType;
@@ -170,6 +206,7 @@ export async function updateEntry(
   }>
 ): Promise<CashflowEntry> {
   if (!data.managementId) throw new Error("managementId required");
+  assertValidSnapshot(data);
 
   const category = data.category === undefined ? undefined : await findCategory(data.category, data.managementId || "");
   if (data.category && !category) {
@@ -189,6 +226,10 @@ export async function updateEntry(
   const updateData = {
     ...(data.name !== undefined ? { name: data.name } : {}),
     ...(data.nominal !== undefined ? { nominal: data.nominal } : {}),
+    ...(data.originalNominal !== undefined ? { originalNominal: data.originalNominal } : {}),
+    ...(data.originalCurrency !== undefined ? { originalCurrency: data.originalCurrency } : {}),
+    ...(data.exchangeRateToIdr !== undefined ? { exchangeRateToIdr: data.exchangeRateToIdr } : {}),
+    ...(data.exchangeRateAt !== undefined ? { exchangeRateAt: data.exchangeRateAt } : {}),
     ...(data.category !== undefined ? { categoryId: category?.id ?? null } : {}),
     ...(data.date !== undefined ? { date: data.date } : {}),
     ...(data.io !== undefined ? { io: data.io } : {}),

@@ -72,6 +72,7 @@ export function registerTransferTools(server: McpServer) {
           ensureTransferCategory(fromManagementId, "Transfer Out", "Expenses"),
           ensureTransferCategory(toManagementId, "Transfer In", "Income"),
         ]);
+        const exchangeRateToIdr = ctx.currency === "IDR" ? 1 : 1 / ctx.rate;
 
         const [fromEntry, toEntry] = await prisma.$transaction([
           prisma.entry.create({
@@ -79,6 +80,10 @@ export function registerTransferTools(server: McpServer) {
               managementId: fromManagementId,
               name: fromName,
               nominal: idrAmount,
+              originalNominal: amount,
+              originalCurrency: ctx.currency,
+              exchangeRateToIdr,
+              exchangeRateAt: new Date(),
               categoryId: fromCategoryId,
               date: today,
               io: "Expenses",
@@ -91,6 +96,10 @@ export function registerTransferTools(server: McpServer) {
               managementId: toManagementId,
               name: toName,
               nominal: idrAmount,
+              originalNominal: amount,
+              originalCurrency: ctx.currency,
+              exchangeRateToIdr,
+              exchangeRateAt: new Date(),
               categoryId: toCategoryId,
               date: today,
               io: "Income",

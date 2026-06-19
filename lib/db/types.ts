@@ -17,6 +17,10 @@ export interface CashflowEntry {
   id: string;
   name: string;
   nominal: number;
+  originalNominal: number | null;
+  originalCurrency: string | null;
+  exchangeRateToIdr: number | null;
+  exchangeRateAt: Date | null;
   category: CategoryType | null;
   date: string | null;
   io: IOType | null;
