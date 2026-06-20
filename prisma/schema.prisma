@@ -13,6 +13,24 @@ enum IOType {
   Expenses
 }
 
+enum StatieRoomStatus {
+  Lobby
+  Voting
+  Debate
+  Finished
+}
+
+enum StatieRoundStatus {
+  Voting
+  Debate
+  Finished
+}
+
+enum StatieVoteChoice {
+  Agree
+  Disagree
+}
+
 model User {
   id            String    @id
   name          String
@@ -34,8 +52,98 @@ model User {
   oauthAuthCodes OAuthAuthorizationCode[]
   oauthTokens    OAuthToken[]
   oauthConsents  OAuthConsent[]
+  statieRoomsCreated StatieRoom[] @relation("StatieRoomLeader")
+  statieParticipations StatieParticipant[]
 
   @@map("User")
+}
+
+model StatieRoom {
+  id             String           @id @default(uuid())
+  code           String           @unique
+  topic          String
+  topicKey       String
+  status         StatieRoomStatus @default(Lobby)
+  leaderUserId   String?
+  leaderUser     User?            @relation("StatieRoomLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
+  leaderGuestName String?
+  leaderToken    String
+  debateSeconds  Int              @default(120)
+  currentRoundId String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  participants StatieParticipant[]
+  rounds       StatieRound[]
+
+  @@index([code])
+  @@index([topicKey])
+}
+
+model StatieParticipant {
+  id        String     @id @default(uuid())
+  roomId    String
+  room      StatieRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName String?
+  token     String
+  isLeader  Boolean    @default(false)
+  joinedAt  DateTime   @default(now())
+  lastSeenAt DateTime  @default(now())
+
+  votes StatieVote[]
+
+  @@unique([roomId, token])
+  @@index([roomId])
+  @@index([userId])
+}
+
+model StatieStatement {
+  id            String   @id @default(uuid())
+  topic         String
+  topicKey      String
+  text          String
+  generatedByAi Boolean  @default(true)
+  usedCount     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  rounds StatieRound[]
+
+  @@unique([topicKey, text])
+  @@index([topicKey, usedCount])
+}
+
+model StatieRound {
+  id             String            @id @default(uuid())
+  roomId         String
+  room           StatieRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  statementId    String
+  statement      StatieStatement   @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  status         StatieRoundStatus @default(Voting)
+  votingStartedAt DateTime         @default(now())
+  debateStartedAt DateTime?
+  debateEndsAt    DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime         @default(now())
+
+  votes StatieVote[]
+
+  @@index([roomId, createdAt])
+  @@index([statementId])
+}
+
+model StatieVote {
+  id            String            @id @default(uuid())
+  roundId       String
+  round         StatieRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   StatieParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  choice        StatieVoteChoice
+  createdAt     DateTime          @default(now())
+
+  @@unique([roundId, participantId])
+  @@index([roundId, choice])
 }
 
 model Session {

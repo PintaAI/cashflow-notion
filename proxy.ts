@@ -49,6 +49,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/.well-known") ||
     pathname.startsWith("/oauth") ||
+    pathname.startsWith("/statie") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||

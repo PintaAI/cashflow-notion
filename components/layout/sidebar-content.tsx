@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
+  AiGameIcon,
   Analytics01Icon,
   ArrowDown01Icon,
   File01Icon,
@@ -104,6 +105,7 @@ export function AppSidebar() {
   const managementPath = params.managementId ? `/dompet/${params.managementId}` : "/";
   const managementToolsPath = params.managementId ? `/dompet/${params.managementId}/tools` : null;
   const toolsPath = "/tools";
+  const statiePath = "/statie";
 
   useEffect(() => {
     checkAdminStatus().then(setIsAdmin);
@@ -137,6 +139,7 @@ export function AppSidebar() {
       ? ((searchParams.get("tab") as AppTab) || "home")
       : "home";
   const isOnAdmin = pathname === "/admin";
+  const isOnStatie = pathname.startsWith(statiePath);
   const isOnPublicTools = pathname === toolsPath;
   const isOnTransferTool = Boolean(managementToolsPath && pathname === managementToolsPath && searchParams.get("tool") === "transfer");
   const activeTool = searchParams.get("tool");
@@ -314,6 +317,18 @@ export function AppSidebar() {
         <SidebarGroup className="p-0">
           <SidebarGroupLabel className="px-3">Tools</SidebarGroupLabel>
           <SidebarMenu className="gap-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={isOnStatie}
+                className="h-10 rounded-lg px-3 text-sm data-active:bg-muted/70 data-active:font-medium"
+              >
+                <Link href={statiePath} onClick={() => setOpenMobile(false)}>
+                  <HugeiconsIcon icon={AiGameIcon} strokeWidth={2.1} className="size-4.5" />
+                  <span>Statie</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             {publicTools.map((tool) => {
               const isActiveTool = isOnPublicTools && (activeTool === tool.id || (!activeTool && tool.id === publicTools[0]?.id));
 
