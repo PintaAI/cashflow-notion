@@ -13,6 +13,7 @@ import {
   startStatieDebate,
   startStatieRound,
   submitStatieVote,
+  updateStatieRoomTopic,
 } from "@/app/actions/statie";
 
 type RoomState = Awaited<ReturnType<typeof getStatieRoomState>>;
@@ -31,6 +32,7 @@ export function StatieRoom({ code }: { code: string }) {
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [nextTopic, setNextTopic] = useState("");
   const [isPending, startTransition] = useTransition();
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
@@ -38,13 +40,17 @@ export function StatieRoom({ code }: { code: string }) {
   async function refresh() {
     const nextState = await getStatieRoomState(code);
     setState(nextState);
+    setNextTopic((current) => current || nextState?.topic || "");
   }
 
   useEffect(() => {
     let active = true;
     const loadState = async () => {
       const nextState = await getStatieRoomState(code);
-      if (active) setState(nextState);
+      if (active) {
+        setState(nextState);
+        setNextTopic((current) => current || nextState?.topic || "");
+      }
     };
 
     void loadState();
@@ -83,6 +89,10 @@ export function StatieRoom({ code }: { code: string }) {
 
   function vote(choice: VoteChoice) {
     runAction(() => submitStatieVote(code, choice));
+  }
+
+  function changeTopic() {
+    runAction(() => updateStatieRoomTopic(code, nextTopic));
   }
 
   async function copyLink() {
@@ -124,6 +134,17 @@ export function StatieRoom({ code }: { code: string }) {
             <p className="text-xs font-medium text-muted-foreground">Topik</p>
             <p className="mt-1 font-bold">{state.topic}</p>
           </div>
+          {state.isLeader && !state.round && (
+            <div className="space-y-2 rounded-xl border p-3">
+              <label className="space-y-2 text-xs font-medium text-muted-foreground">
+                Ganti topik ronde berikutnya
+                <Input value={nextTopic} onChange={(event) => setNextTopic(event.target.value)} placeholder="Topik baru" className="h-9 text-foreground" />
+              </label>
+              <Button onClick={changeTopic} disabled={isPending || nextTopic.trim() === state.topic} variant="outline" className="w-full">
+                Simpan topik
+              </Button>
+            </div>
+          )}
           <Button onClick={copyLink} variant="outline" className="w-full">
             {copied ? "Link disalin" : "Salin link"}
           </Button>

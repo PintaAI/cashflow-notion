@@ -327,6 +327,30 @@ export async function startStatieRound(code: string): Promise<ActionResult<{ rou
   }
 }
 
+export async function updateStatieRoomTopic(code: string, topicInput: string): Promise<ActionResult<object>> {
+  try {
+    const leader = await requireLeader(code);
+    const topic = normalizeTopic(topicInput);
+    if (!topic) return { success: false, message: "Topik tidak boleh kosong." };
+
+    const activeRound = await prisma.statieRound.findFirst({
+      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+      select: { id: true },
+    });
+    if (activeRound) return { success: false, message: "Topik hanya bisa diganti saat tidak ada ronde aktif." };
+
+    await prisma.statieRoom.update({
+      where: { id: leader.roomId },
+      data: { topic, topicKey: topicKey(topic) },
+    });
+
+    revalidatePath(`/statie/${leader.room.code}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal mengganti topik." };
+  }
+}
+
 export async function submitStatieVote(code: string, choice: "Agree" | "Disagree"): Promise<ActionResult<object>> {
   try {
     const participant = await requireParticipant(code);
