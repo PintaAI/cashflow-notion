@@ -131,13 +131,13 @@ function buildVariables(primary: Hsl, secondary: Hsl, accent: Hsl): GeneratedThe
     "chart-3": hsl(accent.h, accent.s, 0.58),
     "chart-4": hsl((primary.h + 42) % 360, primary.s, 0.62),
     "chart-5": hsl((secondary.h + 64) % 360, secondary.s, 0.52),
-    sidebar: hsl(primary.h, 0.28, 0.16),
-    "sidebar-foreground": hsl(primary.h, 0.18, 0.96),
+    sidebar: hsl(primary.h, 0.16, 0.97),
+    "sidebar-foreground": hsl(primary.h, 0.24, 0.16),
     "sidebar-primary": hsl(primary.h, primary.s, 0.58),
     "sidebar-primary-foreground": hsl(primary.h, 0.2, 0.98),
-    "sidebar-accent": hsl(primary.h, 0.22, 0.24),
-    "sidebar-accent-foreground": hsl(primary.h, 0.18, 0.96),
-    "sidebar-border": hsl(primary.h, 0.22, 0.24),
+    "sidebar-accent": hsl(primary.h, 0.16, 0.93),
+    "sidebar-accent-foreground": hsl(primary.h, 0.24, 0.16),
+    "sidebar-border": hsl(primary.h, 0.15, 0.88),
     "sidebar-ring": hsl(primary.h, primary.s, 0.58),
   };
 
@@ -216,10 +216,21 @@ export function parseThemeColors(value: unknown): GeneratedThemeColors | null {
   };
 
   const swatches = Array.isArray(parsed.swatches) ? parsed.swatches.filter((item): item is string => typeof item === "string") : [];
+  const light = cleanMode(parsed.light);
+  const dark = cleanMode(parsed.dark);
+
+  if (swatches.length > 0) {
+    light.sidebar = light.background ?? light.sidebar;
+    light["sidebar-foreground"] = light.foreground ?? light["sidebar-foreground"];
+    light["sidebar-accent"] = light.muted ?? light["sidebar-accent"];
+    light["sidebar-accent-foreground"] = light.foreground ?? light["sidebar-accent-foreground"];
+    light["sidebar-border"] = light.border ?? light["sidebar-border"];
+    light["sidebar-ring"] = light.ring ?? light["sidebar-ring"];
+  }
 
   return {
-    light: cleanMode(parsed.light),
-    dark: cleanMode(parsed.dark),
+    light,
+    dark,
     swatches,
   };
 }

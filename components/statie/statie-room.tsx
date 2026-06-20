@@ -19,6 +19,16 @@ import {
 type RoomState = Awaited<ReturnType<typeof getStatieRoomState>>;
 type VoteChoice = "Agree" | "Disagree";
 
+const LOBBY_POLL_MS = 8000;
+const ACTIVE_ROUND_POLL_MS = 2500;
+const UNJOINED_POLL_MS = 12000;
+
+function getPollingDelay(state: RoomState) {
+  if (!state?.isJoined) return UNJOINED_POLL_MS;
+  if (state.round?.status === "Voting" || state.round?.status === "Debate") return ACTIVE_ROUND_POLL_MS;
+  return LOBBY_POLL_MS;
+}
+
 function formatTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safeSeconds / 60).toString().padStart(2, "0");
@@ -45,26 +55,52 @@ export function StatieRoom({ code }: { code: string }) {
 
   useEffect(() => {
     let active = true;
+    let loading = false;
+    let timeout: number | undefined;
+    let latestState: RoomState = null;
+
+    const scheduleNextLoad = () => {
+      if (!active || document.hidden) return;
+      timeout = window.setTimeout(() => void loadState(), getPollingDelay(latestState));
+    };
+
     const loadState = async () => {
-      const nextState = await getStatieRoomState(code);
-      if (active) {
-        setState(nextState);
-        setNextTopic((current) => current || nextState?.topic || "");
+      if (loading) return;
+      if (document.hidden) return;
+      loading = true;
+      try {
+        const nextState = await getStatieRoomState(code);
+        if (active) {
+          latestState = nextState;
+          setState(nextState);
+          setNextTopic((current) => current || nextState?.topic || "");
+        }
+      } finally {
+        loading = false;
+        scheduleNextLoad();
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (timeout) window.clearTimeout(timeout);
+      if (!document.hidden) void loadState();
+    };
+
     void loadState();
-    const poll = window.setInterval(() => void loadState(), 1500);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       active = false;
-      window.clearInterval(poll);
+      if (timeout) window.clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [code]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    if (state?.round?.status !== "Debate") return;
+
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [state?.round?.status]);
 
   const votes = state?.round?.votes ?? [];
   const agreeVotes = votes.filter((vote) => vote.choice === "Agree");
@@ -72,6 +108,7 @@ export function StatieRoom({ code }: { code: string }) {
   const votedCount = votes.length;
   const totalPlayers = state?.participants.length ?? 0;
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
+  const hasActiveRound = state?.round?.status === "Voting" || state?.round?.status === "Debate";
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
 
   function runAction(action: () => Promise<{ success: boolean; message?: string }>) {
@@ -228,7 +265,7 @@ export function StatieRoom({ code }: { code: string }) {
                   <div className="flex flex-wrap gap-2">
                     {!state.round && <Button onClick={() => runAction(() => startStatieRound(code))} disabled={isPending}>Mulai ronde</Button>}
                     {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code))} disabled={isPending}>Split & debat</Button>}
-                    {state.round && <Button onClick={() => runAction(() => finishStatieRound(code))} disabled={isPending} variant="outline">Selesai ronde</Button>}
+                    {hasActiveRound && <Button onClick={() => runAction(() => finishStatieRound(code))} disabled={isPending} variant="outline">Selesai ronde</Button>}
                   </div>
                 )}
               </div>

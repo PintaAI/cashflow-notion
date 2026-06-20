@@ -246,6 +246,7 @@ export async function getStatieRoomState(code: string) {
         orderBy: [{ isLeader: "desc" }, { joinedAt: "asc" }],
       },
       rounds: {
+        where: { status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
         orderBy: { createdAt: "desc" },
         take: 1,
         include: {

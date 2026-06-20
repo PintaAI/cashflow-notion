@@ -47,7 +47,16 @@ const localThemeScript = `(() => {
       const colors = theme && theme.colors;
       if (!colors || typeof colors !== "object" || Array.isArray(colors) || !colors.light || !colors.dark) return null;
 
-      const light = serialize(colors.light);
+      const lightMode = colors.swatches && Array.isArray(colors.swatches) ? {
+        ...colors.light,
+        sidebar: colors.light.background || colors.light.sidebar,
+        "sidebar-foreground": colors.light.foreground || colors.light["sidebar-foreground"],
+        "sidebar-accent": colors.light.muted || colors.light["sidebar-accent"],
+        "sidebar-accent-foreground": colors.light.foreground || colors.light["sidebar-accent-foreground"],
+        "sidebar-border": colors.light.border || colors.light["sidebar-border"],
+        "sidebar-ring": colors.light.ring || colors.light["sidebar-ring"],
+      } : colors.light;
+      const light = serialize(lightMode);
       const dark = serialize(colors.dark);
       if (!light && !dark) return null;
 
