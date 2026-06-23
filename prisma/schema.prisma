@@ -47,6 +47,7 @@ model User {
   sessions    Session[]
   accounts    Account[]
   memberships ManagementMember[]
+  noteMemberships NoteMember[]
   createdEntries Entry[]          @relation("EntryCreator")
   auditSnapshots AuditSnapshot[]
   oauthAuthCodes OAuthAuthorizationCode[]
@@ -228,6 +229,44 @@ model Invitation {
   status       String     @default("pending")
   createdAt    DateTime   @default(now())
   expiresAt    DateTime
+}
+
+model Note {
+  id          String   @id @default(uuid())
+  title       String
+  contentJson String?
+  contentHtml String?
+  contentMarkdown String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     NoteMember[]
+  invitations NoteInvitation[]
+}
+
+model NoteMember {
+  id       String   @id @default(uuid())
+  noteId   String
+  note     Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  @@unique([noteId, userId])
+  @@index([userId])
+}
+
+model NoteInvitation {
+  id        String   @id @default(uuid())
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  code      String   @unique
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([noteId])
 }
 
 model OverallBudget {

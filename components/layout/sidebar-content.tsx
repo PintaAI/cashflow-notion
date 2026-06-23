@@ -9,6 +9,7 @@ import {
   AiGameIcon,
   Analytics01Icon,
   ArrowDown01Icon,
+  BookEditIcon,
   File01Icon,
   Home02Icon,
   Shield01Icon,
@@ -105,6 +106,7 @@ export function AppSidebar() {
   const managementPath = params.managementId ? `/dompet/${params.managementId}` : "/";
   const managementToolsPath = params.managementId ? `/dompet/${params.managementId}/tools` : null;
   const toolsPath = "/tools";
+  const notesPath = "/notes";
   const statiePath = "/statie";
 
   useEffect(() => {
@@ -139,6 +141,7 @@ export function AppSidebar() {
       ? ((searchParams.get("tab") as AppTab) || "home")
       : "home";
   const isOnAdmin = pathname === "/admin";
+  const isOnNotes = pathname === notesPath;
   const isOnStatie = pathname.startsWith(statiePath);
   const isOnPublicTools = pathname === toolsPath;
   const isOnTransferTool = Boolean(managementToolsPath && pathname === managementToolsPath && searchParams.get("tool") === "transfer");
@@ -317,6 +320,18 @@ export function AppSidebar() {
         <SidebarGroup className="p-0">
           <SidebarGroupLabel className="px-3">Tools</SidebarGroupLabel>
           <SidebarMenu className="gap-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={isOnNotes}
+                className="h-10 rounded-lg px-3 text-sm data-active:bg-muted/70 data-active:font-medium"
+              >
+                <Link href={notesPath} onClick={() => setOpenMobile(false)}>
+                  <HugeiconsIcon icon={BookEditIcon} strokeWidth={2.1} className="size-4.5" />
+                  <span>Notes</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
