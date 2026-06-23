@@ -32,6 +32,7 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
   const [newTitle, setNewTitle] = useState("");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const sharedCount = notes.filter((note) => note.memberCount > 1).length;
 
   const refreshNotes = useCallback(async () => {
     setNotes(await getUserNotes());
@@ -72,35 +73,75 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-lg font-semibold">Notes</h1>
-          <p className="text-xs text-muted-foreground">Catatan pribadi dan bersama.</p>
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="mb-4 space-y-3">
+        <div className="py-3 sm:py-4">
+          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+              Notes
+            </span>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <HugeiconsIcon icon={BookEditIcon} size={14} className="text-muted-foreground" />
+              <span className="font-medium text-muted-foreground/70">{notes.length}</span>
+              <span className="hidden sm:inline">catatan</span>
+              <span className="mx-0.5 text-muted-foreground/40">|</span>
+              <HugeiconsIcon icon={UserGroupIcon} size={14} className="text-muted-foreground" />
+              <span className="font-medium text-muted-foreground/70">{sharedCount}</span>
+              <span className="hidden sm:inline">shared</span>
+            </div>
+          </div>
+
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold tracking-tight transition-all sm:text-3xl md:text-4xl">
+                {notes.length}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                Catatan pribadi dan bersama yang bisa diedit real-time style.
+              </p>
+            </div>
+            <Button size="sm" className="h-9 gap-1.5" onClick={handleCreateNote} disabled={isPending}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+              Baru
+            </Button>
+          </div>
         </div>
-        <HugeiconsIcon icon={BookEditIcon} strokeWidth={2.2} className="size-5 text-primary" />
       </div>
 
       {message && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{message}</p>}
 
-      <div className="flex gap-2">
-        <Input
-          value={newTitle}
-          onChange={(event) => setNewTitle(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") handleCreateNote();
-          }}
-          placeholder="Judul catatan baru"
-          disabled={isPending}
-        />
-        <Button size="icon" onClick={handleCreateNote} disabled={isPending} aria-label="Buat catatan">
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2.4} className="size-4" />
-        </Button>
-      </div>
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Buat catatan</p>
+          <p className="text-xs text-muted-foreground">Judul bisa diganti lagi setelah masuk ke halaman note.</p>
+        </div>
+        <div className="flex gap-2 rounded-md border bg-muted/30 p-2">
+          <Input
+            value={newTitle}
+            onChange={(event) => setNewTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") handleCreateNote();
+            }}
+            placeholder="Judul catatan baru"
+            disabled={isPending}
+            className="h-9 min-w-0 flex-1 rounded-md border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
+          />
+          <Button size="icon-sm" onClick={handleCreateNote} disabled={isPending} aria-label="Buat catatan">
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2.4} className="size-4" />
+          </Button>
+        </div>
+      </section>
 
-      <div className="space-y-1.5">
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Daftar catatan</p>
+          <p className="text-xs text-muted-foreground">Pilih catatan untuk membuka route khususnya.</p>
+        </div>
+
+        <div className="space-y-2">
         {notes.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-8 text-center text-xs text-muted-foreground">
+          <p className="py-8 text-center text-sm text-muted-foreground">
             Belum ada catatan. Buat catatan baru untuk mulai menulis.
           </p>
         ) : notes.map((note) => {
@@ -111,12 +152,12 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
             <Link
               key={note.id}
               href={`/notes/${note.id}`}
-              className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/60"
+              className="flex items-start gap-3 rounded-md border bg-muted/30 p-2 transition-colors hover:bg-muted/60"
             >
               <HugeiconsIcon
                 icon={sharedWithUser ? Share01Icon : BookEditIcon}
                 strokeWidth={2.1}
-                className={cn("mt-0.5 size-5 shrink-0", sharedWithUser ? "text-primary" : "text-muted-foreground")}
+                className={cn("mt-1 size-4 shrink-0", sharedWithUser ? "text-primary" : "text-muted-foreground")}
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{note.title}</p>
@@ -137,7 +178,8 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
             </Link>
           );
         })}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

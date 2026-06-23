@@ -128,27 +128,43 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-3xl space-y-5">
       <Link href="/notes" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         &larr; Kembali ke daftar
       </Link>
 
       {message && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{message}</p>}
 
-      <section className="rounded-2xl border bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-2">
-            <Input
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-              className="h-auto border-0 bg-transparent px-0 text-xl font-semibold shadow-none focus-visible:ring-0"
-            />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
+      <div className="mb-4 space-y-3">
+        <div className="py-3 sm:py-4">
+          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+              Note Editor
+            </span>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <HugeiconsIcon icon={currentNote.role === "owner" ? CheckmarkCircle01Icon : Share01Icon} size={14} className="text-muted-foreground" />
+              <span className="font-medium text-muted-foreground/70">{currentNote.role === "owner" ? "pemilik" : "shared"}</span>
+              <span className="mx-0.5 text-muted-foreground/40">|</span>
+              <HugeiconsIcon icon={UserGroupIcon} size={14} className="text-muted-foreground" />
+              <span className="font-medium text-muted-foreground/70">{currentNote.memberCount}</span>
+              <span className="hidden sm:inline">anggota</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <Input
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                className="h-auto border-0 bg-transparent px-0 text-2xl font-bold tracking-tight shadow-none transition-all focus-visible:ring-0 sm:text-3xl md:text-4xl"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground/70">
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
                 <HugeiconsIcon
                   icon={currentNote.role === "owner" ? CheckmarkCircle01Icon : Share01Icon}
                   strokeWidth={2}
@@ -156,14 +172,14 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                 />
                 {currentNote.role === "owner" ? "Pemilik" : "Shared note"}
               </span>
-              <span>{currentNote.memberCount} anggota</span>
               <span>Update {new Date(currentNote.updatedAt).toLocaleDateString("id-ID")}</span>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
+
+            <div className="flex shrink-0 items-center gap-2">
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-9 gap-1.5">
                   <HugeiconsIcon icon={CogIcon} strokeWidth={2} className="size-3.5" />
                   Setting
                 </Button>
@@ -177,7 +193,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                 </DialogHeader>
 
                 <div className="space-y-5">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
                         <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-4" />
@@ -187,7 +203,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                     </div>
                     <div className="space-y-1.5">
                       {currentNote.members.map((member) => (
-                        <div key={member.id} className="flex items-center gap-2 rounded-lg border p-2">
+                        <div key={member.id} className="flex items-center gap-2 rounded-md border bg-muted/30 p-2">
                           <UserAvatar user={member.user} size={26} className="size-6.5" fallbackClassName="text-[10px]" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-medium">{member.user.name ?? member.user.email}</p>
@@ -198,7 +214,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
                         <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-4" />
@@ -212,15 +228,15 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                       )}
                     </div>
                     {!isOwner ? (
-                      <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">Hanya pemilik yang bisa membuat link undangan.</p>
+                      <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Hanya pemilik yang bisa membuat link undangan.</p>
                     ) : invitations.length === 0 ? (
-                      <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">Belum ada undangan aktif.</p>
+                      <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Belum ada undangan aktif.</p>
                     ) : (
                       <div className="space-y-1.5">
                         {invitations.map((invitation) => {
                           const expired = new Date(invitation.expiresAt) < new Date();
                           return (
-                            <div key={invitation.id} className="space-y-2 rounded-lg border p-2">
+                            <div key={invitation.id} className="space-y-2 rounded-md border bg-muted/30 p-2">
                               <div className="flex items-center justify-between gap-2">
                                 <span className={cn(
                                   "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
@@ -232,7 +248,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                                   Hapus
                                 </Button>
                               </div>
-                              <div className="flex min-w-0 items-center gap-2 rounded bg-muted p-2">
+                              <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted p-2">
                                 <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                                   {getInviteDisplay(invitation)}
                                 </p>
@@ -252,16 +268,22 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
             </Dialog>
 
             {isOwner && (
-              <Button variant="destructive" size="sm" onClick={handleDeleteNote} disabled={isPending}>
+              <Button variant="destructive" size="sm" className="h-9 gap-1.5" onClick={handleDeleteNote} disabled={isPending}>
                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
                 Hapus
               </Button>
             )}
+            </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="rounded-2xl border bg-card p-2 shadow-sm sm:p-4">
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Konten</p>
+          <p className="text-xs text-muted-foreground">Perubahan tersimpan otomatis setelah kamu berhenti mengetik.</p>
+        </div>
+        <div className="rounded-md border bg-muted/30 p-2 sm:p-3">
         <Editor
           key={currentNote.id}
           initialContent={currentNote.contentJson ?? undefined}
@@ -278,6 +300,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
           }}
           className="min-h-[520px]"
         />
+        </div>
       </section>
 
     </div>
