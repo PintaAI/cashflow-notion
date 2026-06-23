@@ -128,21 +128,21 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-4 sm:space-y-5">
       <Link href="/notes" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         &larr; Kembali ke daftar
       </Link>
 
       {message && <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{message}</p>}
 
-      <div className="mb-4 space-y-3">
-        <div className="py-3 sm:py-4">
-          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+      <div className="mb-2 space-y-3 sm:mb-4">
+        <div className="py-2 sm:py-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4 sm:gap-3">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
               Note Editor
             </span>
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground sm:gap-2 sm:text-xs">
               <HugeiconsIcon icon={currentNote.role === "owner" ? CheckmarkCircle01Icon : Share01Icon} size={14} className="text-muted-foreground" />
               <span className="font-medium text-muted-foreground/70">{currentNote.role === "owner" ? "pemilik" : "shared"}</span>
               <span className="mx-0.5 text-muted-foreground/40">|</span>
@@ -152,8 +152,8 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3">
+            <div className="min-w-0">
               <Input
                 value={titleDraft}
                 onChange={(event) => setTitleDraft(event.target.value)}
@@ -161,9 +161,9 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.currentTarget.blur();
                 }}
-                className="h-auto border-0 bg-transparent px-0 text-2xl font-bold tracking-tight shadow-none transition-all focus-visible:ring-0 sm:text-3xl md:text-4xl"
+                className="h-auto border-0 bg-transparent px-0 text-2xl font-bold leading-tight tracking-tight shadow-none transition-all focus-visible:ring-0 sm:text-3xl md:text-4xl"
               />
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground/70">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground/70 sm:gap-2 sm:text-xs">
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
                 <HugeiconsIcon
                   icon={currentNote.role === "owner" ? CheckmarkCircle01Icon : Share01Icon}
@@ -172,118 +172,118 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                 />
                 {currentNote.role === "owner" ? "Pemilik" : "Shared note"}
               </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
+                <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-3.5" />
+                {currentNote.memberCount} anggota
+              </span>
               <span>Update {new Date(currentNote.updatedAt).toLocaleDateString("id-ID")}</span>
-              </div>
-            </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="xs" className="h-6 gap-1 rounded-full px-2 text-[11px]">
+                    <HugeiconsIcon icon={CogIcon} strokeWidth={2} className="size-3" />
+                    Setting
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Setting Catatan</DialogTitle>
+                    <DialogDescription>
+                      Kelola anggota dan link invite untuk catatan ini.
+                    </DialogDescription>
+                  </DialogHeader>
 
-            <div className="flex shrink-0 items-center gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-1.5">
-                  <HugeiconsIcon icon={CogIcon} strokeWidth={2} className="size-3.5" />
-                  Setting
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Setting Catatan</DialogTitle>
-                  <DialogDescription>
-                    Kelola anggota dan link invite untuk catatan ini.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-5">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                        <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-4" />
-                        Anggota
-                      </h2>
-                      <span className="text-xs text-muted-foreground">{currentNote.memberCount} anggota</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {currentNote.members.map((member) => (
-                        <div key={member.id} className="flex items-center gap-2 rounded-md border bg-muted/30 p-2">
-                          <UserAvatar user={member.user} size={26} className="size-6.5" fallbackClassName="text-[10px]" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium">{member.user.name ?? member.user.email}</p>
-                            <p className="text-[10px] text-muted-foreground">{member.role === "owner" ? "Pemilik" : "Editor"}</p>
+                  <div className="space-y-5">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                          <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-4" />
+                          Anggota
+                        </h2>
+                        <span className="text-xs text-muted-foreground">{currentNote.memberCount} anggota</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {currentNote.members.map((member) => (
+                          <div key={member.id} className="flex items-center gap-2 rounded-md border bg-muted/30 p-2">
+                            <UserAvatar user={member.user} size={26} className="size-6.5" fallbackClassName="text-[10px]" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium">{member.user.name ?? member.user.email}</p>
+                              <p className="text-[10px] text-muted-foreground">{member.role === "owner" ? "Pemilik" : "Editor"}</p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                        <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-4" />
-                        Link Invite
-                      </h2>
-                      {isOwner && (
-                        <Button size="sm" onClick={handleCreateInvite} disabled={isPending}>
-                          <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-3.5" />
-                          Buat
-                        </Button>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                          <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-4" />
+                          Link Invite
+                        </h2>
+                        {isOwner && (
+                          <Button size="sm" onClick={handleCreateInvite} disabled={isPending}>
+                            <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-3.5" />
+                            Buat
+                          </Button>
+                        )}
+                      </div>
+                      {!isOwner ? (
+                        <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Hanya pemilik yang bisa membuat link undangan.</p>
+                      ) : invitations.length === 0 ? (
+                        <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Belum ada undangan aktif.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {invitations.map((invitation) => {
+                            const expired = new Date(invitation.expiresAt) < new Date();
+                            return (
+                              <div key={invitation.id} className="space-y-2 rounded-md border bg-muted/30 p-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={cn(
+                                    "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                    invitation.status === "pending" && !expired ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                                  )}>
+                                    {expired ? "Kadaluarsa" : invitation.status === "pending" ? "Aktif" : "Digunakan"}
+                                  </span>
+                                  <Button variant="outline" size="xs" onClick={() => handleDeleteInvite(invitation.id)}>
+                                    Hapus
+                                  </Button>
+                                </div>
+                                <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted p-2">
+                                  <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                                    {getInviteDisplay(invitation)}
+                                  </p>
+                                  <Button variant="outline" size="xs" onClick={() => handleCopyInvite(invitation)}>
+                                    <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} className="size-3" />
+                                    {copiedInviteId === invitation.id ? "Tersalin" : "Copy"}
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                    {!isOwner ? (
-                      <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Hanya pemilik yang bisa membuat link undangan.</p>
-                    ) : invitations.length === 0 ? (
-                      <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Belum ada undangan aktif.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {invitations.map((invitation) => {
-                          const expired = new Date(invitation.expiresAt) < new Date();
-                          return (
-                            <div key={invitation.id} className="space-y-2 rounded-md border bg-muted/30 p-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className={cn(
-                                  "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                                  invitation.status === "pending" && !expired ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                                )}>
-                                  {expired ? "Kadaluarsa" : invitation.status === "pending" ? "Aktif" : "Digunakan"}
-                                </span>
-                                <Button variant="outline" size="xs" onClick={() => handleDeleteInvite(invitation.id)}>
-                                  Hapus
-                                </Button>
-                              </div>
-                              <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted p-2">
-                                <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                                  {getInviteDisplay(invitation)}
-                                </p>
-                                <Button variant="outline" size="xs" onClick={() => handleCopyInvite(invitation)}>
-                                  <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} className="size-3" />
-                                  {copiedInviteId === invitation.id ? "Tersalin" : "Copy"}
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            {isOwner && (
-              <Button variant="destructive" size="sm" className="h-9 gap-1.5" onClick={handleDeleteNote} disabled={isPending}>
-                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
-                Hapus
-              </Button>
-            )}
+                </DialogContent>
+              </Dialog>
+              {isOwner && (
+                <Button variant="destructive" size="xs" className="h-6 gap-1 rounded-full px-2 text-[11px]" onClick={handleDeleteNote} disabled={isPending}>
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3" />
+                  Hapus
+                </Button>
+              )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <section className="space-y-3">
-        <div>
+        <div className="px-0.5 sm:px-0">
           <p className="text-sm font-semibold">Konten</p>
           <p className="text-xs text-muted-foreground">Perubahan tersimpan otomatis setelah kamu berhenti mengetik.</p>
         </div>
-        <div className="rounded-md border bg-muted/30 p-2 sm:p-3">
+        <div className="overflow-hidden rounded-md border bg-background p-2 sm:bg-muted/30 sm:p-3">
         <Editor
           key={currentNote.id}
           initialContent={currentNote.contentJson ?? undefined}
@@ -298,7 +298,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
               updatedAt: new Date().toISOString(),
             }));
           }}
-          className="min-h-[520px]"
+          className="min-h-[58dvh] sm:min-h-[520px]"
         />
         </div>
       </section>

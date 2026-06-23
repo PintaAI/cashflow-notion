@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useCreateBlockNote } from "@blocknote/react"
 import { BlockNoteView } from "@blocknote/shadcn"
 import type { Block } from "@blocknote/core"
-import "@blocknote/core/fonts/inter.css"
 import "@blocknote/shadcn/style.css"
 import { cn } from "@/lib/utils"
 
@@ -68,7 +67,17 @@ export function BlockNoteEditor({
   }, [])
 
   return (
-    <div className={cn("relative", className)}>
+    <div
+      className={cn(
+        "relative bg-transparent text-foreground",
+        "cashflow-blocknote",
+        "[&_.bn-container]:bg-transparent [&_.bn-container]:text-foreground",
+        "[&_.bn-editor]:min-h-[58dvh] [&_.bn-editor]:bg-transparent [&_.bn-editor]:px-0 [&_.bn-editor]:text-foreground sm:[&_.bn-editor]:min-h-[520px] sm:[&_.bn-editor]:px-2",
+        "[&_.bn-editor]:font-[var(--font-body)] [&_.bn-editor_*]:font-[var(--font-body)]",
+        "[&_.bn-block-content]:text-foreground [&_.bn-inline-content]:text-foreground [&_.bn-toolbar]:font-[var(--font-body)]",
+        className
+      )}
+    >
       <BlockNoteView
         editor={editor}
         onChange={handleChange}

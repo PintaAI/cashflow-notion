@@ -207,6 +207,32 @@ body {
   letter-spacing: var(--tracking-body);
 }
 
+.cashflow-blocknote,
+.cashflow-blocknote .bn-root,
+.cashflow-blocknote .bn-container,
+.cashflow-blocknote .bn-editor,
+.cashflow-blocknote .bn-default-styles {
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-body);
+  letter-spacing: var(--tracking-body);
+}
+
+.cashflow-blocknote .bn-editor {
+  padding-inline: 0;
+}
+
+.cashflow-blocknote .bn-block-content {
+  color: var(--foreground);
+}
+
+@media (max-width: 640px) {
+  .cashflow-blocknote .bn-side-menu,
+  .cashflow-blocknote .bn-drag-handle-menu {
+    display: none;
+  }
+}
+
 @utility no-scrollbar {
   &::-webkit-scrollbar {
     display: none;

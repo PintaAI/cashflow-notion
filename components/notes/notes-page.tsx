@@ -73,15 +73,15 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div className="mb-4 space-y-3">
-        <div className="py-3 sm:py-4">
-          <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+    <div className="mx-auto max-w-3xl space-y-4 sm:space-y-5">
+      <div className="mb-2 space-y-3 sm:mb-4">
+        <div className="py-2 sm:py-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4 sm:gap-3">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
               Notes
             </span>
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground sm:gap-2 sm:text-xs">
               <HugeiconsIcon icon={BookEditIcon} size={14} className="text-muted-foreground" />
               <span className="font-medium text-muted-foreground/70">{notes.length}</span>
               <span className="hidden sm:inline">catatan</span>
@@ -101,7 +101,7 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
                 Catatan pribadi dan bersama yang bisa diedit real-time style.
               </p>
             </div>
-            <Button size="sm" className="h-9 gap-1.5" onClick={handleCreateNote} disabled={isPending}>
+            <Button size="sm" className="h-9 shrink-0 gap-1.5" onClick={handleCreateNote} disabled={isPending}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
               Baru
             </Button>
@@ -116,7 +116,7 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
           <p className="text-sm font-semibold">Buat catatan</p>
           <p className="text-xs text-muted-foreground">Judul bisa diganti lagi setelah masuk ke halaman note.</p>
         </div>
-        <div className="flex gap-2 rounded-md border bg-muted/30 p-2">
+        <div className="flex gap-2 rounded-md border bg-muted/30 p-1.5 sm:p-2">
           <Input
             value={newTitle}
             onChange={(event) => setNewTitle(event.target.value)}
@@ -152,7 +152,7 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
             <Link
               key={note.id}
               href={`/notes/${note.id}`}
-              className="flex items-start gap-3 rounded-md border bg-muted/30 p-2 transition-colors hover:bg-muted/60"
+              className="flex items-start gap-2.5 rounded-md border bg-muted/30 p-2 transition-colors hover:bg-muted/60 sm:gap-3"
             >
               <HugeiconsIcon
                 icon={sharedWithUser ? Share01Icon : BookEditIcon}
