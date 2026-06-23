@@ -234,3 +234,40 @@ export async function acceptNoteInvite(code: string): Promise<AcceptNoteInviteRe
   revalidatePath("/notes");
   return { success: true };
 }
+
+export async function getUserNote(noteId: string): Promise<UserNote | null> {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const membership = await prisma.noteMember.findFirst({
+    where: { noteId, userId: session.user.id },
+    include: {
+      note: {
+        include: {
+          _count: { select: { members: true } },
+          members: {
+            orderBy: { joinedAt: "asc" },
+            include: { user: { select: { id: true, name: true, email: true, image: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!membership) return null;
+
+  return {
+    id: membership.note.id,
+    title: membership.note.title,
+    contentJson: membership.note.contentJson,
+    contentHtml: membership.note.contentHtml,
+    contentMarkdown: membership.note.contentMarkdown,
+    role: membership.role,
+    memberCount: membership.note._count.members,
+    updatedAt: membership.note.updatedAt.toISOString(),
+    members: membership.note.members.map((member) => ({
+      id: member.id,
+      role: member.role,
+      user: member.user,
+    })),
+  };
+}
