@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useCreateBlockNote } from "@blocknote/react"
 import { BlockNoteView } from "@blocknote/shadcn"
 import type { Block } from "@blocknote/core"
+import { useTheme } from "next-themes"
 import "@blocknote/shadcn/style.css"
 import { cn } from "@/lib/utils"
 
@@ -30,6 +31,7 @@ export function BlockNoteEditor({
 }: BlockNoteEditorProps) {
   const [saving, setSaving] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const { resolvedTheme } = useTheme()
 
   const parsedContent = initialContent
     ? (JSON.parse(initialContent) as Block[])
@@ -66,6 +68,8 @@ export function BlockNoteEditor({
     }
   }, [])
 
+  const blockNoteTheme = resolvedTheme === "dark" ? "dark" : "light"
+
   return (
     <div
       className={cn(
@@ -82,6 +86,7 @@ export function BlockNoteEditor({
         editor={editor}
         onChange={handleChange}
         editable={editable}
+        theme={blockNoteTheme}
         shadCNComponents={{}}
       />
       {saving && (
