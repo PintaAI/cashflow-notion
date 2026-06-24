@@ -8,7 +8,6 @@ import {
   AnalyticsUpIcon,
   BubbleChatSparkIcon,
   CheckmarkCircle04Icon,
-  Clock01Icon,
   Delete02Icon,
   PencilEdit01Icon,
   ThumbsDownIcon,
@@ -26,7 +25,7 @@ import type { getStatiePopularTopics, getStatieStatements } from "@/app/actions/
 type Statement = Awaited<ReturnType<typeof getStatieStatements>>;
 type PopularTopic = Awaited<ReturnType<typeof getStatiePopularTopics>>[number];
 
-const TIME_PRESETS = [300, 600, 900, 1800, 3600];
+const TIME_PRESETS = [300, 600, 900];
 const FALLBACK_TOPICS = ["kerja remote", "dating", "uang", "AI", "teknologi"];
 
 function parseTopicsLocal(input: string): string[] {
@@ -270,7 +269,7 @@ export function StatieHome({ statements, popularTopics, isAdmin }: { statements:
                   <Input
                     type="number"
                     min={1}
-                    max={60}
+                    max={15}
                     value={customDebateMinutes}
                     onChange={(event) => {
                       setCustomDebateMinutes(event.target.value);
@@ -293,7 +292,7 @@ export function StatieHome({ statements, popularTopics, isAdmin }: { statements:
                         }}
                         className={`rounded-full border px-2 py-1.5 text-xs font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
                       >
-                        {seconds === 3600 ? "1h" : `${seconds / 60}m`}
+                        {`${seconds / 60}m`}
                       </button>
                     );
                   })}

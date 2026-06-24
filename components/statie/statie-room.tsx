@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -34,17 +34,30 @@ import {
   kickStatieParticipant,
   startStatieDebate,
   startStatieRound,
+  submitStatieTranscript,
   submitStatieVote,
   updateStatiePlayerLimit,
   updateStatieRoomTopic,
 } from "@/app/actions/statie";
 
 type RoomState = Awaited<ReturnType<typeof getStatieRoomState>>;
+type ActiveRound = NonNullable<NonNullable<RoomState>["round"]>;
 type VoteChoice = "Agree" | "Disagree";
 
 const LOBBY_POLL_MS = 8000;
 const ACTIVE_ROUND_POLL_MS = 2500;
 const UNJOINED_POLL_MS = 12000;
+
+type StatieAiScore = {
+  participants: {
+    participantId: string;
+    score: number;
+    reason: string;
+    criteria?: Record<string, number>;
+  }[];
+  winnerParticipantId: string | null;
+  summary: string;
+};
 
 function getPollingDelay(state: RoomState) {
   if (!state?.isJoined) return UNJOINED_POLL_MS;
@@ -60,6 +73,24 @@ function formatTime(seconds: number) {
   return `${minutes}:${rest}`;
 }
 
+function pickSupportedMimeType() {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+  return ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+}
+
+function extensionForMimeType(mimeType: string) {
+  if (mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("webm")) return "webm";
+  return "bin";
+}
+
+function getAiScore(value: unknown): StatieAiScore | null {
+  if (!value || typeof value !== "object") return null;
+  const score = value as StatieAiScore;
+  return Array.isArray(score.participants) && typeof score.summary === "string" ? score : null;
+}
+
 export function StatieRoom({ code }: { code: string }) {
   const [state, setState] = useState<RoomState>(null);
   const [name, setName] = useState("");
@@ -69,15 +100,36 @@ export function StatieRoom({ code }: { code: string }) {
   const [nextTopic, setNextTopic] = useState("");
   const [playerLimitInput, setPlayerLimitInput] = useState(10);
   const [customStatement, setCustomStatement] = useState("");
+  const [transcriptText, setTranscriptText] = useState("");
+  const [recorderMessage, setRecorderMessage] = useState("");
+  const [isMicReady, setIsMicReady] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const transcriptRoundIdRef = useRef<string | null>(null);
+  const finishAfterTranscribeRef = useRef(false);
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
 
-  async function refresh() {
-    const nextState = await getStatieRoomState(code);
+  function applyRoomState(nextState: RoomState) {
     setState(nextState);
     if (nextState) setPlayerLimitInput(nextState.playerLimit);
     setNextTopic((current) => current || nextState?.topic || "");
+
+    const roundId = nextState?.round?.id ?? null;
+    if (transcriptRoundIdRef.current !== roundId) {
+      transcriptRoundIdRef.current = roundId;
+      setTranscriptText(nextState?.round?.myTranscript ?? "");
+      setRecorderMessage("");
+    }
+  }
+
+  async function refresh() {
+    const nextState = await getStatieRoomState(code);
+    applyRoomState(nextState);
   }
 
   useEffect(() => {
@@ -101,9 +153,7 @@ export function StatieRoom({ code }: { code: string }) {
         const nextState = await getStatieRoomState(code);
         if (active) {
           latestState = nextState;
-          setState(nextState);
-          if (nextState) setPlayerLimitInput(nextState.playerLimit);
-          setNextTopic((current) => current || nextState?.topic || "");
+          applyRoomState(nextState);
         }
       } finally {
         loading = false;
@@ -132,6 +182,13 @@ export function StatieRoom({ code }: { code: string }) {
     return () => window.clearInterval(timer);
   }, [state?.round?.status]);
 
+  useEffect(() => {
+    return () => {
+      recorderRef.current?.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
   const votes = state?.round?.votes ?? [];
   const voteByParticipantId = new Map(votes.map((vote) => [vote.participantId, vote]));
   const agreeVotes = votes.filter((vote) => vote.choice === "Agree");
@@ -141,6 +198,7 @@ export function StatieRoom({ code }: { code: string }) {
   const votingSecondsLeft = state?.round?.votingEndsAt ? Math.ceil((new Date(state.round.votingEndsAt).getTime() - now) / 1000) : 0;
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
+  const resultScore = getAiScore(state?.lastResult?.aiScore);
 
   function runAction(action: () => Promise<{ success: boolean; message?: string }>) {
     setMessage("");
@@ -157,6 +215,16 @@ export function StatieRoom({ code }: { code: string }) {
 
   function vote(choice: VoteChoice) {
     runAction(() => submitStatieVote(code, choice));
+  }
+
+  function finishRoundAction() {
+    runAction(() => finishStatieRound(code));
+  }
+
+  function saveTranscript(text = transcriptText) {
+    const roundId = state?.round?.id;
+    if (!roundId) return;
+    runAction(() => submitStatieTranscript(code, roundId, text));
   }
 
   function changeTopic() {
@@ -176,6 +244,134 @@ export function StatieRoom({ code }: { code: string }) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
   }
+
+  async function uploadRecording(blob: Blob, mimeType: string, round: ActiveRound) {
+    setIsTranscribing(true);
+    setRecorderMessage("Mengirim audio ke Whisper...");
+    try {
+      const formData = new FormData();
+      formData.set("audio", new File([blob], `statie-${round.id}.${extensionForMimeType(mimeType)}`, { type: mimeType || blob.type }));
+      formData.set("code", code);
+      formData.set("roundId", round.id);
+      formData.set("language", "id");
+      formData.set("prompt", round.statement);
+
+      const response = await fetch("/api/statie/transcribe", { method: "POST", body: formData });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || "Transkripsi gagal.");
+
+      const text = String(result.text || "").trim();
+      setTranscriptText(text);
+      if (text) {
+        const saved = await submitStatieTranscript(code, round.id, text);
+        if (!saved.success) throw new Error(saved.message);
+      }
+      setRecorderMessage("Transcript tersimpan untuk AI scoring.");
+      await refresh();
+    } catch (error) {
+      setRecorderMessage(error instanceof Error ? error.message : "Transkripsi gagal.");
+    } finally {
+      setIsTranscribing(false);
+      if (finishAfterTranscribeRef.current) {
+        finishAfterTranscribeRef.current = false;
+        finishRoundAction();
+      }
+    }
+  }
+
+  async function prepareMic() {
+    setRecorderMessage("");
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setRecorderMessage("Browser ini belum mendukung rekaman audio. Isi transcript manual di bawah.");
+      return null;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      setIsMicReady(true);
+      setRecorderMessage("Mic siap. Rekaman akan otomatis mengikuti timer debat.");
+      return stream;
+    } catch (error) {
+      setIsMicReady(false);
+      setRecorderMessage(error instanceof Error ? error.message : "Tidak bisa mengakses mikrofon.");
+      return null;
+    }
+  }
+
+  function startRecordingForRound(round: ActiveRound, stream: MediaStream) {
+    if (isRecording || recorderRef.current?.state === "recording") return;
+
+    try {
+      const mimeType = pickSupportedMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        setIsRecording(false);
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || "audio/webm" });
+        chunksRef.current = [];
+        if (blob.size > 0) {
+          void uploadRecording(blob, recorder.mimeType || mimeType || blob.type, round);
+          return;
+        }
+        if (finishAfterTranscribeRef.current) {
+          finishAfterTranscribeRef.current = false;
+          finishRoundAction();
+        }
+      };
+      recorder.start();
+      setIsRecording(true);
+      setRecorderMessage("Rekaman otomatis berjalan mengikuti timer debat.");
+    } catch (error) {
+      setRecorderMessage(error instanceof Error ? error.message : "Tidak bisa mengakses mikrofon.");
+    }
+  }
+
+  async function startRecording() {
+    const round = state?.round;
+    if (!round || isRecording) return;
+
+    const stream = streamRef.current ?? await prepareMic();
+    if (!stream) return;
+    startRecordingForRound(round, stream);
+  }
+
+  function stopRecording() {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  }
+
+  function finishRound() {
+    if (isRecording) {
+      finishAfterTranscribeRef.current = true;
+      setRecorderMessage("Menghentikan rekaman, transcribe, lalu scoring...");
+      stopRecording();
+      return;
+    }
+
+    if (isTranscribing) {
+      finishAfterTranscribeRef.current = true;
+      setRecorderMessage("Menunggu transkripsi selesai sebelum scoring...");
+      return;
+    }
+
+    finishRoundAction();
+  }
+
+  useEffect(() => {
+    const round = state?.round;
+    if (round?.status !== "Debate" || !streamRef.current || isRecording || isTranscribing) return;
+    startRecordingForRound(round, streamRef.current);
+    // Auto-start is intentionally keyed to the round transition, not every recorder helper identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.round?.id, state?.round?.status, isRecording, isTranscribing]);
+
+  useEffect(() => {
+    if (state?.round?.status === "Debate" && isRecording && debateSecondsLeft <= 0) stopRecording();
+  }, [state?.round?.status, isRecording, debateSecondsLeft]);
 
   if (state === null) {
     return (
@@ -505,11 +701,109 @@ export function StatieRoom({ code }: { code: string }) {
                   </div>
                 )}
 
+                {state.round && (state.round.status === "Voting" || state.round.status === "Debate") && (
+                  <div className="space-y-3 rounded-md border bg-muted/30 p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">AI transcript</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {state.round.status === "Voting"
+                            ? "Aktifkan mic sekarang. Rekaman akan mulai otomatis saat debat dimulai dan berhenti saat timer habis."
+                            : "Rekaman mengikuti timer debat. Whisper lokal akan ubah audio jadi text untuk scoring."}
+                        </p>
+                        <p className="mt-1 rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5 text-xs text-muted-foreground">
+                          Mic digunakan untuk membuat transcript dan menilai hasil debat dengan AI scoring.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {!isMicReady ? (
+                          <Button onClick={prepareMic} disabled={isTranscribing} className="h-9">Aktifkan mic</Button>
+                        ) : state.round.status === "Voting" ? (
+                          <Button disabled className="h-9">Mic siap</Button>
+                        ) : !isRecording ? (
+                          <Button onClick={startRecording} disabled={isTranscribing} className="h-9">Mulai rekam sekarang</Button>
+                        ) : (
+                          <Button onClick={stopRecording} variant="outline" className="h-9 bg-background">Stop awal</Button>
+                        )}
+                        <Button onClick={() => saveTranscript()} disabled={isPending || isRecording || isTranscribing || !transcriptText.trim()} variant="outline" className="h-9 bg-background">
+                          Simpan text
+                        </Button>
+                      </div>
+                    </div>
+
+                    <textarea
+                      value={transcriptText}
+                      onChange={(event) => setTranscriptText(event.target.value)}
+                      placeholder="Transcript akan muncul di sini. Kalau mic/Whisper gagal, tulis ringkasan argumenmu manual."
+                      className="min-h-28 w-full rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    {isRecording && (
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-primary">
+                        <span className="text-xs font-semibold">Recording mengikuti timer debat</span>
+                        <div className="flex h-6 items-center gap-1" aria-label="Recording audio indicator">
+                          {[0, 1, 2, 3, 4, 5, 6].map((item) => (
+                            <span
+                              key={item}
+                              className="w-1 rounded-full bg-primary animate-pulse"
+                              style={{ height: `${8 + (item % 4) * 4}px`, animationDelay: `${item * 120}ms` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{state.round.transcriptCount} transcript tersimpan · {isMicReady ? "mic siap" : "mic belum aktif"}</span>
+                      {recorderMessage ? <span className={recorderMessage.includes("gagal") || recorderMessage.includes("Tidak") ? "text-destructive" : "text-primary"}>{recorderMessage}</span> : null}
+                    </div>
+                  </div>
+                )}
+
+                {!state.round && state.lastResult && (
+                  <div className="space-y-3 rounded-md border bg-muted/30 p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">AI scoring ronde terakhir</p>
+                        <p className="mt-1 text-sm font-semibold">{state.lastResult.statement}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                        {state.lastResult.transcriptCount} transcript
+                      </span>
+                    </div>
+                    {resultScore ? (
+                      <div className="space-y-3">
+                        <p className="text-sm text-muted-foreground">{resultScore.summary}</p>
+                        <div className="space-y-2">
+                          {resultScore.participants
+                            .slice()
+                            .sort((a, b) => b.score - a.score)
+                            .map((item) => {
+                              const participant = state.participants.find((p) => p.id === item.participantId);
+                              const isWinner = resultScore.winnerParticipantId === item.participantId;
+                              return (
+                                <div key={item.participantId} className={`rounded-md border bg-background p-3 ${isWinner ? "border-primary/40" : ""}`}>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="truncate text-sm font-semibold">{participant?.name ?? "Peserta"}{isWinner ? " · Winner" : ""}</p>
+                                    <span className="text-lg font-bold text-primary">{Math.round(item.score)}</span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    ) : state.lastResult.aiScoreError ? (
+                      <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{state.lastResult.aiScoreError}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">AI scoring belum tersedia.</p>
+                    )}
+                  </div>
+                )}
+
                 {state.isLeader && (
                   <div className="flex justify-end">
                     {!state.round && <Button onClick={() => { runAction(() => startStatieRound(code, customStatement)); setCustomStatement(""); }} disabled={isPending} className="h-9">Mulai ronde</Button>}
                     {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code))} disabled={isPending} className="h-9">Mulai debat</Button>}
-                    {state.round?.status === "Debate" && <Button onClick={() => runAction(() => finishStatieRound(code))} disabled={isPending} variant="outline" className="h-9 bg-background">Selesai ronde</Button>}
+                    {state.round?.status === "Debate" && <Button onClick={finishRound} disabled={isPending} variant="outline" className="h-9 bg-background">Selesai ronde & scoring</Button>}
                   </div>
                 )}
               </div>

@@ -50,6 +50,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/.well-known") ||
     pathname.startsWith("/oauth") ||
     pathname.startsWith("/statie") ||
+    pathname.startsWith("/werewolf-multiplayer") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||

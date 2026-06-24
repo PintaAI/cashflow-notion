@@ -31,50 +31,67 @@ enum StatieVoteChoice {
   Disagree
 }
 
-model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  profileTheme  Json?
-  mcpApiKey     String?   @unique
-  currency            String    @default("IDR")
-  activeManagementId  String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+enum WerewolfRoomStatus {
+  Lobby
+  Night
+  Day
+  Voting
+  Revote
+  Finished
+}
 
-  sessions    Session[]
-  accounts    Account[]
-  memberships ManagementMember[]
-  noteMemberships NoteMember[]
-  createdEntries Entry[]          @relation("EntryCreator")
-  auditSnapshots AuditSnapshot[]
-  oauthAuthCodes OAuthAuthorizationCode[]
-  oauthTokens    OAuthToken[]
-  oauthConsents  OAuthConsent[]
-  statieRoomsCreated StatieRoom[] @relation("StatieRoomLeader")
-  statieParticipations StatieParticipant[]
+enum WerewolfRole {
+  Werewolf
+  Seer
+  Villager
+}
+
+model User {
+  id                 String   @id
+  name               String
+  email              String   @unique
+  emailVerified      Boolean  @default(false)
+  image              String?
+  profileTheme       Json?
+  mcpApiKey          String?  @unique
+  currency           String   @default("IDR")
+  activeManagementId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  sessions               Session[]
+  accounts               Account[]
+  memberships            ManagementMember[]
+  noteMemberships        NoteMember[]
+  createdEntries         Entry[]                  @relation("EntryCreator")
+  auditSnapshots         AuditSnapshot[]
+  oauthAuthCodes         OAuthAuthorizationCode[]
+  oauthTokens            OAuthToken[]
+  oauthConsents          OAuthConsent[]
+  statieRoomsCreated     StatieRoom[]             @relation("StatieRoomLeader")
+  statieParticipations   StatieParticipant[]
+  werewolfRoomsCreated   WerewolfRoom[]           @relation("WerewolfRoomLeader")
+  werewolfParticipations WerewolfParticipant[]
 
   @@map("User")
 }
 
 model StatieRoom {
-  id             String           @id @default(uuid())
-  code           String           @unique
-  topic          String
-  topicKey       String
-  status         StatieRoomStatus @default(Lobby)
-  leaderUserId   String?
-  leaderUser     User?            @relation("StatieRoomLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
-  leaderGuestName String?
-  leaderToken    String
-  debateSeconds  Int              @default(900)
-  playerLimit    Int              @default(10)
-  currentRoundId String?
+  id                 String           @id @default(uuid())
+  code               String           @unique
+  topic              String
+  topicKey           String
+  status             StatieRoomStatus @default(Lobby)
+  leaderUserId       String?
+  leaderUser         User?            @relation("StatieRoomLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
+  leaderGuestName    String?
+  leaderToken        String
+  debateSeconds      Int              @default(900)
+  playerLimit        Int              @default(10)
+  currentRoundId     String?
   pendingStatementId String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   participants StatieParticipant[]
   rounds       StatieRound[]
@@ -84,18 +101,19 @@ model StatieRoom {
 }
 
 model StatieParticipant {
-  id        String     @id @default(uuid())
-  roomId    String
-  room      StatieRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  guestName String?
-  token     String
-  isLeader  Boolean    @default(false)
-  joinedAt  DateTime   @default(now())
-  lastSeenAt DateTime  @default(now())
+  id         String     @id @default(uuid())
+  roomId     String
+  room       StatieRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName  String?
+  token      String
+  isLeader   Boolean    @default(false)
+  joinedAt   DateTime   @default(now())
+  lastSeenAt DateTime   @default(now())
 
   votes StatieVote[]
+  transcripts StatieTranscript[]
 
   @@unique([roomId, token])
   @@index([roomId])
@@ -120,22 +138,41 @@ model StatieStatement {
 }
 
 model StatieRound {
-  id             String            @id @default(uuid())
-  roomId         String
-  room           StatieRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  statementId    String
-  statement      StatieStatement   @relation(fields: [statementId], references: [id], onDelete: Restrict)
-  status         StatieRoundStatus @default(Voting)
-  votingStartedAt DateTime         @default(now())
+  id              String            @id @default(uuid())
+  roomId          String
+  room            StatieRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  statementId     String
+  statement       StatieStatement   @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  status          StatieRoundStatus @default(Voting)
+  votingStartedAt DateTime          @default(now())
   debateStartedAt DateTime?
   debateEndsAt    DateTime?
   finishedAt      DateTime?
-  createdAt       DateTime         @default(now())
+  aiScore         Json?
+  aiScoreError    String?
+  aiScoredAt      DateTime?
+  createdAt       DateTime          @default(now())
 
-  votes StatieVote[]
+  votes       StatieVote[]
+  transcripts StatieTranscript[]
 
   @@index([roomId, createdAt])
   @@index([statementId])
+}
+
+model StatieTranscript {
+  id            String            @id @default(uuid())
+  roundId       String
+  round         StatieRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   StatieParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  text          String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([roundId, participantId])
+  @@index([roundId])
+  @@index([participantId])
 }
 
 model StatieVote {
@@ -149,6 +186,109 @@ model StatieVote {
 
   @@unique([roundId, participantId])
   @@index([roundId, choice])
+}
+
+model WerewolfRoom {
+  id              String             @id @default(uuid())
+  code            String             @unique
+  status          WerewolfRoomStatus @default(Lobby)
+  leaderUserId    String?
+  leaderUser      User?              @relation("WerewolfRoomLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
+  leaderGuestName String?
+  leaderToken     String
+  playerLimit     Int                @default(10)
+  phaseNumber     Int                @default(0)
+  finishedReason  String?
+  phaseEndsAt     DateTime?
+  nightSeconds    Int                @default(60)
+  daySeconds      Int                @default(120)
+  votingSeconds   Int                @default(60)
+  revoteSeconds   Int                @default(30)
+  currentVoteRound Int              @default(1)
+  revoteCandidates String?
+  lastEliminatedId String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  participants  WerewolfParticipant[]
+  votes         WerewolfVote[]
+  nightActions WerewolfNightAction[]
+  seerChecks   WerewolfSeerCheck[]
+
+  @@index([code])
+}
+
+model WerewolfParticipant {
+  id           String        @id @default(uuid())
+  roomId       String
+  room         WerewolfRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName    String?
+  token        String
+  isLeader     Boolean       @default(false)
+  role         WerewolfRole?
+  isAlive      Boolean       @default(true)
+  eliminatedAt DateTime?
+  joinedAt     DateTime      @default(now())
+  lastSeenAt   DateTime      @default(now())
+
+  votesCast     WerewolfVote[] @relation("WerewolfVoteVoter")
+  votesReceived WerewolfVote[] @relation("WerewolfVoteTarget")
+  nightActions  WerewolfNightAction[] @relation("WerewolfNightActor")
+  nightTargets  WerewolfNightAction[] @relation("WerewolfNightTarget")
+  seerChecks    WerewolfSeerCheck[]   @relation("WerewolfSeerActor")
+  seerTargets   WerewolfSeerCheck[]   @relation("WerewolfSeerTarget")
+
+  @@unique([roomId, token])
+  @@index([roomId])
+  @@index([userId])
+}
+
+model WerewolfVote {
+  id        String              @id @default(uuid())
+  roomId    String
+  room      WerewolfRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  voterId   String
+  voter     WerewolfParticipant @relation("WerewolfVoteVoter", fields: [voterId], references: [id], onDelete: Cascade)
+  targetId  String
+  target    WerewolfParticipant @relation("WerewolfVoteTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  round     Int                 @default(1)
+  createdAt DateTime            @default(now())
+
+  @@unique([roomId, round, voterId])
+  @@index([roomId, round, targetId])
+}
+
+model WerewolfNightAction {
+  id          String               @id @default(uuid())
+  roomId      String
+  room        WerewolfRoom         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  phaseNumber Int
+  actorId     String
+  actor       WerewolfParticipant  @relation("WerewolfNightActor", fields: [actorId], references: [id], onDelete: Cascade)
+  targetId    String
+  target      WerewolfParticipant  @relation("WerewolfNightTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt   DateTime             @default(now())
+
+  @@unique([roomId, phaseNumber, actorId])
+  @@index([roomId, phaseNumber])
+}
+
+model WerewolfSeerCheck {
+  id            String               @id @default(uuid())
+  roomId        String
+  room          WerewolfRoom         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  phaseNumber   Int
+  actorId       String
+  actor         WerewolfParticipant  @relation("WerewolfSeerActor", fields: [actorId], references: [id], onDelete: Cascade)
+  targetId      String
+  target        WerewolfParticipant  @relation("WerewolfSeerTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  inspectedRole WerewolfRole
+  createdAt     DateTime             @default(now())
+
+  @@unique([roomId, phaseNumber, actorId])
+  @@index([roomId, phaseNumber])
 }
 
 model Session {
@@ -185,7 +325,7 @@ model Account {
 }
 
 model Verification {
-  id         String   @id
+  id         String    @id
   identifier String
   value      String
   expiresAt  DateTime
@@ -196,21 +336,21 @@ model Verification {
 }
 
 model Management {
-  id        String   @id @default(uuid())
-  name      String
-  image     String?
+  id         String   @id @default(uuid())
+  name       String
+  image      String?
   imageTheme Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  members        ManagementMember[]
-  categories     Category[]
-  entries        Entry[]
-  quickFills     QuickFill[]
-  invitations    Invitation[]
-  overallBudgets OverallBudget[]
+  members          ManagementMember[]
+  categories       Category[]
+  entries          Entry[]
+  quickFills       QuickFill[]
+  invitations      Invitation[]
+  overallBudgets   OverallBudget[]
   recurringEntries RecurringEntry[]
-  auditSnapshots AuditSnapshot[]
+  auditSnapshots   AuditSnapshot[]
 }
 
 model ManagementMember {
@@ -236,13 +376,13 @@ model Invitation {
 }
 
 model Note {
-  id          String   @id @default(uuid())
-  title       String
-  contentJson String?
-  contentHtml String?
+  id              String   @id @default(uuid())
+  title           String
+  contentJson     String?
+  contentHtml     String?
   contentMarkdown String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   members     NoteMember[]
   invitations NoteInvitation[]
@@ -286,79 +426,79 @@ model OverallBudget {
 }
 
 model RecurringEntry {
-  id             String     @id @default(uuid())
-  managementId   String
-  management     Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
-  name           String
-  nominal        Float
-  categoryId     String?
-  category       Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  io             IOType
-  frequency      String
-  dayOfWeek      Int?
-  dayOfMonth     Int?
-  monthOfYear    Int?
-  startDate      String
-  endDate        String?
-  lastGenerated  String?
-  active         Boolean    @default(true)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id            String     @id @default(uuid())
+  managementId  String
+  management    Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  name          String
+  nominal       Float
+  categoryId    String?
+  category      Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  io            IOType
+  frequency     String
+  dayOfWeek     Int?
+  dayOfMonth    Int?
+  monthOfYear   Int?
+  startDate     String
+  endDate       String?
+  lastGenerated String?
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   @@index([managementId, active])
   @@index([managementId, frequency])
 }
 
 model Category {
-  id            String      @id @default(uuid())
-  name          String
-  color         String      @default("default")
-  icon          String?
-  budgetDaily   Float?
-  budgetWeekly  Float?
-  budgetMonthly Float?
-  budgetYearly  Float?
-  managementId  String?
-  management    Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
-  createdAt     DateTime    @default(now())
-  entries         Entry[]
-  quickFills      QuickFill[]
+  id               String           @id @default(uuid())
+  name             String
+  color            String           @default("default")
+  icon             String?
+  budgetDaily      Float?
+  budgetWeekly     Float?
+  budgetMonthly    Float?
+  budgetYearly     Float?
+  managementId     String?
+  management       Management?      @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+  entries          Entry[]
+  quickFills       QuickFill[]
   recurringEntries RecurringEntry[]
 
   @@unique([name, managementId])
 }
 
 model QuickFill {
-  id           String     @id @default(uuid())
+  id           String      @id @default(uuid())
   name         String
   nominal      Float
   categoryId   String?
-  category     Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category     Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   managementId String?
   management   Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
-  order        Int        @default(0)
+  createdAt    DateTime    @default(now())
+  order        Int         @default(0)
 }
 
 model Entry {
-  id               String    @id @default(uuid())
-  notionId         String?   @unique
-  name             String
-  nominal          Float
-  originalNominal  Float?
-  originalCurrency String?
+  id                String      @id @default(uuid())
+  notionId          String?     @unique
+  name              String
+  nominal           Float
+  originalNominal   Float?
+  originalCurrency  String?
   exchangeRateToIdr Float?
-  exchangeRateAt   DateTime?
-  categoryId       String?
-  category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  date             String?
-  io               IOType?
-  managementId     String?
-  management       Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
-  createdById      String?
-  createdBy        User?     @relation("EntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  isReconciliation Boolean   @default(false)
-  createdAt        DateTime  @default(now())
+  exchangeRateAt    DateTime?
+  categoryId        String?
+  category          Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  date              String?
+  io                IOType?
+  managementId      String?
+  management        Management? @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  createdById       String?
+  createdBy         User?       @relation("EntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  isReconciliation  Boolean     @default(false)
+  createdAt         DateTime    @default(now())
 
   @@index([date, createdAt, id])
   @@index([io, date])
@@ -369,36 +509,36 @@ model Entry {
 }
 
 model AuditSnapshot {
-  id               String   @id @default(uuid())
-  managementId     String
-  management       Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
-  date             String
-  expectedBalance  Float
-  actualBalance    Float
-  difference       Float
+  id                String     @id @default(uuid())
+  managementId      String
+  management        Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  date              String
+  expectedBalance   Float
+  actualBalance     Float
+  difference        Float
   adjustmentEntryId String?
-  note             String?
-  createdById      String
-  createdBy        User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
+  note              String?
+  createdById       String
+  createdBy         User       @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt         DateTime   @default(now())
 
   @@index([managementId, date])
 }
 
 model OAuthClient {
-  id             String   @id @default(cuid())
-  clientId       String   @unique
-  clientSecret   String?
-  clientName     String
-  clientUri      String?
-  logoUri        String?
-  redirectUris   String[]
-  grantTypes     String[]
-  responseTypes  String[]
-  scope          String?
-  isPublic       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(cuid())
+  clientId      String   @unique
+  clientSecret  String?
+  clientName    String
+  clientUri     String?
+  logoUri       String?
+  redirectUris  String[]
+  grantTypes    String[]
+  responseTypes String[]
+  scope         String?
+  isPublic      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   authCodes OAuthAuthorizationCode[]
   tokens    OAuthToken[]
@@ -428,32 +568,32 @@ model OAuthAuthorizationCode {
 }
 
 model OAuthToken {
-  id           String    @id @default(cuid())
-  accessToken  String    @unique
-  refreshToken String?   @unique
+  id           String      @id @default(cuid())
+  accessToken  String      @unique
+  refreshToken String?     @unique
   clientId     String
   client       OAuthClient @relation(fields: [clientId], references: [clientId])
   userId       String
   user         User        @relation(fields: [userId], references: [id])
   scopes       String[]
   resource     String?
-  tokenType    String    @default("Bearer")
+  tokenType    String      @default("Bearer")
   expiresAt    DateTime
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime    @default(now())
   revokedAt    DateTime?
 
   @@map("OAuthToken")
 }
 
 model OAuthConsent {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   clientId  String
   client    OAuthClient @relation(fields: [clientId], references: [clientId])
   userId    String
   user      User        @relation(fields: [userId], references: [id])
   scopes    String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   @@unique([clientId, userId])
   @@map("OAuthConsent")

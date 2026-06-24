@@ -108,6 +108,7 @@ export function AppSidebar() {
   const toolsPath = "/tools";
   const notesPath = "/notes";
   const statiePath = "/statie";
+  const werewolfPath = "/werewolf-multiplayer";
 
   useEffect(() => {
     checkAdminStatus().then(setIsAdmin);
@@ -143,6 +144,7 @@ export function AppSidebar() {
   const isOnAdmin = pathname === "/admin";
   const isOnNotes = pathname === notesPath;
   const isOnStatie = pathname.startsWith(statiePath);
+  const isOnWerewolf = pathname.startsWith(werewolfPath);
   const isOnPublicTools = pathname === toolsPath;
   const isOnTransferTool = Boolean(managementToolsPath && pathname === managementToolsPath && searchParams.get("tool") === "transfer");
   const activeTool = searchParams.get("tool");
@@ -341,6 +343,18 @@ export function AppSidebar() {
                 <Link href={statiePath} onClick={() => setOpenMobile(false)}>
                   <HugeiconsIcon icon={AiGameIcon} strokeWidth={2.1} className="size-4.5" />
                   <span>Statie</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={isOnWerewolf}
+                className="h-10 rounded-lg px-3 text-sm data-active:bg-muted/70 data-active:font-medium"
+              >
+                <Link href={werewolfPath} onClick={() => setOpenMobile(false)}>
+                  <HugeiconsIcon icon={AiGameIcon} strokeWidth={2.1} className="size-4.5" />
+                  <span>Werewolf</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

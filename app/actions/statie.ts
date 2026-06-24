@@ -2,10 +2,11 @@
 
 import crypto from "crypto";
 import { google } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { generateText, Output } from "ai";
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { StatieRoundStatus, StatieRoomStatus, StatieVoteChoice } from "@prisma/client";
+import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
@@ -13,10 +14,27 @@ import { requireAdmin } from "@/lib/admin";
 const ROOM_CODE_LENGTH = 6;
 const PARTICIPANT_COOKIE_DAYS = 14;
 const MIN_DEBATE_SECONDS = 30;
-const MAX_DEBATE_SECONDS = 60 * 60;
+const MAX_DEBATE_SECONDS = 15 * 60;
 const VOTING_SECONDS = 30;
 const MIN_PLAYER_LIMIT = 2;
 const MAX_PLAYER_LIMIT = 30;
+
+const statieScoreSchema = z.object({
+  participants: z.array(z.object({
+    participantId: z.string(),
+    score: z.number().min(0).max(100),
+    reason: z.string(),
+    criteria: z.object({
+      clarity: z.number().min(0).max(20),
+      logic: z.number().min(0).max(25),
+      evidence: z.number().min(0).max(15),
+      rebuttal: z.number().min(0).max(20),
+      sportsmanship: z.number().min(0).max(20),
+    }),
+  })),
+  winnerParticipantId: z.string().nullable(),
+  summary: z.string(),
+});
 
 type ActionResult<T> =
   | ({ success: true } & T)
@@ -229,6 +247,63 @@ Syarat:
   });
 }
 
+async function scoreStatieRound(roundId: string) {
+  const round = await prisma.statieRound.findUnique({
+    where: { id: roundId },
+    include: {
+      statement: true,
+      transcripts: {
+        include: {
+          participant: { include: { user: { select: { name: true, email: true } } } },
+        },
+      },
+      votes: true,
+    },
+  });
+
+  if (!round || round.transcripts.length === 0) return;
+
+  const voteByParticipantId = new Map(round.votes.map((vote) => [vote.participantId, vote.choice]));
+  const transcriptLines = round.transcripts.map((transcript) => {
+    const side = voteByParticipantId.get(transcript.participantId) ?? "Unknown";
+    return [
+      `Participant ID: ${transcript.participantId}`,
+      `Name: ${participantDisplayName(transcript.participant)}`,
+      `Side: ${side}`,
+      `Transcript: ${transcript.text}`,
+    ].join("\n");
+  }).join("\n\n---\n\n");
+
+  const result = await generateText({
+    model: google("gemini-2.5-flash-lite"),
+    temperature: 0.2,
+    output: Output.object({
+      name: "StatieDebateScore",
+      description: "AI judging result for a casual debate game round.",
+      schema: statieScoreSchema,
+    }),
+    prompt: `Nilai debat game Statie berikut dalam Bahasa Indonesia.
+
+Pernyataan debat: ${round.statement.text}
+
+Aturan scoring:
+- Skor total 0-100 per peserta.
+- clarity maksimal 20, logic maksimal 25, evidence maksimal 15, rebuttal maksimal 20, sportsmanship maksimal 20.
+- Jangan beri skor tinggi untuk argumen kosong, hinaan personal, atau transcript yang tidak relevan.
+- Pilih winnerParticipantId dari participantId yang tersedia, atau null jika semua transcript terlalu lemah.
+- Reason singkat, spesifik, dan aman untuk ditampilkan ke pemain.
+
+Transcript peserta:
+
+${transcriptLines}`,
+  });
+
+  await prisma.statieRound.update({
+    where: { id: roundId },
+    data: { aiScore: result.output, aiScoreError: null, aiScoredAt: new Date() },
+  });
+}
+
 export async function createStatieRoom(input: {
   topic: string;
   leaderName?: string;
@@ -348,6 +423,7 @@ export async function getStatieRoomState(code: string) {
         take: 1,
         include: {
           statement: true,
+          transcripts: true,
           votes: { include: { participant: { include: { user: { select: { name: true, email: true } } } } } },
         },
       },
@@ -377,6 +453,7 @@ export async function getStatieRoomState(code: string) {
           take: 1,
           include: {
             statement: true,
+            transcripts: true,
             votes: { include: { participant: { include: { user: { select: { name: true, email: true } } } } } },
           },
         },
@@ -387,6 +464,17 @@ export async function getStatieRoomState(code: string) {
   }
 
   const currentParticipantVote = currentRound?.votes.find((vote) => vote.participantId === participant?.id)?.choice ?? null;
+  const lastFinishedRound = currentRound
+    ? null
+    : await prisma.statieRound.findFirst({
+        where: { roomId: room.id, status: StatieRoundStatus.Finished },
+        orderBy: { finishedAt: "desc" },
+        include: {
+          statement: true,
+          transcripts: true,
+          votes: { include: { participant: { include: { user: { select: { name: true, email: true } } } } } },
+        },
+      });
 
   return {
     code: room.code,
@@ -412,7 +500,27 @@ export async function getStatieRoomState(code: string) {
           votingEndsAt: getVotingEndsAt(currentRound.votingStartedAt).toISOString(),
           debateEndsAt: currentRound.debateEndsAt?.toISOString() ?? null,
           myVote: currentParticipantVote,
+          myTranscript: currentRound.transcripts.find((transcript) => transcript.participantId === participant?.id)?.text ?? null,
+          transcriptCount: currentRound.transcripts.length,
+          aiScore: currentRound.aiScore,
+          aiScoreError: currentRound.aiScoreError,
+          aiScoredAt: currentRound.aiScoredAt?.toISOString() ?? null,
           votes: currentRound.votes.map((vote) => ({
+            participantId: vote.participantId,
+            participantName: participantDisplayName(vote.participant),
+            choice: vote.choice,
+          })),
+        }
+      : null,
+    lastResult: lastFinishedRound
+      ? {
+          id: lastFinishedRound.id,
+          statement: lastFinishedRound.statement.text,
+          transcriptCount: lastFinishedRound.transcripts.length,
+          aiScore: lastFinishedRound.aiScore,
+          aiScoreError: lastFinishedRound.aiScoreError,
+          aiScoredAt: lastFinishedRound.aiScoredAt?.toISOString() ?? null,
+          votes: lastFinishedRound.votes.map((vote) => ({
             participantId: vote.participantId,
             participantName: participantDisplayName(vote.participant),
             choice: vote.choice,
@@ -594,6 +702,33 @@ export async function submitStatieVote(code: string, choice: "Agree" | "Disagree
   }
 }
 
+export async function submitStatieTranscript(code: string, roundId: string, text: string): Promise<ActionResult<object>> {
+  try {
+    const participant = await requireParticipant(code);
+    if (!participant) return { success: false, message: "Bergabung ke room terlebih dahulu." };
+
+    const normalizedText = text.trim().replace(/\s+/g, " ").slice(0, 12_000);
+    if (!normalizedText) return { success: false, message: "Transcript kosong." };
+
+    const round = await prisma.statieRound.findFirst({
+      where: { id: roundId, roomId: participant.roomId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.Finished] } },
+      select: { id: true },
+    });
+    if (!round) return { success: false, message: "Ronde debat tidak ditemukan." };
+
+    await prisma.statieTranscript.upsert({
+      where: { roundId_participantId: { roundId: round.id, participantId: participant.id } },
+      create: { roundId: round.id, participantId: participant.id, text: normalizedText },
+      update: { text: normalizedText },
+    });
+
+    revalidatePath(`/statie/${participant.room.code}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menyimpan transcript." };
+  }
+}
+
 export async function startStatieDebate(code: string): Promise<ActionResult<object>> {
   try {
     const leader = await requireLeader(code);
@@ -644,6 +779,15 @@ export async function finishStatieRound(code: string): Promise<ActionResult<obje
         data: { agreeCount: { increment: agreeCount }, disagreeCount: { increment: disagreeCount } },
       }),
     ]);
+
+    try {
+      await scoreStatieRound(round.id);
+    } catch (scoreError) {
+      await prisma.statieRound.update({
+        where: { id: round.id },
+        data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "AI scoring gagal." },
+      });
+    }
 
     revalidatePath(`/statie/${leader.room.code}`);
     return { success: true };
