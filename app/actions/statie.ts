@@ -14,6 +14,7 @@ const ROOM_CODE_LENGTH = 6;
 const PARTICIPANT_COOKIE_DAYS = 14;
 const MIN_DEBATE_SECONDS = 30;
 const MAX_DEBATE_SECONDS = 60 * 60;
+const VOTING_SECONDS = 30;
 const MIN_PLAYER_LIMIT = 2;
 const MAX_PLAYER_LIMIT = 30;
 
@@ -72,6 +73,10 @@ function clampDebateSeconds(seconds: number) {
 function clampPlayerLimit(limit: number) {
   if (!Number.isFinite(limit)) return 10;
   return Math.min(MAX_PLAYER_LIMIT, Math.max(MIN_PLAYER_LIMIT, Math.round(limit)));
+}
+
+function getVotingEndsAt(votingStartedAt: Date) {
+  return new Date(votingStartedAt.getTime() + VOTING_SECONDS * 1000);
 }
 
 function roomCookieName(code: string) {
@@ -142,6 +147,46 @@ function participantDisplayName(participant: {
   user: { name: string | null; email: string } | null;
 }) {
   return participant.user?.name || participant.user?.email.split("@")[0] || participant.guestName || "Guest";
+}
+
+async function startDebateWithRandomMissingVotes(input: {
+  roomId: string;
+  roundId: string;
+  debateSeconds: number;
+}) {
+  const now = new Date();
+  const debateEndsAt = new Date(now.getTime() + input.debateSeconds * 1000);
+
+  await prisma.$transaction(async (tx) => {
+    const activeRound = await tx.statieRound.findFirst({
+      where: { id: input.roundId, status: StatieRoundStatus.Voting },
+      select: { id: true },
+    });
+    if (!activeRound) return;
+
+    const [participants, votes] = await Promise.all([
+      tx.statieParticipant.findMany({ where: { roomId: input.roomId }, select: { id: true } }),
+      tx.statieVote.findMany({ where: { roundId: input.roundId }, select: { participantId: true } }),
+    ]);
+    const votedParticipantIds = new Set(votes.map((vote) => vote.participantId));
+    const randomVotes = participants
+      .filter((participant) => !votedParticipantIds.has(participant.id))
+      .map((participant) => ({
+        roundId: input.roundId,
+        participantId: participant.id,
+        choice: Math.random() < 0.5 ? StatieVoteChoice.Agree : StatieVoteChoice.Disagree,
+      }));
+
+    if (randomVotes.length > 0) {
+      await tx.statieVote.createMany({ data: randomVotes, skipDuplicates: true });
+    }
+
+    await tx.statieRound.update({
+      where: { id: input.roundId },
+      data: { status: StatieRoundStatus.Debate, debateStartedAt: now, debateEndsAt },
+    });
+    await tx.statieRoom.update({ where: { id: input.roomId }, data: { status: StatieRoomStatus.Debate } });
+  });
 }
 
 async function getReusableOrGeneratedStatement(topic: string, usedStatementIds: string[]) {
@@ -290,7 +335,7 @@ export async function getStatieRoomState(code: string) {
   const roomCode = normalizeRoomCode(code);
   const participant = await requireParticipant(roomCode);
 
-  const room = await prisma.statieRoom.findUnique({
+  let room = await prisma.statieRoom.findUnique({
     where: { code: roomCode },
     include: {
       participants: {
@@ -310,7 +355,37 @@ export async function getStatieRoomState(code: string) {
   });
 
   if (!room) return null;
-  const currentRound = room.rounds[0] ?? null;
+  let currentRound = room.rounds[0] ?? null;
+
+  if (currentRound?.status === StatieRoundStatus.Voting && Date.now() >= getVotingEndsAt(currentRound.votingStartedAt).getTime()) {
+    await startDebateWithRandomMissingVotes({
+      roomId: room.id,
+      roundId: currentRound.id,
+      debateSeconds: room.debateSeconds,
+    });
+
+    room = await prisma.statieRoom.findUnique({
+      where: { code: roomCode },
+      include: {
+        participants: {
+          include: { user: { select: { name: true, email: true, image: true } } },
+          orderBy: [{ isLeader: "desc" }, { joinedAt: "asc" }],
+        },
+        rounds: {
+          where: { status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: {
+            statement: true,
+            votes: { include: { participant: { include: { user: { select: { name: true, email: true } } } } } },
+          },
+        },
+      },
+    });
+    if (!room) return null;
+    currentRound = room.rounds[0] ?? null;
+  }
+
   const currentParticipantVote = currentRound?.votes.find((vote) => vote.participantId === participant?.id)?.choice ?? null;
 
   return {
@@ -334,6 +409,7 @@ export async function getStatieRoomState(code: string) {
           id: currentRound.id,
           status: currentRound.status,
           statement: currentRound.statement.text,
+          votingEndsAt: getVotingEndsAt(currentRound.votingStartedAt).toISOString(),
           debateEndsAt: currentRound.debateEndsAt?.toISOString() ?? null,
           myVote: currentParticipantVote,
           votes: currentRound.votes.map((vote) => ({
@@ -478,9 +554,19 @@ export async function submitStatieVote(code: string, choice: "Agree" | "Disagree
     const round = await prisma.statieRound.findFirst({
       where: { roomId: participant.roomId, status: StatieRoundStatus.Voting },
       orderBy: { createdAt: "desc" },
-      select: { id: true },
+      select: { id: true, votingStartedAt: true },
     });
     if (!round) return { success: false, message: "Belum ada voting aktif." };
+
+    if (Date.now() >= getVotingEndsAt(round.votingStartedAt).getTime()) {
+      await startDebateWithRandomMissingVotes({
+        roomId: participant.roomId,
+        roundId: round.id,
+        debateSeconds: participant.room.debateSeconds,
+      });
+      revalidatePath(`/statie/${participant.room.code}`);
+      return { success: true };
+    }
 
     await prisma.statieVote.upsert({
       where: { roundId_participantId: { roundId: round.id, participantId: participant.id } },
@@ -494,16 +580,11 @@ export async function submitStatieVote(code: string, choice: "Agree" | "Disagree
     ]);
 
     if (voteCount >= participantCount) {
-      const now = new Date();
-      const debateEndsAt = new Date(now.getTime() + participant.room.debateSeconds * 1000);
-
-      await prisma.$transaction([
-        prisma.statieRound.update({
-          where: { id: round.id },
-          data: { status: StatieRoundStatus.Debate, debateStartedAt: now, debateEndsAt },
-        }),
-        prisma.statieRoom.update({ where: { id: participant.roomId }, data: { status: StatieRoomStatus.Debate } }),
-      ]);
+      await startDebateWithRandomMissingVotes({
+        roomId: participant.roomId,
+        roundId: round.id,
+        debateSeconds: participant.room.debateSeconds,
+      });
     }
 
     revalidatePath(`/statie/${participant.room.code}`);
@@ -523,16 +604,11 @@ export async function startStatieDebate(code: string): Promise<ActionResult<obje
     });
     if (!round) return { success: false, message: "Belum ada ronde voting aktif." };
 
-    const now = new Date();
-    const debateEndsAt = new Date(now.getTime() + leader.room.debateSeconds * 1000);
-
-    await prisma.$transaction([
-      prisma.statieRound.update({
-        where: { id: round.id },
-        data: { status: StatieRoundStatus.Debate, debateStartedAt: now, debateEndsAt },
-      }),
-      prisma.statieRoom.update({ where: { id: leader.roomId }, data: { status: StatieRoomStatus.Debate } }),
-    ]);
+    await startDebateWithRandomMissingVotes({
+      roomId: leader.roomId,
+      roundId: round.id,
+      debateSeconds: leader.room.debateSeconds,
+    });
 
     revalidatePath(`/statie/${leader.room.code}`);
     return { success: true };

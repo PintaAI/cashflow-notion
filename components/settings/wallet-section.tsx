@@ -179,24 +179,11 @@ function ManagementSettings() {
         setManagement(cachedManagement);
         setNameValue(cachedManagement.management.name);
       });
-    } else {
-      getCurrentManagement(managementId).then((m) => {
-        if (cancelled || !m) return;
-        setManagement(m);
-        setNameValue(m.management.name);
-        writeCurrentManagementCache(managementId, m);
-      });
     }
     const cachedManagements = readWalletCache(managementId);
     if (cachedManagements.length > 0) {
       queueMicrotask(() => {
         if (!cancelled) setManagements(cachedManagements);
-      });
-    } else {
-      getUserManagements(managementId).then((items) => {
-        if (cancelled) return;
-        setManagements(items);
-        writeWalletCache(items);
       });
     }
     const cachedInvitations = readInvitationCache(managementId);
@@ -205,6 +192,18 @@ function ManagementSettings() {
       setInvitations(cachedInvitations ?? []);
       setInvitationsLoaded(cachedInvitations !== null);
       setInvitationsOpen(false);
+    });
+
+    getCurrentManagement(managementId).then((m) => {
+      if (cancelled || !m) return;
+      setManagement(m);
+      setNameValue(m.management.name);
+      writeCurrentManagementCache(managementId, m);
+    });
+    getUserManagements(managementId).then((items) => {
+      if (cancelled) return;
+      setManagements(items);
+      writeWalletCache(items);
     });
 
     return () => {

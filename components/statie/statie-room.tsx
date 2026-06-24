@@ -48,7 +48,8 @@ const UNJOINED_POLL_MS = 12000;
 
 function getPollingDelay(state: RoomState) {
   if (!state?.isJoined) return UNJOINED_POLL_MS;
-  if (state.round?.status === "Voting" || state.round?.status === "Debate") return ACTIVE_ROUND_POLL_MS;
+  if (state.round?.status === "Debate") return null;
+  if (state.round?.status === "Voting") return ACTIVE_ROUND_POLL_MS;
   return LOBBY_POLL_MS;
 }
 
@@ -87,7 +88,9 @@ export function StatieRoom({ code }: { code: string }) {
 
     const scheduleNextLoad = () => {
       if (!active || document.hidden) return;
-      timeout = window.setTimeout(() => void loadState(), getPollingDelay(latestState));
+      const delay = getPollingDelay(latestState);
+      if (delay === null) return;
+      timeout = window.setTimeout(() => void loadState(), delay);
     };
 
     const loadState = async () => {
@@ -123,19 +126,20 @@ export function StatieRoom({ code }: { code: string }) {
   }, [code]);
 
   useEffect(() => {
-    if (state?.round?.status !== "Debate") return;
+    if (state?.round?.status !== "Voting" && state?.round?.status !== "Debate") return;
 
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [state?.round?.status]);
 
   const votes = state?.round?.votes ?? [];
+  const voteByParticipantId = new Map(votes.map((vote) => [vote.participantId, vote]));
   const agreeVotes = votes.filter((vote) => vote.choice === "Agree");
   const disagreeVotes = votes.filter((vote) => vote.choice === "Disagree");
   const votedCount = votes.length;
   const totalPlayers = state?.participants.length ?? 0;
+  const votingSecondsLeft = state?.round?.votingEndsAt ? Math.ceil((new Date(state.round.votingEndsAt).getTime() - now) / 1000) : 0;
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
-  const hasActiveRound = state?.round?.status === "Voting" || state?.round?.status === "Debate";
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
 
   function runAction(action: () => Promise<{ success: boolean; message?: string }>) {
@@ -387,7 +391,10 @@ export function StatieRoom({ code }: { code: string }) {
 
                 <div className="rounded-md border bg-muted/30 p-4 sm:p-5">
                   {state.round ? (
-                    <p className="text-xl font-bold leading-tight tracking-tight sm:text-3xl">{state.round.statement}</p>
+                    <div className="space-y-5">
+                      <p className="text-xl font-bold leading-tight tracking-tight sm:text-3xl">{state.round.statement}</p>
+                      <p className="text-sm text-muted-foreground">Vote masuk: <span className="font-bold text-foreground">{votedCount}/{totalPlayers}</span></p>
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium leading-6 text-muted-foreground">
@@ -429,56 +436,84 @@ export function StatieRoom({ code }: { code: string }) {
                 </div>
 
                 {state.round?.status === "Voting" && (
-                  <div className="flex items-center justify-center gap-6">
-                    <button
-                      onClick={() => vote("Agree")}
-                      disabled={isPending}
-                      className={`flex size-24 flex-col items-center justify-center gap-1.5 rounded-full border-2 transition-all disabled:opacity-50 ${state.round.myVote === "Agree" ? "border-green-500 bg-green-100 text-green-600 shadow-md dark:bg-green-950 dark:text-green-400" : "border-green-300 bg-green-50/50 text-green-500 hover:bg-green-100 dark:border-green-700 dark:bg-green-950/30 dark:text-green-400"}`}
-                    >
-                      <HugeiconsIcon icon={ThumbsUpIcon} size={32} strokeWidth={2} />
-                      <span className="text-xs font-bold">Setuju</span>
-                    </button>
-                    <button
-                      onClick={() => vote("Disagree")}
-                      disabled={isPending}
-                      className={`flex size-24 flex-col items-center justify-center gap-1.5 rounded-full border-2 transition-all disabled:opacity-50 ${state.round.myVote === "Disagree" ? "border-red-500 bg-red-100 text-red-600 shadow-md dark:bg-red-950 dark:text-red-400" : "border-red-300 bg-red-50/50 text-red-500 hover:bg-red-100 dark:border-red-700 dark:bg-red-950/30 dark:text-red-400"}`}
-                    >
-                      <HugeiconsIcon icon={ThumbsDownIcon} size={32} strokeWidth={2} />
-                      <span className="text-xs font-bold">Tidak</span>
-                    </button>
+                  <div className="space-y-4 rounded-md border bg-muted/30 p-4 sm:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Voting time</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Yang belum vote akan dipilih acak saat waktu habis.</p>
+                      </div>
+                      <div className="rounded-md border bg-background px-3 py-2 text-xl font-bold tabular-nums text-primary">
+                        {formatTime(votingSecondsLeft)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-6">
+                      <button
+                        onClick={() => vote("Agree")}
+                        disabled={isPending}
+                        className={`flex size-24 flex-col items-center justify-center gap-1.5 rounded-full border-2 transition-all disabled:opacity-50 ${state.round.myVote === "Agree" ? "border-green-500 bg-green-100 text-green-600 shadow-md dark:bg-green-950 dark:text-green-400" : "border-green-300 bg-green-50/50 text-green-500 hover:bg-green-100 dark:border-green-700 dark:bg-green-950/30 dark:text-green-400"}`}
+                      >
+                        <HugeiconsIcon icon={ThumbsUpIcon} size={32} strokeWidth={2} />
+                        <span className="text-xs font-bold">Setuju</span>
+                      </button>
+                      <button
+                        onClick={() => vote("Disagree")}
+                        disabled={isPending}
+                        className={`flex size-24 flex-col items-center justify-center gap-1.5 rounded-full border-2 transition-all disabled:opacity-50 ${state.round.myVote === "Disagree" ? "border-red-500 bg-red-100 text-red-600 shadow-md dark:bg-red-950 dark:text-red-400" : "border-red-300 bg-red-50/50 text-red-500 hover:bg-red-100 dark:border-red-700 dark:bg-red-950/30 dark:text-red-400"}`}
+                      >
+                        <HugeiconsIcon icon={ThumbsDownIcon} size={32} strokeWidth={2} />
+                        <span className="text-xs font-bold">Ga Setuju</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {state.participants.map((participant) => {
+                        const hasVoted = voteByParticipantId.has(participant.id);
+
+                        return (
+                          <div key={participant.id} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{participant.name}</p>
+                              {participant.isLeader ? <p className="text-[10px] text-muted-foreground">Leader</p> : null}
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${hasVoted ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                              {hasVoted ? "Sudah vote" : "Belum vote"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {state.round && state.round.status !== "Voting" && (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-primary/30 bg-primary/10 p-4">
+                    <div className="rounded-md border border-primary/30 bg-primary/10 p-4 text-left">
                       <p className="text-xs font-medium text-muted-foreground">Kubu Setuju</p>
                       <p className="text-3xl font-bold text-primary">{agreeVotes.length}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {agreeVotes.map((vote) => <span key={vote.participantId} className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium">{vote.participantName}</span>)}
                       </div>
                     </div>
-                    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4">
+                    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-right">
                       <p className="text-xs font-medium text-muted-foreground">Kubu Tidak Setuju</p>
                       <p className="text-3xl font-bold text-destructive">{disagreeVotes.length}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
                         {disagreeVotes.map((vote) => <span key={vote.participantId} className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium">{vote.participantName}</span>)}
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-                <p className="text-sm text-muted-foreground">Vote masuk: <span className="font-bold text-foreground">{votedCount}/{totalPlayers}</span></p>
                 {state.isLeader && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex justify-end">
                     {!state.round && <Button onClick={() => { runAction(() => startStatieRound(code, customStatement)); setCustomStatement(""); }} disabled={isPending} className="h-9">Mulai ronde</Button>}
-                    {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code))} disabled={isPending} className="h-9">Split & debat</Button>}
-                    {hasActiveRound && <Button onClick={() => runAction(() => finishStatieRound(code))} disabled={isPending} variant="outline" className="h-9 bg-background">Selesai ronde</Button>}
+                    {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code))} disabled={isPending} className="h-9">Mulai debat</Button>}
+                    {state.round?.status === "Debate" && <Button onClick={() => runAction(() => finishStatieRound(code))} disabled={isPending} variant="outline" className="h-9 bg-background">Selesai ronde</Button>}
                   </div>
                 )}
               </div>
+
             </div>
           )}
           {message && <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
