@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
-import { PullToRefreshWrapper } from "@/components/pwa";
+
 import { LocalThemeStyle, FontStyle } from "@/components/layout";
 import { CSS_VARIABLE_NAMES } from "@/lib/theme-palettes";
 import { fetchExchangeRates, fetchUserCurrency } from "@/app/actions/preferences";
@@ -186,9 +186,7 @@ export default async function RootLayout({
         >
           <QueryProvider>
             <CurrencyProvider initialCurrency={initialCurrency} initialRates={initialRates}>
-              <PullToRefreshWrapper>
-                {children}
-              </PullToRefreshWrapper>
+              {children}
             </CurrencyProvider>
           </QueryProvider>
         </ThemeProvider>
