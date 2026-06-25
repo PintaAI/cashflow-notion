@@ -20,10 +20,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/lib/auth-client";
 
 import { createStatieRoom, deleteStatieStatement, joinStatieRoom } from "@/app/actions/statie";
-import type { getStatiePopularTopics, getStatieStatements } from "@/app/actions/statie";
+import type { getStatieLeaderboard, getStatiePopularTopics, getStatieStatements } from "@/app/actions/statie";
 
 type Statement = Awaited<ReturnType<typeof getStatieStatements>>;
 type PopularTopic = Awaited<ReturnType<typeof getStatiePopularTopics>>[number];
+type Leaderboard = Awaited<ReturnType<typeof getStatieLeaderboard>>;
 
 const TIME_PRESETS = [300, 600, 900];
 const FALLBACK_TOPICS = ["kerja remote", "dating", "uang", "AI", "teknologi"];
@@ -42,7 +43,17 @@ function parseTopicsLocal(input: string): string[] {
   return result;
 }
 
-export function StatieHome({ statements, popularTopics, isAdmin }: { statements: Statement; popularTopics: PopularTopic[]; isAdmin: boolean }) {
+export function StatieHome({
+  statements,
+  popularTopics,
+  leaderboard,
+  isAdmin,
+}: {
+  statements: Statement;
+  popularTopics: PopularTopic[];
+  leaderboard: Leaderboard;
+  isAdmin: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [topics, setTopics] = useState<string[]>([]);
@@ -343,86 +354,141 @@ export function StatieHome({ statements, popularTopics, isAdmin }: { statements:
           </Tabs>
         </div>
 
-        {statements.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                  <HugeiconsIcon icon={AnalyticsUpIcon} strokeWidth={2} className="size-4" />
-                  Trending
-                </p>
-                <p className="text-xs text-muted-foreground">Top 10 trending argumen</p>
+        {(statements.length > 0 || leaderboard.length > 0) && (
+          <section className="rounded-md border bg-background/60 p-2 shadow-sm sm:p-3">
+            <Tabs defaultValue="trending" className="gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                    <HugeiconsIcon icon={AnalyticsUpIcon} strokeWidth={2} className="size-4" />
+                    Arena Statie
+                  </p>
+                  <p className="text-xs text-muted-foreground">Argumen panas dan pemain dengan skor AI tertinggi</p>
+                </div>
+                <TabsList variant="line" className="shrink-0">
+                  <TabsTrigger value="trending">Trending</TabsTrigger>
+                  <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+                </TabsList>
               </div>
-              <span className="text-xs text-muted-foreground">{statements.length} argumen</span>
-            </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              {statements.map((statement) => {
-                const voteCount = statement.agreeCount + statement.disagreeCount;
-                const isSelected = selectedStatementId === statement.id;
-                return (
-                  <div
-                    key={statement.id}
-                    className={`group relative flex flex-col gap-2.5 rounded-md border p-3 transition-colors ${isSelected ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "bg-muted/30 hover:bg-muted/50"}`}
-                  >
-                    {isSelected && (
-                      <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                        <HugeiconsIcon icon={CheckmarkCircle04Icon} size={12} strokeWidth={2} />
-                        Terpilih
-                      </span>
-                    )}
+              <TabsContent value="trending" className="pt-1">
+                {statements.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {statements.map((statement) => {
+                      const voteCount = statement.agreeCount + statement.disagreeCount;
+                      const isSelected = selectedStatementId === statement.id;
+                      return (
+                        <div
+                          key={statement.id}
+                          className={`group relative flex flex-col gap-2.5 rounded-md border p-3 transition-colors ${isSelected ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "bg-muted/30 hover:bg-muted/50"}`}
+                        >
+                          {isSelected && (
+                            <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                              <HugeiconsIcon icon={CheckmarkCircle04Icon} size={12} strokeWidth={2} />
+                              Terpilih
+                            </span>
+                          )}
 
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        aria-label="Hapus argumen"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          removeStatement(statement.id);
-                        }}
-                        className="absolute left-2 top-2 inline-flex size-6 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} size={12} strokeWidth={2} className="size-3.5" />
-                      </button>
-                    )}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              disabled={isPending}
+                              aria-label="Hapus argumen"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                removeStatement(statement.id);
+                              }}
+                              className="absolute left-2 top-2 inline-flex size-6 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                            >
+                              <HugeiconsIcon icon={Delete02Icon} size={12} strokeWidth={2} className="size-3.5" />
+                            </button>
+                          )}
 
-                    <button
-                      type="button"
-                      onClick={() => pickStatement(statement)}
-                      disabled={isPending}
-                      className="flex flex-1 flex-col gap-2.5 text-left disabled:opacity-50"
-                    >
-                      <div className="flex items-start gap-2">
-                        <HugeiconsIcon
-                          icon={statement.generatedByAi ? BubbleChatSparkIcon : PencilEdit01Icon}
-                          size={14}
-                          className="mt-0.5 shrink-0 text-muted-foreground"
-                        />
-                        <p className="text-sm font-medium leading-5">{statement.text}</p>
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => pickStatement(statement)}
+                            disabled={isPending}
+                            className="flex flex-1 flex-col gap-2.5 text-left disabled:opacity-50"
+                          >
+                            <div className="flex items-start gap-2">
+                              <HugeiconsIcon
+                                icon={statement.generatedByAi ? BubbleChatSparkIcon : PencilEdit01Icon}
+                                size={14}
+                                className="mt-0.5 shrink-0 text-muted-foreground"
+                              />
+                              <p className="text-sm font-medium leading-5">{statement.text}</p>
+                            </div>
 
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 font-medium">
-                          {statement.topic}
-                        </span>
-                        <span className="inline-flex items-center gap-1 font-medium text-green-600 dark:text-green-400">
-                          <HugeiconsIcon icon={ThumbsUpIcon} size={12} strokeWidth={2} />
-                          {statement.agreeCount}
-                        </span>
-                        <span className="inline-flex items-center gap-1 font-medium text-red-600 dark:text-red-400">
-                          <HugeiconsIcon icon={ThumbsDownIcon} size={12} strokeWidth={2} />
-                          {statement.disagreeCount}
-                        </span>
-                        <span className="text-muted-foreground/60">
-                          {voteCount} vote · {statement.usedCount}× dipakai
-                        </span>
-                      </div>
-                    </button>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                              <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 font-medium">
+                                {statement.topic}
+                              </span>
+                              <span className="inline-flex items-center gap-1 font-medium text-green-600 dark:text-green-400">
+                                <HugeiconsIcon icon={ThumbsUpIcon} size={12} strokeWidth={2} />
+                                {statement.agreeCount}
+                              </span>
+                              <span className="inline-flex items-center gap-1 font-medium text-red-600 dark:text-red-400">
+                                <HugeiconsIcon icon={ThumbsDownIcon} size={12} strokeWidth={2} />
+                                {statement.disagreeCount}
+                              </span>
+                              <span className="text-muted-foreground/60">
+                                {voteCount} vote · {statement.usedCount}× dipakai
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                ) : (
+                  <div className="rounded-md border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                    Belum ada argumen trending. Mulai ronde pertama untuk mengisi arena.
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="leaderboard" className="space-y-2 pt-1">
+                {leaderboard.length > 0 ? leaderboard.map((player, index) => (
+                  <div
+                    key={player.key}
+                    className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-md border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className={`flex size-8 items-center justify-center rounded-full text-xs font-black ${index === 0 ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`}>
+                      #{index + 1}
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-semibold">{player.name}</p>
+                        <span className="rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {player.rounds} ronde
+                        </span>
+                      </div>
+                      <p className="line-clamp-2 text-xs text-muted-foreground">{player.latestReason || player.latestStatement}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                        <span>Best {player.bestScore}</span>
+                        <span>Latest {player.latestScore}</span>
+                        <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <HugeiconsIcon icon={ThumbsUpIcon} size={12} strokeWidth={2} />
+                          {player.agreeCount}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+                          <HugeiconsIcon icon={ThumbsDownIcon} size={12} strokeWidth={2} />
+                          {player.disagreeCount}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                      <p className="text-xl font-black leading-none">{player.averageScore}</p>
+                      <p className="mt-1 text-[10px] font-medium text-muted-foreground">AVG AI</p>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="rounded-md border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                    Leaderboard muncul setelah ada ronde yang selesai dengan AI scoring.
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </section>
         )}
       </div>

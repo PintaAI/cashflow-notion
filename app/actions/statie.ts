@@ -825,6 +825,135 @@ export async function getStatieStatements(limit = 60) {
   }));
 }
 
+export async function getStatieLeaderboard(limit = 10) {
+  const rounds = await prisma.statieRound.findMany({
+    where: { status: StatieRoundStatus.Finished, aiScore: { not: undefined } },
+    select: {
+      id: true,
+      aiScore: true,
+      aiScoredAt: true,
+      statement: { select: { text: true } },
+      votes: {
+        select: {
+          participantId: true,
+          choice: true,
+          participant: {
+            select: {
+              userId: true,
+              guestName: true,
+              user: { select: { name: true, email: true } },
+            },
+          },
+        },
+      },
+      transcripts: {
+        select: {
+          participantId: true,
+          participant: {
+            select: {
+              userId: true,
+              guestName: true,
+              user: { select: { name: true, email: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { aiScoredAt: "desc" },
+    take: 120,
+  });
+
+  type ScoreParticipant = {
+    participantId: string;
+    score: number;
+    reason?: string;
+  };
+
+  type LeaderboardEntry = {
+    key: string;
+    name: string;
+    rounds: number;
+    totalScore: number;
+    bestScore: number;
+    latestScore: number;
+    latestReason: string;
+    latestStatement: string;
+    agreeCount: number;
+    disagreeCount: number;
+    lastScoredAt: string | null;
+  };
+
+  const entries = new Map<string, LeaderboardEntry>();
+
+  for (const round of rounds) {
+    const score = round.aiScore;
+    if (!score || typeof score !== "object" || !Array.isArray((score as { participants?: unknown }).participants)) continue;
+
+    const participantsById = new Map<string, {
+      userId: string | null;
+      guestName: string | null;
+      user: { name: string | null; email: string } | null;
+    }>();
+    for (const vote of round.votes) participantsById.set(vote.participantId, vote.participant);
+    for (const transcript of round.transcripts) participantsById.set(transcript.participantId, transcript.participant);
+
+    for (const item of (score as { participants: ScoreParticipant[] }).participants) {
+      if (!item || typeof item.participantId !== "string" || typeof item.score !== "number") continue;
+      const participant = participantsById.get(item.participantId);
+      if (!participant) continue;
+
+      const name = participantDisplayName(participant);
+      const key = participant.userId ? `user:${participant.userId}` : `guest:${name.toLowerCase()}`;
+      const vote = round.votes.find((v) => v.participantId === item.participantId)?.choice;
+      const existing = entries.get(key);
+      if (existing) {
+        existing.rounds += 1;
+        existing.totalScore += item.score;
+        existing.bestScore = Math.max(existing.bestScore, item.score);
+        if (vote === StatieVoteChoice.Agree) existing.agreeCount += 1;
+        if (vote === StatieVoteChoice.Disagree) existing.disagreeCount += 1;
+        if (!existing.lastScoredAt || (round.aiScoredAt && round.aiScoredAt.toISOString() > existing.lastScoredAt)) {
+          existing.latestScore = item.score;
+          existing.latestReason = item.reason ?? "";
+          existing.latestStatement = round.statement.text;
+          existing.lastScoredAt = round.aiScoredAt?.toISOString() ?? null;
+        }
+      } else {
+        entries.set(key, {
+          key,
+          name,
+          rounds: 1,
+          totalScore: item.score,
+          bestScore: item.score,
+          latestScore: item.score,
+          latestReason: item.reason ?? "",
+          latestStatement: round.statement.text,
+          agreeCount: vote === StatieVoteChoice.Agree ? 1 : 0,
+          disagreeCount: vote === StatieVoteChoice.Disagree ? 1 : 0,
+          lastScoredAt: round.aiScoredAt?.toISOString() ?? null,
+        });
+      }
+    }
+  }
+
+  return Array.from(entries.values())
+    .map((entry) => ({
+      key: entry.key,
+      name: entry.name,
+      rounds: entry.rounds,
+      averageScore: Math.round(entry.totalScore / entry.rounds),
+      bestScore: Math.round(entry.bestScore),
+      latestScore: Math.round(entry.latestScore),
+      latestReason: entry.latestReason,
+      latestStatement: entry.latestStatement,
+      agreeCount: entry.agreeCount,
+      disagreeCount: entry.disagreeCount,
+      lastScoredAt: entry.lastScoredAt,
+    }))
+    .sort((a, b) => b.averageScore - a.averageScore || b.bestScore - a.bestScore || b.rounds - a.rounds)
+    .slice(0, Math.min(50, Math.max(1, limit)));
+}
+
 export async function deleteStatieStatement(statementId: string): Promise<ActionResult<object>> {
   try {
     await requireAdmin();
