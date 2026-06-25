@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/auth-client";
+import { useStatieRealtime } from "@/hooks/use-statie-realtime";
 
 import {
   finishStatieRound,
@@ -211,51 +212,55 @@ export function StatieRoom({ code }: { code: string }) {
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
   const resultScore = getAiScore(state?.lastResult?.aiScore);
+  const realtime = useStatieRealtime(code, async () => {
+    await refresh();
+  });
 
-  function runAction(action: () => Promise<{ success: boolean; message?: string }>) {
+  function runAction(action: () => Promise<{ success: boolean; message?: string }>, realtimeAction = "action") {
     setMessage("");
     startTransition(async () => {
       const result = await action();
       if (!result.success) setMessage(result.message ?? "Aksi gagal.");
       await refresh();
+      if (result.success) realtime.publish(realtimeAction);
     });
   }
 
   function joinRoom() {
-    runAction(() => joinStatieRoom(code, name));
+    runAction(() => joinStatieRoom(code, name), "join");
   }
 
   function vote(choice: VoteChoice) {
-    runAction(() => submitStatieVote(code, choice));
+    runAction(() => submitStatieVote(code, choice), "vote");
   }
 
   function finishRoundAction() {
-    runAction(() => finishStatieRound(code));
+    runAction(() => finishStatieRound(code), "finish-round");
   }
 
   function saveTranscript(text = transcriptText) {
     const roundId = state?.round?.id;
     if (!roundId) return;
-    runAction(() => submitStatieTranscript(code, roundId, text));
+    runAction(() => submitStatieTranscript(code, roundId, text), "transcript");
   }
 
   function changeTopic() {
-    runAction(() => updateStatieRoomTopic(code, nextTopic));
+    runAction(() => updateStatieRoomTopic(code, nextTopic), "topic");
   }
 
   function changePlayerLimit() {
-    runAction(() => updateStatiePlayerLimit(code, playerLimitInput));
+    runAction(() => updateStatiePlayerLimit(code, playerLimitInput), "player-limit");
   }
 
   function changeTimers() {
     runAction(() => updateStatieRoomTimers(code, {
       votingSeconds: votingSecondsInput,
       debateSeconds: debateMinutesInput * 60,
-    }));
+    }), "timers");
   }
 
   function kickParticipant(participantId: string) {
-    runAction(() => kickStatieParticipant(code, participantId));
+    runAction(() => kickStatieParticipant(code, participantId), "kick");
   }
 
   async function copyLink() {
@@ -284,6 +289,7 @@ export function StatieRoom({ code }: { code: string }) {
       if (text) {
         const saved = await submitStatieTranscript(code, round.id, text);
         if (!saved.success) throw new Error(saved.message);
+        realtime.publish("transcript");
       }
       setRecorderMessage("Transcript tersimpan untuk AI scoring.");
       await refresh();
@@ -700,7 +706,7 @@ export function StatieRoom({ code }: { code: string }) {
                               maxLength={180}
                             />
                             <Button
-                              onClick={() => { runAction(() => startStatieRound(code, customStatement)); setCustomStatement(""); }}
+                              onClick={() => { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }}
                               disabled={isPending}
                               className="h-9 shrink-0"
                             >
@@ -892,8 +898,8 @@ export function StatieRoom({ code }: { code: string }) {
 
                 {state.isLeader && (
                   <div className="flex justify-end">
-                    {!state.round && <Button onClick={() => { runAction(() => startStatieRound(code, customStatement)); setCustomStatement(""); }} disabled={isPending} className="h-9">Mulai ronde</Button>}
-                    {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code))} disabled={isPending} className="h-9">Mulai debat</Button>}
+                    {!state.round && <Button onClick={() => { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }} disabled={isPending} className="h-9">Mulai ronde</Button>}
+                    {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code), "start-debate")} disabled={isPending} className="h-9">Mulai debat</Button>}
                     {state.round?.status === "Debate" && <Button onClick={finishRound} disabled={isPending} variant="outline" className="h-9 bg-background">Selesai ronde & scoring</Button>}
                   </div>
                 )}
