@@ -175,6 +175,13 @@ export function StatieRoom({ code }: { code: string }) {
   const realtime = useStatieRealtime(code, async () => {
     await refresh();
   });
+  const realtimeLabel = realtime.status === "connected"
+    ? "Realtime on"
+    : realtime.status === "disabled"
+      ? "Realtime off"
+      : realtime.status === "error"
+        ? "Realtime error"
+        : "Connecting";
 
   function runAction(action: () => Promise<{ success: boolean; message?: string }>, realtimeAction = "action") {
     setMessage("");
@@ -420,6 +427,11 @@ export function StatieRoom({ code }: { code: string }) {
                 <span className="mx-0.5 text-muted-foreground/40">|</span>
                 <HugeiconsIcon icon={Clock01Icon} size={14} className="text-muted-foreground" />
                 <span className="font-medium text-muted-foreground/70">{state.votingSeconds}s/{Math.round(state.debateSeconds / 60)}m</span>
+                <span className="mx-0.5 text-muted-foreground/40">|</span>
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${realtime.status === "connected" ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400" : realtime.status === "error" ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border bg-background text-muted-foreground"}`}>
+                  <span className={`size-1.5 rounded-full ${realtime.status === "connected" ? "bg-green-500" : realtime.status === "error" ? "bg-destructive" : "bg-muted-foreground/50"}`} />
+                  {realtimeLabel}
+                </span>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="xs" className="h-6 gap-1 rounded-full px-2 text-[11px]">
