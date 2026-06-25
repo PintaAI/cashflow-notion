@@ -46,10 +46,6 @@ type RoomState = Awaited<ReturnType<typeof getStatieRoomState>>;
 type ActiveRound = NonNullable<NonNullable<RoomState>["round"]>;
 type VoteChoice = "Agree" | "Disagree";
 
-const LOBBY_POLL_MS = 8000;
-const ACTIVE_ROUND_POLL_MS = 2500;
-const UNJOINED_POLL_MS = 12000;
-
 type StatieAiScore = {
   participants: {
     participantId: string;
@@ -60,13 +56,6 @@ type StatieAiScore = {
   winnerParticipantId: string | null;
   summary: string;
 };
-
-function getPollingDelay(state: RoomState) {
-  if (!state?.isJoined) return UNJOINED_POLL_MS;
-  if (state.round?.status === "Debate") return null;
-  if (state.round?.status === "Voting") return ACTIVE_ROUND_POLL_MS;
-  return LOBBY_POLL_MS;
-}
 
 function formatTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -144,44 +133,15 @@ export function StatieRoom({ code }: { code: string }) {
 
   useEffect(() => {
     let active = true;
-    let loading = false;
-    let timeout: number | undefined;
-    let latestState: RoomState = null;
-
-    const scheduleNextLoad = () => {
-      if (!active || document.hidden) return;
-      const delay = getPollingDelay(latestState);
-      if (delay === null) return;
-      timeout = window.setTimeout(() => void loadState(), delay);
-    };
 
     const loadState = async () => {
-      if (loading) return;
-      if (document.hidden) return;
-      loading = true;
-      try {
-        const nextState = await getStatieRoomState(code);
-        if (active) {
-          latestState = nextState;
-          applyRoomState(nextState);
-        }
-      } finally {
-        loading = false;
-        scheduleNextLoad();
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (timeout) window.clearTimeout(timeout);
-      if (!document.hidden) void loadState();
+      const nextState = await getStatieRoomState(code);
+      if (active) applyRoomState(nextState);
     };
 
     void loadState();
-    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       active = false;
-      if (timeout) window.clearTimeout(timeout);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [code]);
 
