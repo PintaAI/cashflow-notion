@@ -4,13 +4,17 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } f
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  AiGameIcon,
+  ArrowLeft01Icon,
   BubbleChatSparkIcon,
   Clock01Icon,
   CogIcon,
   CopyLinkIcon,
   Delete02Icon,
+  Mic01Icon,
+  MicOffIcon,
   PencilEdit01Icon,
+  SaveIcon,
+  StopIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
   UserGroupIcon,
@@ -104,6 +108,7 @@ export function StatieRoom({ code }: { code: string }) {
   const chunksRef = useRef<Blob[]>([]);
   const transcriptRoundIdRef = useRef<string | null>(null);
   const recordedRoundIdRef = useRef<string | null>(null);
+  const votingExpiredRoundIdRef = useRef<string | null>(null);
   const autoFinishRoundIdRef = useRef<string | null>(null);
   const finishAfterTranscribeRef = useRef(false);
   const { data: session, isPending: sessionPending } = useSession();
@@ -120,6 +125,7 @@ export function StatieRoom({ code }: { code: string }) {
     if (transcriptRoundIdRef.current !== roundId) {
       transcriptRoundIdRef.current = roundId;
       recordedRoundIdRef.current = nextState?.round?.myTranscript ? roundId : null;
+      votingExpiredRoundIdRef.current = null;
       autoFinishRoundIdRef.current = null;
       setTranscriptText(nextState?.round?.myTranscript ?? "");
       setRecorderMessage("");
@@ -163,8 +169,6 @@ export function StatieRoom({ code }: { code: string }) {
   const voteByParticipantId = new Map(votes.map((vote) => [vote.participantId, vote]));
   const agreeVotes = votes.filter((vote) => vote.choice === "Agree");
   const disagreeVotes = votes.filter((vote) => vote.choice === "Disagree");
-  const votedCount = votes.length;
-  const totalPlayers = state?.participants.length ?? 0;
   const activeRoundId = state?.round?.id ?? null;
   const activeRoundStatus = state?.round?.status ?? null;
   const isLeader = Boolean(state?.isLeader);
@@ -174,7 +178,24 @@ export function StatieRoom({ code }: { code: string }) {
   const resultScore = getAiScore(state?.lastResult?.aiScore);
   const realtime = useStatieRealtime(code, async () => {
     await refresh();
+  }, (text) => {
+    setCustomStatement(text);
   });
+
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const publishDraftRef = useRef(realtime.publishDraft);
+  publishDraftRef.current = realtime.publishDraft;
+
+  useEffect(() => {
+    if (!state?.isLeader || state.round) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      publishDraftRef.current(customStatement);
+    }, 200);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
+  }, [customStatement, state?.isLeader, state?.round]);
   const realtimeLabel = realtime.status === "connected"
     ? "Realtime on"
     : realtime.status === "disabled"
@@ -342,6 +363,10 @@ export function StatieRoom({ code }: { code: string }) {
     stopRecording();
   });
 
+  const refreshFromVotingTimer = useEffectEvent(async () => {
+    await refresh();
+  });
+
   function finishRound() {
     if (isRecording) {
       finishAfterTranscribeRef.current = true;
@@ -358,6 +383,49 @@ export function StatieRoom({ code }: { code: string }) {
 
     finishRoundAction();
   }
+
+  function renderMicControl() {
+    const isScoring = isPending && activeRoundStatus === "Debate";
+    const isBusy = isTranscribing || isScoring;
+    const micClass = !isMicReady
+      ? "size-12 rounded-full shadow-md"
+      : isRecording
+        ? "size-12 rounded-full border-primary/30 bg-primary/10 text-primary shadow-md"
+        : isBusy
+          ? "size-12 rounded-full border-amber-500/30 bg-amber-500/10 text-amber-600 shadow-md dark:text-amber-400"
+          : "size-12 rounded-full shadow-md";
+    const micLabel = isScoring
+      ? "AI scoring"
+      : isTranscribing
+        ? "Transcribing"
+        : isRecording
+          ? "Recording"
+          : isMicReady
+            ? "Mic ready"
+            : "Activate mic";
+
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <Button onClick={!isMicReady ? prepareMic : undefined} disabled={isMicReady || isTranscribing} size="icon" className={`relative ${micClass}`} aria-label={micLabel}>
+          <HugeiconsIcon icon={isMicReady ? Mic01Icon : MicOffIcon} strokeWidth={2} className="size-5" />
+          {isBusy && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-amber-500 ring-2 ring-background animate-pulse" />}
+          {isRecording && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-primary ring-2 ring-background animate-pulse" />}
+        </Button>
+      </div>
+    );
+  }
+
+  useEffect(() => {
+    if (activeRoundStatus !== "Voting" || !activeRoundId || votingSecondsLeft > 0) return;
+    if (votingExpiredRoundIdRef.current === activeRoundId) return;
+
+    votingExpiredRoundIdRef.current = activeRoundId;
+    const refreshTimeout = window.setTimeout(() => {
+      void refreshFromVotingTimer();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimeout);
+  }, [activeRoundId, activeRoundStatus, votingSecondsLeft]);
 
   useEffect(() => {
     const round = state?.round;
@@ -416,9 +484,16 @@ export function StatieRoom({ code }: { code: string }) {
         <div className="mb-2 space-y-3 sm:mb-4">
           <div className="py-3 sm:py-4">
             <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
-                Statie Room
-              </span>
+              <div className="flex items-center gap-2">
+                <Button asChild variant="ghost" size="icon-xs" className="shrink-0">
+                  <Link href="/statie" aria-label="Kembali ke Statie">
+                    <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
+                  </Link>
+                </Button>
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+                  Statie Room
+                </span>
+              </div>
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <HugeiconsIcon icon={UserGroupIcon} size={14} className="text-muted-foreground" />
@@ -608,19 +683,44 @@ export function StatieRoom({ code }: { code: string }) {
             </div>
 
             <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <h1 className="text-2xl font-bold tracking-[0.16em] transition-all sm:text-3xl md:text-4xl">
-                  {state.code}
-                </h1>
-                <p className="mt-1 truncate text-xs text-muted-foreground/70">
-                  {state.status} · {state.round ? "ronde aktif" : "menunggu ronde"}
-                </p>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1.5">
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/statie">Statie Home</Link>
-                </Button>
+              <div className="min-w-0 flex-1">
+                {state.round ? (
+                  <div>
+                    <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-3xl">
+                      {state.round.statement}
+                    </h1>
+                    <p className="mt-1 truncate text-xs text-muted-foreground/70">
+                      {state.topic}
+                    </p>
+                  </div>
+                ) : state.isLeader || customStatement.trim() ? (
+                  <div className="flex items-center gap-2">
+                    <textarea
+                      value={customStatement}
+                      onChange={(event) => setCustomStatement(event.target.value)}
+                      placeholder="Tulis argumen untuk Debat..."
+                      readOnly={!state.isLeader}
+                      className="mx-2 min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-2xl placeholder:text-muted-foreground focus-visible:ring-0 sm:text-3xl md:text-4xl dark:bg-transparent [field-sizing:content] read-only:cursor-default"
+                      maxLength={180}
+                      rows={1}
+                    />
+                    {state.isLeader && (
+                      <Button
+                        onClick={() => { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }}
+                        disabled={isPending}
+                        size="sm"
+                        className="h-8 shrink-0"
+                      >
+                      <span className="text-base">{customStatement.trim() ? <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} className="size-4" /> : "🎲"}</span>
+                      {customStatement.trim() ? "Mulai" : "Random"}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <h1 className="text-2xl font-bold tracking-[0.16em] transition-all sm:text-3xl md:text-4xl">
+                    {state.code}
+                  </h1>
+                )}
               </div>
             </div>
           </div>
@@ -642,73 +742,58 @@ export function StatieRoom({ code }: { code: string }) {
           ) : (
             <div className="space-y-4">
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">{state.round ? "Topik dari" : "Topik"}</p>
-                    <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{state.topic}</h2>
-                  </div>
-                  {state.round?.status === "Debate" && (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xl font-bold tabular-nums text-destructive">
-                      {formatTime(debateSecondsLeft)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-md border bg-muted/30 p-4 sm:p-5">
-                  {state.round ? (
-                    <div className="space-y-5">
-                      <p className="text-xl font-bold leading-tight tracking-tight sm:text-3xl">{state.round.statement}</p>
-                      <p className="text-sm text-muted-foreground">Vote masuk: <span className="font-bold text-foreground">{votedCount}/{totalPlayers}</span></p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium leading-6 text-muted-foreground">
-                        <HugeiconsIcon icon={BubbleChatSparkIcon} size={16} className="text-muted-foreground" />
-                        <span>{state.hasPendingStatement ? "Argumen tersimpan siap dipakai." : "Tunggu leader mulai ronde. AI akan pilih argumen acak."}</span>
-                      </div>
-                      {state.isLeader && (
-                        <div className="space-y-2">
-                          <label className="text-xs text-muted-foreground">Tulis argumen sendiri (opsional)</label>
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <Input
-                              value={customStatement}
-                              onChange={(event) => setCustomStatement(event.target.value)}
-                              placeholder="Contoh: Nasi padang harus pakai tangan."
-                              className="h-9 min-w-0 flex-1 bg-background"
-                              maxLength={180}
-                            />
-                            <Button
-                              onClick={() => { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }}
-                              disabled={isPending}
-                              className="h-9 shrink-0"
-                            >
-                              <HugeiconsIcon icon={customStatement.trim() ? PencilEdit01Icon : AiGameIcon} strokeWidth={2} className="size-4" />
-                              {customStatement.trim() ? "Pakai ini" : "Generate bahan Debat"}
-                            </Button>
+                {!state.round && (
+                  <div className="rounded-md border bg-muted/30 p-4 sm:p-5">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="inline-flex items-center gap-2 rounded-full border bg-background px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+                            <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={2} />
+                            Lobby pemain
                           </div>
+                          <p className="text-sm text-muted-foreground">
+                            {state.isLeader ? "Atur pemain dan mulai ronde saat semua siap." : "Tunggu leader memulai ronde debat."}
+                          </p>
                         </div>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        {state.participants.map((participant) => (
-                          <span key={participant.id} className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs font-medium">
-                            {participant.name}
-                            {participant.isLeader ? <span className="text-[10px] text-muted-foreground">Leader</span> : null}
-                          </span>
+                        <div className="rounded-md border bg-background px-3 py-2 text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Joined</p>
+                          <p className="text-xl font-bold tabular-nums">{state.participants.length}/{state.playerLimit}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {state.participants.map((participant, index) => (
+                          <div key={participant.id} className="flex items-center gap-3 rounded-md border bg-background p-3">
+                            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold">{participant.name}</p>
+                              <div className="mt-1 flex flex-wrap gap-1.5">
+                                {participant.isLeader ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">Leader</span> : null}
+                                {state.me?.id === participant.id ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Kamu</span> : null}
+                              </div>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {state.round?.status === "Voting" && (
                   <div className="space-y-4 rounded-md border bg-muted/30 p-4 sm:p-5">
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Voting time</p>
-                        <p className="mt-1 text-xs text-muted-foreground">Yang belum vote akan dipilih acak saat waktu habis.</p>
-                      </div>
-                      <div className="rounded-md border bg-background px-3 py-2 text-xl font-bold tabular-nums text-primary">
-                        {formatTime(votingSecondsLeft)}
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Voting time</p>
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-md border bg-background px-3 py-2 text-xl font-bold tabular-nums text-primary">
+                          {formatTime(votingSecondsLeft)}
+                        </div>
+                        {state.isLeader && (
+                          <Button onClick={() => runAction(() => startStatieDebate(code), "start-debate")} disabled={isPending} size="sm" className="h-9">
+                            Mulai debat
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -734,7 +819,6 @@ export function StatieRoom({ code }: { code: string }) {
                     <div className="space-y-2">
                       {state.participants.map((participant) => {
                         const hasVoted = voteByParticipantId.has(participant.id);
-
                         return (
                           <div key={participant.id} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
                             <div className="min-w-0">
@@ -748,82 +832,106 @@ export function StatieRoom({ code }: { code: string }) {
                         );
                       })}
                     </div>
+
+                    <div className="border-t pt-4">
+                      <div className="flex flex-col items-center gap-3">
+                        {renderMicControl()}
+
+                        <textarea
+                          value={transcriptText}
+                          onChange={(event) => setTranscriptText(event.target.value)}
+                          placeholder="Tulis argumenmu, atau gunakan mic untuk transcribe otomatis."
+                          className="w-full resize-none border-0 bg-transparent p-0 text-center text-xl outline-none placeholder:text-muted-foreground focus-visible:ring-0 [field-sizing:content] dark:bg-transparent"
+                        />
+                      </div>
+
+                      <div className="mt-3 flex justify-end">
+                        <Button onClick={() => saveTranscript()} disabled={isPending || isTranscribing || !transcriptText.trim()} variant="outline" size="icon" className="size-9 rounded-full bg-background">
+                          <HugeiconsIcon icon={SaveIcon} strokeWidth={2} className="size-4" />
+                        </Button>
+                      </div>
+
+                      {recorderMessage && (
+                        <p className={`text-center text-xs ${recorderMessage.includes("gagal") || recorderMessage.includes("Tidak") ? "text-destructive" : "text-primary"}`}>{recorderMessage}</p>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 {state.round && state.round.status !== "Voting" && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-primary/30 bg-primary/10 p-4 text-left">
-                      <p className="text-xs font-medium text-muted-foreground">Kubu Setuju</p>
-                      <p className="text-3xl font-bold text-primary">{agreeVotes.length}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {agreeVotes.map((vote) => <span key={vote.participantId} className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium">{vote.participantName}</span>)}
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-3">
+                    <div className="relative overflow-hidden rounded-2xl border bg-card p-3 text-left shadow-sm sm:p-4">
+                      <div className="pointer-events-none absolute -left-10 -top-12 size-28 rounded-full bg-green-500/10 blur-2xl" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">Setuju</p>
+                          <p className="mt-1 text-4xl font-black leading-none tabular-nums text-green-600 dark:text-green-400">{agreeVotes.length}</p>
+                        </div>
+                        <div className="grid size-8 place-items-center rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
+                          <HugeiconsIcon icon={ThumbsUpIcon} strokeWidth={2} className="size-4" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {agreeVotes.length > 0
+                          ? agreeVotes.map((vote) => <span key={vote.participantId} className="rounded-md border bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-sm">{vote.participantName}</span>)
+                          : <span className="text-xs text-muted-foreground">Belum ada pemain</span>}
                       </div>
                     </div>
-                    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-right">
-                      <p className="text-xs font-medium text-muted-foreground">Kubu Tidak Setuju</p>
-                      <p className="text-3xl font-bold text-destructive">{disagreeVotes.length}</p>
-                      <div className="mt-3 flex flex-wrap justify-end gap-2">
-                        {disagreeVotes.map((vote) => <span key={vote.participantId} className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium">{vote.participantName}</span>)}
+                    {state.round.status === "Debate" && (
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="rounded-full border border-border bg-background px-3 py-2 text-sm font-black tabular-nums text-foreground shadow-sm sm:text-base">
+                          {formatTime(debateSecondsLeft)}
+                        </div>
+                        {state.isLeader && (
+                          <Button onClick={finishRound} disabled={isPending} variant="outline" size="sm" className="h-auto flex-col gap-0.5 rounded-full bg-background px-2 py-1" aria-label="Selesai & scoring">
+                            <HugeiconsIcon icon={StopIcon} strokeWidth={2} className="size-4" />
+                            <span className="text-[10px] font-semibold">Stop</span>
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <div className="relative overflow-hidden rounded-2xl border bg-card p-3 text-right shadow-sm sm:p-4">
+                      <div className="pointer-events-none absolute -right-10 -top-12 size-28 rounded-full bg-red-500/10 blur-2xl" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="grid size-8 place-items-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+                          <HugeiconsIcon icon={ThumbsDownIcon} strokeWidth={2} className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">Tidak Setuju</p>
+                          <p className="mt-1 text-4xl font-black leading-none tabular-nums text-red-600 dark:text-red-400">{disagreeVotes.length}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap justify-end gap-1.5">
+                        {disagreeVotes.length > 0
+                          ? disagreeVotes.map((vote) => <span key={vote.participantId} className="rounded-md border bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-sm">{vote.participantName}</span>)
+                          : <span className="text-xs text-muted-foreground">Belum ada pemain</span>}
                       </div>
                     </div>
                   </div>
                 )}
 
-                {state.round && (state.round.status === "Voting" || state.round.status === "Debate") && (
-                  <div className="space-y-3 rounded-md border bg-muted/30 p-4 sm:p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">AI transcript</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {state.round.status === "Voting"
-                            ? "Aktifkan mic sekarang. Rekaman akan mulai otomatis saat debat dimulai dan berhenti saat timer habis."
-                            : "Rekaman mengikuti timer debat. Whisper lokal akan ubah audio jadi text untuk scoring."}
-                        </p>
-                        <p className="mt-1 rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5 text-xs text-muted-foreground">
-                          Mic digunakan untuk membuat transcript dan menilai hasil debat dengan AI scoring.
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        {!isMicReady ? (
-                          <Button onClick={prepareMic} disabled={isTranscribing} className="h-9">Aktifkan mic</Button>
-                        ) : state.round.status === "Voting" ? (
-                          <Button disabled className="h-9">Mic siap</Button>
-                        ) : isRecording ? (
-                          <Button disabled className="h-9">Recording otomatis</Button>
-                        ) : (
-                          <Button disabled className="h-9">Menunggu timer</Button>
-                        )}
-                        <Button onClick={() => saveTranscript()} disabled={isPending || isRecording || isTranscribing || !transcriptText.trim()} variant="outline" className="h-9 bg-background">
-                          Simpan text
-                        </Button>
-                      </div>
+                {state.round?.status === "Debate" && (
+                  <div className="space-y-4 rounded-md border bg-muted/30 p-4 sm:p-5">
+                    <div className="flex flex-col items-center gap-3">
+                      {renderMicControl()}
+
+                      <textarea
+                        value={transcriptText}
+                        onChange={(event) => setTranscriptText(event.target.value)}
+                        placeholder="Tulis argumenmu, atau gunakan mic untuk transcribe otomatis."
+                        className="w-full resize-none border-0 bg-transparent p-0 text-center text-xl outline-none placeholder:text-muted-foreground focus-visible:ring-0 [field-sizing:content] dark:bg-transparent"
+                      />
                     </div>
 
-                    <textarea
-                      value={transcriptText}
-                      onChange={(event) => setTranscriptText(event.target.value)}
-                      placeholder="Transcript akan muncul di sini. Kalau mic/Whisper gagal, tulis ringkasan argumenmu manual."
-                      className="min-h-28 w-full rounded-md border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                    {isRecording && (
-                      <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-primary">
-                        <span className="text-xs font-semibold">Recording mengikuti timer debat</span>
-                        <div className="flex h-6 items-center gap-1" aria-label="Recording audio indicator">
-                          {[0, 1, 2, 3, 4, 5, 6].map((item) => (
-                            <span
-                              key={item}
-                              className="w-1 rounded-full bg-primary animate-pulse"
-                              style={{ height: `${8 + (item % 4) * 4}px`, animationDelay: `${item * 120}ms` }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>{state.round.transcriptCount} transcript tersimpan · {isMicReady ? "mic siap" : "mic belum aktif"}</span>
-                      {recorderMessage ? <span className={recorderMessage.includes("gagal") || recorderMessage.includes("Tidak") ? "text-destructive" : "text-primary"}>{recorderMessage}</span> : null}
+                    <div className="flex justify-end">
+                      <Button onClick={() => saveTranscript()} disabled={isPending || isTranscribing || !transcriptText.trim()} variant="outline" size="icon" className="size-9 rounded-full bg-background">
+                        <HugeiconsIcon icon={SaveIcon} strokeWidth={2} className="size-4" />
+                      </Button>
                     </div>
+
+                    {recorderMessage && (
+                      <p className={`text-center text-xs ${recorderMessage.includes("gagal") || recorderMessage.includes("Tidak") ? "text-destructive" : "text-primary"}`}>{recorderMessage}</p>
+                    )}
                   </div>
                 )}
 
@@ -865,14 +973,6 @@ export function StatieRoom({ code }: { code: string }) {
                     ) : (
                       <p className="text-sm text-muted-foreground">AI scoring belum tersedia.</p>
                     )}
-                  </div>
-                )}
-
-                {state.isLeader && (
-                  <div className="flex justify-end">
-                    {!state.round && <Button onClick={() => { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }} disabled={isPending} className="h-9">Mulai ronde</Button>}
-                    {state.round?.status === "Voting" && <Button onClick={() => runAction(() => startStatieDebate(code), "start-debate")} disabled={isPending} className="h-9">Mulai debat</Button>}
-                    {state.round?.status === "Debate" && <Button onClick={finishRound} disabled={isPending} variant="outline" className="h-9 bg-background">Selesai ronde & scoring</Button>}
                   </div>
                 )}
               </div>

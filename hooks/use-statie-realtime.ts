@@ -20,14 +20,25 @@ function getSupabaseClient() {
   return supabaseClient;
 }
 
-export function useStatieRealtime(code: string, onRoomChanged: (event: StatieRealtimeEvent) => void | Promise<void>) {
+type StatementDraftHandler = (text: string) => void;
+
+export function useStatieRealtime(
+  code: string,
+  onRoomChanged: (event: StatieRealtimeEvent) => void | Promise<void>,
+  onStatementDraft?: StatementDraftHandler,
+) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const onRoomChangedRef = useRef(onRoomChanged);
+  const onStatementDraftRef = useRef(onStatementDraft);
   const [status, setStatus] = useState<StatieRealtimeStatus>(SUPABASE_URL && SUPABASE_ANON_KEY ? "connecting" : "disabled");
 
   useEffect(() => {
     onRoomChangedRef.current = onRoomChanged;
   }, [onRoomChanged]);
+
+  useEffect(() => {
+    onStatementDraftRef.current = onStatementDraft;
+  }, [onStatementDraft]);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -50,6 +61,10 @@ export function useStatieRealtime(code: string, onRoomChanged: (event: StatieRea
       .on("broadcast", { event: "room_changed" }, ({ payload }) => {
         if (!isStatieRealtimeEvent(payload) || payload.code !== code) return;
         void onRoomChangedRef.current(payload);
+      })
+      .on("broadcast", { event: "statement_draft" }, ({ payload }) => {
+        if (!active || typeof payload?.text !== "string" || payload.code !== code) return;
+        onStatementDraftRef.current?.(payload.text);
       })
       .subscribe((nextStatus) => {
         if (!active) return;
@@ -74,5 +89,15 @@ export function useStatieRealtime(code: string, onRoomChanged: (event: StatieRea
     });
   }
 
-  return { status, publish, enabled: Boolean(SUPABASE_URL && SUPABASE_ANON_KEY) };
+  function publishDraft(text: string) {
+    const channel = channelRef.current;
+    if (!channel) return;
+    void channel.send({
+      type: "broadcast",
+      event: "statement_draft",
+      payload: { code, text },
+    });
+  }
+
+  return { status, publish, publishDraft, enabled: Boolean(SUPABASE_URL && SUPABASE_ANON_KEY) };
 }

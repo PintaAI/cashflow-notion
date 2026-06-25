@@ -269,6 +269,12 @@ async function scoreStatieRound(roundId: string) {
 
   if (!round || round.transcripts.length === 0) return;
 
+  const transcriptCount = round.transcripts.length;
+  const latestTranscriptUpdatedAt = round.transcripts.reduce<Date | null>((latest, transcript) => {
+    if (!latest || transcript.updatedAt > latest) return transcript.updatedAt;
+    return latest;
+  }, null);
+
   const voteByParticipantId = new Map(round.votes.map((vote) => [vote.participantId, vote.choice]));
   const transcriptLines = round.transcripts.map((transcript) => {
     const side = voteByParticipantId.get(transcript.participantId) ?? "Unknown";
@@ -303,6 +309,19 @@ Transcript peserta:
 
 ${transcriptLines}`,
   });
+
+  const latestTranscript = await prisma.statieTranscript.findFirst({
+    where: { roundId },
+    orderBy: { updatedAt: "desc" },
+    select: { updatedAt: true },
+  });
+  const currentTranscriptCount = await prisma.statieTranscript.count({ where: { roundId } });
+  if (
+    currentTranscriptCount !== transcriptCount
+    || (latestTranscript?.updatedAt && latestTranscriptUpdatedAt && latestTranscript.updatedAt > latestTranscriptUpdatedAt)
+  ) {
+    return;
+  }
 
   await prisma.statieRound.update({
     where: { id: roundId },
@@ -746,7 +765,7 @@ export async function submitStatieTranscript(code: string, roundId: string, text
 
     const round = await prisma.statieRound.findFirst({
       where: { id: roundId, roomId: participant.roomId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.Finished] } },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!round) return { success: false, message: "Ronde debat tidak ditemukan." };
 
@@ -755,6 +774,17 @@ export async function submitStatieTranscript(code: string, roundId: string, text
       create: { roundId: round.id, participantId: participant.id, text: normalizedText },
       update: { text: normalizedText },
     });
+
+    if (round.status === StatieRoundStatus.Finished) {
+      try {
+        await scoreStatieRound(round.id);
+      } catch (scoreError) {
+        await prisma.statieRound.update({
+          where: { id: round.id },
+          data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "AI scoring gagal." },
+        });
+      }
+    }
 
     revalidatePath(`/statie/${participant.room.code}`);
     return { success: true };
