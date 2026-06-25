@@ -190,7 +190,7 @@ export function StatieHome({
             <TabsList variant="line" className="w-full">
               <TabsTrigger value="create">
                 <HugeiconsIcon icon={AiGameIcon} size={14} strokeWidth={2} />
-                Buka room
+                Buat room
               </TabsTrigger>
               <TabsTrigger value="join">
                 <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={2} />
@@ -333,7 +333,7 @@ export function StatieHome({
               </div>
 
               <Button onClick={createRoom} disabled={isPending} className="mt-1 h-10 w-full">
-                Buka Room
+                Buat Room
               </Button>
             </TabsContent>
 
