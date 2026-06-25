@@ -113,6 +113,7 @@ export function StatieRoom({ code }: { code: string }) {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const transcriptRoundIdRef = useRef<string | null>(null);
+  const recordedRoundIdRef = useRef<string | null>(null);
   const finishAfterTranscribeRef = useRef(false);
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
@@ -127,6 +128,7 @@ export function StatieRoom({ code }: { code: string }) {
     const roundId = nextState?.round?.id ?? null;
     if (transcriptRoundIdRef.current !== roundId) {
       transcriptRoundIdRef.current = roundId;
+      recordedRoundIdRef.current = nextState?.round?.myTranscript ? roundId : null;
       setTranscriptText(nextState?.round?.myTranscript ?? "");
       setRecorderMessage("");
     }
@@ -324,6 +326,7 @@ export function StatieRoom({ code }: { code: string }) {
       };
       recorder.onstop = () => {
         setIsRecording(false);
+        recordedRoundIdRef.current = round.id;
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || "audio/webm" });
         chunksRef.current = [];
         if (blob.size > 0) {
@@ -376,10 +379,11 @@ export function StatieRoom({ code }: { code: string }) {
   useEffect(() => {
     const round = state?.round;
     if (round?.status !== "Debate" || !streamRef.current || isRecording || isTranscribing) return;
+    if (debateSecondsLeft <= 0 || recordedRoundIdRef.current === round.id) return;
     startRecordingForRound(round, streamRef.current);
     // Auto-start is intentionally keyed to the round transition, not every recorder helper identity change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.round?.id, state?.round?.status, isRecording, isTranscribing]);
+  }, [state?.round?.id, state?.round?.status, isRecording, isTranscribing, debateSecondsLeft]);
 
   useEffect(() => {
     if (state?.round?.status === "Debate" && isRecording && debateSecondsLeft <= 0) stopRecording();
