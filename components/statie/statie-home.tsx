@@ -357,19 +357,18 @@ export function StatieHome({
         {(statements.length > 0 || leaderboard.length > 0) && (
           <section className="rounded-md border bg-background/60 p-2 shadow-sm sm:p-3">
             <Tabs defaultValue="trending" className="gap-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                    <HugeiconsIcon icon={AnalyticsUpIcon} strokeWidth={2} className="size-4" />
-                    Arena Statie
-                  </p>
-                  <p className="text-xs text-muted-foreground">Argumen panas dan pemain dengan skor AI tertinggi</p>
-                </div>
-                <TabsList variant="line" className="shrink-0">
-                  <TabsTrigger value="trending">Trending</TabsTrigger>
-                  <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
-                </TabsList>
+              <div>
+                <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                  <HugeiconsIcon icon={AnalyticsUpIcon} strokeWidth={2} className="size-4" />
+                  Arena Statie
+                </p>
+                <p className="text-xs text-muted-foreground">Argumen panas dan pemain dengan skor AI tertinggi</p>
               </div>
+
+              <TabsList variant="line" className="w-full justify-start border-b border-border/60 pb-1">
+                <TabsTrigger value="trending" className="flex-none px-2.5">Trending</TabsTrigger>
+                <TabsTrigger value="leaderboard" className="flex-none px-2.5">Leaderboard</TabsTrigger>
+              </TabsList>
 
               <TabsContent value="trending" className="pt-1">
                 {statements.length > 0 ? (
