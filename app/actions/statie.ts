@@ -18,6 +18,7 @@ const MAX_DEBATE_SECONDS = 15 * 60;
 const VOTING_SECONDS = 30;
 const MIN_PLAYER_LIMIT = 2;
 const MAX_PLAYER_LIMIT = 30;
+const ROOM_CLEANUP_MS = 24 * 60 * 60 * 1000;
 
 const statieScoreSchema = z.object({
   participants: z.array(z.object({
@@ -823,6 +824,15 @@ export async function getStatieStatements(limit = 60) {
     voteCount: statement.agreeCount + statement.disagreeCount,
     createdAt: statement.createdAt.toISOString(),
   }));
+}
+
+export async function cleanupOldStatieRooms() {
+  const cutoff = new Date(Date.now() - ROOM_CLEANUP_MS);
+  const result = await prisma.statieRoom.deleteMany({
+    where: { updatedAt: { lt: cutoff } },
+  });
+
+  return { deleted: result.count, cutoff: cutoff.toISOString() };
 }
 
 export async function getStatieLeaderboard(limit = 10) {

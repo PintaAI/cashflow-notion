@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { StatieHome } from "@/components/statie/statie-home";
-import { getStatieLeaderboard, getStatiePopularTopics, getStatieStatements } from "@/app/actions/statie";
+import { cleanupOldStatieRooms, getStatieLeaderboard, getStatiePopularTopics, getStatieStatements } from "@/app/actions/statie";
 import { isCurrentUserAdmin } from "@/lib/admin";
 
 export const metadata: Metadata = {
@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function StatiePage() {
+  await cleanupOldStatieRooms();
+
   const [statements, popularTopics, leaderboard, isAdmin] = await Promise.all([
     getStatieStatements(),
     getStatiePopularTopics(),
