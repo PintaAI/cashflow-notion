@@ -17,6 +17,7 @@ const MIN_VOTING_SECONDS = 10;
 const MAX_VOTING_SECONDS = 120;
 const MIN_DEBATE_SECONDS = 30;
 const MAX_DEBATE_SECONDS = 15 * 60;
+const TRANSCRIPT_COLLECTION_SECONDS = 30;
 const MIN_PLAYER_LIMIT = 2;
 const MAX_PLAYER_LIMIT = 30;
 
@@ -101,6 +102,14 @@ function clampPlayerLimit(limit: number) {
 
 function getVotingEndsAt(votingStartedAt: Date, votingSeconds: number) {
   return new Date(votingStartedAt.getTime() + clampVotingSeconds(votingSeconds) * 1000);
+}
+
+function getTranscriptDeadline(now = new Date()) {
+  return new Date(now.getTime() + TRANSCRIPT_COLLECTION_SECONDS * 1000);
+}
+
+function activeRoundStatuses() {
+  return [StatieRoundStatus.Voting, StatieRoundStatus.Debate, StatieRoundStatus.CollectingTranscripts];
 }
 
 function roomCookieName(code: string) {
@@ -263,26 +272,22 @@ async function scoreStatieRound(roundId: string) {
           participant: { include: { user: { select: { name: true, email: true } } } },
         },
       },
-      votes: true,
+      votes: { include: { participant: { include: { user: { select: { name: true, email: true } } } } } },
     },
   });
 
-  if (!round || round.transcripts.length === 0) return;
-
-  const transcriptCount = round.transcripts.length;
-  const latestTranscriptUpdatedAt = round.transcripts.reduce<Date | null>((latest, transcript) => {
-    if (!latest || transcript.updatedAt > latest) return transcript.updatedAt;
-    return latest;
-  }, null);
+  if (!round || round.votes.length === 0) return;
 
   const voteByParticipantId = new Map(round.votes.map((vote) => [vote.participantId, vote.choice]));
-  const transcriptLines = round.transcripts.map((transcript) => {
-    const side = voteByParticipantId.get(transcript.participantId) ?? "Unknown";
+  const transcriptByParticipantId = new Map(round.transcripts.map((transcript) => [transcript.participantId, transcript]));
+  const transcriptLines = round.votes.map((vote) => {
+    const transcript = transcriptByParticipantId.get(vote.participantId);
+    const side = voteByParticipantId.get(vote.participantId) ?? "Unknown";
     return [
-      `Participant ID: ${transcript.participantId}`,
-      `Name: ${participantDisplayName(transcript.participant)}`,
+      `Participant ID: ${vote.participantId}`,
+      `Name: ${participantDisplayName(vote.participant)}`,
       `Side: ${side}`,
-      `Transcript: ${transcript.text}`,
+      `Transcript: ${transcript?.text ?? "[MISSING_TRANSCRIPT]"}`,
     ].join("\n");
   }).join("\n\n---\n\n");
 
@@ -302,6 +307,7 @@ Aturan scoring:
 - Skor total 0-100 per peserta.
 - clarity maksimal 20, logic maksimal 25, evidence maksimal 15, rebuttal maksimal 20, sportsmanship maksimal 20.
 - Jangan beri skor tinggi untuk argumen kosong, hinaan personal, atau transcript yang tidak relevan.
+- Peserta dengan [MISSING_TRANSCRIPT] harus diberi skor 0 dan reason bahwa transcript tidak tersedia.
 - Pilih winnerParticipantId dari participantId yang tersedia, atau null jika semua transcript terlalu lemah.
 - Reason singkat, spesifik, dan aman untuk ditampilkan ke pemain.
 
@@ -310,23 +316,59 @@ Transcript peserta:
 ${transcriptLines}`,
   });
 
-  const latestTranscript = await prisma.statieTranscript.findFirst({
-    where: { roundId },
-    orderBy: { updatedAt: "desc" },
-    select: { updatedAt: true },
-  });
-  const currentTranscriptCount = await prisma.statieTranscript.count({ where: { roundId } });
-  if (
-    currentTranscriptCount !== transcriptCount
-    || (latestTranscript?.updatedAt && latestTranscriptUpdatedAt && latestTranscript.updatedAt > latestTranscriptUpdatedAt)
-  ) {
-    return;
-  }
-
   await prisma.statieRound.update({
     where: { id: roundId },
     data: { aiScore: result.output, aiScoreError: null, aiScoredAt: new Date() },
   });
+}
+
+async function finalizeCollectingRound(roundId: string) {
+  const round = await prisma.statieRound.findUnique({
+    where: { id: roundId },
+    select: {
+      id: true,
+      roomId: true,
+      status: true,
+      transcriptDeadlineAt: true,
+      votes: { select: { participantId: true } },
+      transcripts: { select: { participantId: true } },
+    },
+  });
+
+  if (!round || round.status !== StatieRoundStatus.CollectingTranscripts) {
+    return { finalized: false, expected: 0, received: 0, pending: 0, deadlinePassed: false };
+  }
+
+  const expectedParticipantIds = new Set(round.votes.map((vote) => vote.participantId));
+  const receivedParticipantIds = new Set(round.transcripts.map((transcript) => transcript.participantId));
+  const expected = expectedParticipantIds.size;
+  const received = Array.from(receivedParticipantIds).filter((participantId) => expectedParticipantIds.has(participantId)).length;
+  const pending = Math.max(0, expected - received);
+  const deadlinePassed = Boolean(round.transcriptDeadlineAt && Date.now() >= round.transcriptDeadlineAt.getTime());
+
+  if (expected > 0 && received < expected && !deadlinePassed) {
+    return { finalized: false, expected, received, pending, deadlinePassed };
+  }
+
+  const result = await prisma.statieRound.updateMany({
+    where: { id: round.id, status: StatieRoundStatus.CollectingTranscripts },
+    data: { status: StatieRoundStatus.Finished, finishedAt: new Date() },
+  });
+
+  if (result.count === 0) return { finalized: false, expected, received, pending, deadlinePassed };
+
+  await prisma.statieRoom.update({ where: { id: round.roomId }, data: { status: StatieRoomStatus.Lobby, currentRoundId: null } });
+
+  try {
+    await scoreStatieRound(round.id);
+  } catch (scoreError) {
+    await prisma.statieRound.update({
+      where: { id: round.id },
+      data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "AI scoring gagal." },
+    });
+  }
+
+  return { finalized: true, expected, received, pending, deadlinePassed };
 }
 
 export async function createStatieRoom(input: {
@@ -446,7 +488,7 @@ export async function getStatieRoomState(code: string) {
         orderBy: [{ isLeader: "desc" }, { joinedAt: "asc" }],
       },
       rounds: {
-        where: { status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+        where: { status: { in: activeRoundStatuses() } },
         orderBy: { createdAt: "desc" },
         take: 1,
         include: {
@@ -476,7 +518,7 @@ export async function getStatieRoomState(code: string) {
           orderBy: [{ isLeader: "desc" }, { joinedAt: "asc" }],
         },
         rounds: {
-          where: { status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+          where: { status: { in: activeRoundStatuses() } },
           orderBy: { createdAt: "desc" },
           take: 1,
           include: {
@@ -528,9 +570,11 @@ export async function getStatieRoomState(code: string) {
           statement: currentRound.statement.text,
           votingEndsAt: getVotingEndsAt(currentRound.votingStartedAt, room.votingSeconds).toISOString(),
           debateEndsAt: currentRound.debateEndsAt?.toISOString() ?? null,
+          transcriptDeadlineAt: currentRound.transcriptDeadlineAt?.toISOString() ?? null,
           myVote: currentParticipantVote,
           myTranscript: currentRound.transcripts.find((transcript) => transcript.participantId === participant?.id)?.text ?? null,
           transcriptCount: currentRound.transcripts.length,
+          transcriptTargetCount: currentRound.votes.length,
           aiScore: currentRound.aiScore,
           aiScoreError: currentRound.aiScoreError,
           aiScoredAt: currentRound.aiScoredAt?.toISOString() ?? null,
@@ -563,7 +607,7 @@ export async function startStatieRound(code: string, customStatement?: string): 
   try {
     const leader = await requireLeader(code);
     const activeRound = await prisma.statieRound.findFirst({
-      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+      where: { roomId: leader.roomId, status: { in: activeRoundStatuses() } },
       select: { id: true },
     });
     if (activeRound) return { success: false, message: "Selesaikan ronde berjalan terlebih dahulu." };
@@ -627,7 +671,7 @@ export async function updateStatieRoomTopic(code: string, topicInput: string): P
     const topic = serializeTopics(topics);
 
     const activeRound = await prisma.statieRound.findFirst({
-      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+      where: { roomId: leader.roomId, status: { in: activeRoundStatuses() } },
       select: { id: true },
     });
     if (activeRound) return { success: false, message: "Topik hanya bisa diganti saat tidak ada ronde aktif." };
@@ -648,7 +692,7 @@ export async function updateStatieRoomTimers(code: string, input: { votingSecond
   try {
     const leader = await requireLeader(code);
     const activeRound = await prisma.statieRound.findFirst({
-      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+      where: { roomId: leader.roomId, status: { in: activeRoundStatuses() } },
       select: { id: true },
     });
     if (activeRound) return { success: false, message: "Timer hanya bisa diganti saat tidak ada ronde aktif." };
@@ -764,7 +808,7 @@ export async function submitStatieTranscript(code: string, roundId: string, text
     if (!normalizedText) return { success: false, message: "Transcript kosong." };
 
     const round = await prisma.statieRound.findFirst({
-      where: { id: roundId, roomId: participant.roomId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.Finished] } },
+      where: { id: roundId, roomId: participant.roomId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.CollectingTranscripts, StatieRoundStatus.Finished] } },
       select: { id: true, status: true },
     });
     if (!round) return { success: false, message: "Ronde debat tidak ditemukan." };
@@ -775,16 +819,7 @@ export async function submitStatieTranscript(code: string, roundId: string, text
       update: { text: normalizedText },
     });
 
-    if (round.status === StatieRoundStatus.Finished) {
-      try {
-        await scoreStatieRound(round.id);
-      } catch (scoreError) {
-        await prisma.statieRound.update({
-          where: { id: round.id },
-          data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "AI scoring gagal." },
-        });
-      }
-    }
+    if (round.status === StatieRoundStatus.CollectingTranscripts) await finalizeCollectingRound(round.id);
 
     revalidatePath(`/statie/${participant.room.code}`);
     return { success: true };
@@ -820,11 +855,18 @@ export async function finishStatieRound(code: string): Promise<ActionResult<obje
   try {
     const leader = await requireLeader(code);
     const round = await prisma.statieRound.findFirst({
-      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.CollectingTranscripts] } },
       orderBy: { createdAt: "desc" },
       select: { id: true, statementId: true },
     });
     if (!round) return { success: false, message: "Tidak ada ronde aktif." };
+
+    const existing = await prisma.statieRound.findUnique({ where: { id: round.id }, select: { status: true } });
+    if (existing?.status === StatieRoundStatus.CollectingTranscripts) {
+      await finalizeCollectingRound(round.id);
+      revalidatePath(`/statie/${leader.room.code}`);
+      return { success: true };
+    }
 
     const voteCounts = await prisma.statieVote.groupBy({
       by: ["choice"],
@@ -835,28 +877,48 @@ export async function finishStatieRound(code: string): Promise<ActionResult<obje
     const agreeCount = voteCounts.find((v) => v.choice === StatieVoteChoice.Agree)?._count.choice ?? 0;
     const disagreeCount = voteCounts.find((v) => v.choice === StatieVoteChoice.Disagree)?._count.choice ?? 0;
 
-    await prisma.$transaction([
-      prisma.statieRound.update({ where: { id: round.id }, data: { status: StatieRoundStatus.Finished, finishedAt: new Date() } }),
-      prisma.statieRoom.update({ where: { id: leader.roomId }, data: { status: StatieRoomStatus.Lobby, currentRoundId: null } }),
-      prisma.statieStatement.update({
+    const movedToCollection = await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.statieRound.updateMany({
+        where: { id: round.id, status: StatieRoundStatus.Debate },
+        data: { status: StatieRoundStatus.CollectingTranscripts, transcriptDeadlineAt: getTranscriptDeadline() },
+      });
+      if (updateResult.count === 0) return false;
+
+      await tx.statieRoom.update({ where: { id: leader.roomId }, data: { status: StatieRoomStatus.Collecting } });
+      await tx.statieStatement.update({
         where: { id: round.statementId },
         data: { agreeCount: { increment: agreeCount }, disagreeCount: { increment: disagreeCount } },
-      }),
-    ]);
-
-    try {
-      await scoreStatieRound(round.id);
-    } catch (scoreError) {
-      await prisma.statieRound.update({
-        where: { id: round.id },
-        data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "AI scoring gagal." },
       });
-    }
+
+      return true;
+    });
+
+    if (movedToCollection) await finalizeCollectingRound(round.id);
 
     revalidatePath(`/statie/${leader.room.code}`);
     return { success: true };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Gagal menyelesaikan ronde." };
+  }
+}
+
+export async function finalizeStatieRoundIfReady(code: string): Promise<ActionResult<{ finalized: boolean; expected: number; received: number; pending: number }>> {
+  try {
+    const participant = await requireParticipant(code);
+    if (!participant) return { success: false, message: "Bergabung ke room terlebih dahulu." };
+
+    const round = await prisma.statieRound.findFirst({
+      where: { roomId: participant.roomId, status: StatieRoundStatus.CollectingTranscripts },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    if (!round) return { success: true, finalized: false, expected: 0, received: 0, pending: 0 };
+
+    const result = await finalizeCollectingRound(round.id);
+    revalidatePath(`/statie/${participant.room.code}`);
+    return { success: true, finalized: result.finalized, expected: result.expected, received: result.received, pending: result.pending };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal finalisasi scoring." };
   }
 }
 

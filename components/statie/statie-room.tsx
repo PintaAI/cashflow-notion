@@ -33,6 +33,7 @@ import { useSession } from "@/lib/auth-client";
 import { useStatieRealtime } from "@/hooks/use-statie-realtime";
 
 import {
+  finalizeStatieRoundIfReady,
   finishStatieRound,
   getStatieRoomState,
   joinStatieRoom,
@@ -110,6 +111,7 @@ export function StatieRoom({ code }: { code: string }) {
   const recordedRoundIdRef = useRef<string | null>(null);
   const votingExpiredRoundIdRef = useRef<string | null>(null);
   const autoFinishRoundIdRef = useRef<string | null>(null);
+  const finalizeRoundIdRef = useRef<string | null>(null);
   const finishAfterTranscribeRef = useRef(false);
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
@@ -127,6 +129,7 @@ export function StatieRoom({ code }: { code: string }) {
       recordedRoundIdRef.current = nextState?.round?.myTranscript ? roundId : null;
       votingExpiredRoundIdRef.current = null;
       autoFinishRoundIdRef.current = null;
+      finalizeRoundIdRef.current = null;
       setTranscriptText(nextState?.round?.myTranscript ?? "");
       setRecorderMessage("");
     }
@@ -152,7 +155,7 @@ export function StatieRoom({ code }: { code: string }) {
   }, [code]);
 
   useEffect(() => {
-    if (state?.round?.status !== "Voting" && state?.round?.status !== "Debate") return;
+    if (state?.round?.status !== "Voting" && state?.round?.status !== "Debate" && state?.round?.status !== "CollectingTranscripts") return;
 
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
@@ -174,6 +177,9 @@ export function StatieRoom({ code }: { code: string }) {
   const isLeader = Boolean(state?.isLeader);
   const votingSecondsLeft = state?.round?.votingEndsAt ? Math.ceil((new Date(state.round.votingEndsAt).getTime() - now) / 1000) : 0;
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
+  const collectingSecondsLeft = state?.round?.transcriptDeadlineAt ? Math.ceil((new Date(state.round.transcriptDeadlineAt).getTime() - now) / 1000) : 0;
+  const transcriptTargetCount = state?.round?.transcriptTargetCount ?? 0;
+  const transcriptPendingCount = Math.max(0, transcriptTargetCount - (state?.round?.transcriptCount ?? 0));
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
   const resultScore = getAiScore(state?.lastResult?.aiScore);
   const realtime = useStatieRealtime(code, async () => {
@@ -224,6 +230,10 @@ export function StatieRoom({ code }: { code: string }) {
 
   function finishRoundAction() {
     runAction(() => finishStatieRound(code), "finish-round");
+  }
+
+  function finalizeRoundAction() {
+    runAction(() => finalizeStatieRoundIfReady(code), "finalize-round");
   }
 
   function saveTranscript(text = transcriptText) {
@@ -359,7 +369,7 @@ export function StatieRoom({ code }: { code: string }) {
   });
 
   const stopRecordingFromTimer = useEffectEvent((showScoringMessage: boolean) => {
-    if (showScoringMessage) setRecorderMessage("Timer habis. Menghentikan rekaman, transcribe, lalu scoring...");
+    if (showScoringMessage) setRecorderMessage("Timer habis. Menghentikan rekaman lalu mengumpulkan transcript...");
     stopRecording();
   });
 
@@ -370,14 +380,14 @@ export function StatieRoom({ code }: { code: string }) {
   function finishRound() {
     if (isRecording) {
       finishAfterTranscribeRef.current = true;
-      setRecorderMessage("Menghentikan rekaman, transcribe, lalu scoring...");
+      setRecorderMessage("Menghentikan rekaman lalu mengumpulkan transcript...");
       stopRecording();
       return;
     }
 
     if (isTranscribing) {
       finishAfterTranscribeRef.current = true;
-      setRecorderMessage("Menunggu transkripsi selesai sebelum scoring...");
+      setRecorderMessage("Menunggu transkripsi selesai sebelum collection...");
       return;
     }
 
@@ -385,7 +395,7 @@ export function StatieRoom({ code }: { code: string }) {
   }
 
   function renderMicControl() {
-    const isScoring = isPending && activeRoundStatus === "Debate";
+    const isScoring = isPending && (activeRoundStatus === "Debate" || activeRoundStatus === "CollectingTranscripts");
     const isBusy = isTranscribing || isScoring;
     const micClass = !isMicReady
       ? "size-12 rounded-full shadow-md"
@@ -456,6 +466,18 @@ export function StatieRoom({ code }: { code: string }) {
       if (stopTimeout) window.clearTimeout(stopTimeout);
     };
   }, [activeRoundId, activeRoundStatus, isLeader, isRecording, isTranscribing, debateSecondsLeft]);
+
+  useEffect(() => {
+    if (activeRoundStatus !== "CollectingTranscripts" || !activeRoundId) return;
+    if (transcriptPendingCount > 0 && collectingSecondsLeft > 0) return;
+    if (finalizeRoundIdRef.current === activeRoundId) return;
+
+    finalizeRoundIdRef.current = activeRoundId;
+    const timeout = window.setTimeout(() => finalizeRoundAction(), 0);
+    return () => window.clearTimeout(timeout);
+    // Finalization is intentionally keyed to collection readiness only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoundId, activeRoundStatus, transcriptPendingCount, collectingSecondsLeft]);
 
   if (state === null) {
     return (
@@ -858,7 +880,7 @@ export function StatieRoom({ code }: { code: string }) {
                   </div>
                 )}
 
-                {state.round && state.round.status !== "Voting" && (
+              {state.round && state.round.status !== "Voting" && (
                   <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-3">
                     <div className="relative overflow-hidden rounded-2xl border bg-card p-3 text-left shadow-sm sm:p-4">
                       <div className="pointer-events-none absolute -left-10 -top-12 size-28 rounded-full bg-green-500/10 blur-2xl" />
@@ -877,17 +899,19 @@ export function StatieRoom({ code }: { code: string }) {
                           : <span className="text-xs text-muted-foreground">Belum ada pemain</span>}
                       </div>
                     </div>
-                    {state.round.status === "Debate" && (
+                    {(state.round.status === "Debate" || state.round.status === "CollectingTranscripts") && (
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <div className="rounded-full border border-border bg-background px-3 py-2 text-sm font-black tabular-nums text-foreground shadow-sm sm:text-base">
-                          {formatTime(debateSecondsLeft)}
+                        <div className={`rounded-full border border-border bg-background px-3 py-2 text-sm font-black tabular-nums shadow-sm sm:text-base ${state.round.status === "CollectingTranscripts" ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                          {state.round.status === "CollectingTranscripts" ? formatTime(collectingSecondsLeft) : formatTime(debateSecondsLeft)}
                         </div>
-                        {state.isLeader && (
+                        {state.round.status === "CollectingTranscripts" ? (
+                          <span className="text-center text-[10px] font-semibold text-muted-foreground">Collecting<br />{state.round.transcriptCount}/{state.round.transcriptTargetCount}</span>
+                        ) : state.isLeader ? (
                           <Button onClick={finishRound} disabled={isPending} variant="outline" size="sm" className="h-auto flex-col gap-0.5 rounded-full bg-background px-2 py-1" aria-label="Selesai & scoring">
                             <HugeiconsIcon icon={StopIcon} strokeWidth={2} className="size-4" />
                             <span className="text-[10px] font-semibold">Stop</span>
                           </Button>
-                        )}
+                        ) : null}
                       </div>
                     )}
                     <div className="relative overflow-hidden rounded-2xl border bg-card p-3 text-right shadow-sm sm:p-4">
@@ -910,7 +934,17 @@ export function StatieRoom({ code }: { code: string }) {
                   </div>
                 )}
 
-                {state.round?.status === "Debate" && (
+                {state.round?.status === "CollectingTranscripts" && (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-center sm:p-5">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Mengumpulkan transcript</p>
+                    <p className="mt-2 text-2xl font-black tabular-nums text-foreground">{state.round.transcriptCount}/{state.round.transcriptTargetCount}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      AI scoring mulai otomatis saat semua transcript masuk atau dalam {formatTime(collectingSecondsLeft)}.
+                    </p>
+                  </div>
+                )}
+
+                {(state.round?.status === "Debate" || state.round?.status === "CollectingTranscripts") && (
                   <div className="space-y-4 rounded-md border bg-muted/30 p-4 sm:p-5">
                     <div className="flex flex-col items-center gap-3">
                       {renderMicControl()}

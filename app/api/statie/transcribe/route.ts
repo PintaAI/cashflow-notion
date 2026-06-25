@@ -30,7 +30,7 @@ async function requireStatieParticipant(code: string, roundId: string) {
       token,
       room: {
         code: roomCode,
-        rounds: { some: { id: roundId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.Finished] } } },
+        rounds: { some: { id: roundId, status: { in: [StatieRoundStatus.Debate, StatieRoundStatus.CollectingTranscripts, StatieRoundStatus.Finished] } } },
       },
     },
     select: { id: true },

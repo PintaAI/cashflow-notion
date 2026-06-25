@@ -17,12 +17,14 @@ enum StatieRoomStatus {
   Lobby
   Voting
   Debate
+  Collecting
   Finished
 }
 
 enum StatieRoundStatus {
   Voting
   Debate
+  CollectingTranscripts
   Finished
 }
 
@@ -149,6 +151,7 @@ model StatieRound {
   votingStartedAt DateTime          @default(now())
   debateStartedAt DateTime?
   debateEndsAt    DateTime?
+  transcriptDeadlineAt DateTime?
   finishedAt      DateTime?
   aiScore         Json?
   aiScoreError    String?
