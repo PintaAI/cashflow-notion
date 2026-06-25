@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -114,6 +114,7 @@ export function StatieRoom({ code }: { code: string }) {
   const chunksRef = useRef<Blob[]>([]);
   const transcriptRoundIdRef = useRef<string | null>(null);
   const recordedRoundIdRef = useRef<string | null>(null);
+  const autoFinishRoundIdRef = useRef<string | null>(null);
   const finishAfterTranscribeRef = useRef(false);
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
@@ -129,6 +130,7 @@ export function StatieRoom({ code }: { code: string }) {
     if (transcriptRoundIdRef.current !== roundId) {
       transcriptRoundIdRef.current = roundId;
       recordedRoundIdRef.current = nextState?.round?.myTranscript ? roundId : null;
+      autoFinishRoundIdRef.current = null;
       setTranscriptText(nextState?.round?.myTranscript ?? "");
       setRecorderMessage("");
     }
@@ -202,6 +204,9 @@ export function StatieRoom({ code }: { code: string }) {
   const disagreeVotes = votes.filter((vote) => vote.choice === "Disagree");
   const votedCount = votes.length;
   const totalPlayers = state?.participants.length ?? 0;
+  const activeRoundId = state?.round?.id ?? null;
+  const activeRoundStatus = state?.round?.status ?? null;
+  const isLeader = Boolean(state?.isLeader);
   const votingSecondsLeft = state?.round?.votingEndsAt ? Math.ceil((new Date(state.round.votingEndsAt).getTime() - now) / 1000) : 0;
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
@@ -304,7 +309,12 @@ export function StatieRoom({ code }: { code: string }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       setIsMicReady(true);
-      setRecorderMessage("Mic siap. Rekaman akan otomatis mengikuti timer debat.");
+      const round = state?.round;
+      if (round?.status === "Debate" && debateSecondsLeft > 0 && recordedRoundIdRef.current !== round.id) {
+        startRecordingForRound(round, stream);
+      } else {
+        setRecorderMessage("Mic siap. Rekaman akan otomatis mengikuti timer debat.");
+      }
       return stream;
     } catch (error) {
       setIsMicReady(false);
@@ -346,18 +356,18 @@ export function StatieRoom({ code }: { code: string }) {
     }
   }
 
-  async function startRecording() {
-    const round = state?.round;
-    if (!round || isRecording) return;
-
-    const stream = streamRef.current ?? await prepareMic();
-    if (!stream) return;
-    startRecordingForRound(round, stream);
-  }
-
   function stopRecording() {
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
   }
+
+  const finishRoundFromTimer = useEffectEvent(() => {
+    finishRoundAction();
+  });
+
+  const stopRecordingFromTimer = useEffectEvent((showScoringMessage: boolean) => {
+    if (showScoringMessage) setRecorderMessage("Timer habis. Menghentikan rekaman, transcribe, lalu scoring...");
+    stopRecording();
+  });
 
   function finishRound() {
     if (isRecording) {
@@ -386,8 +396,25 @@ export function StatieRoom({ code }: { code: string }) {
   }, [state?.round?.id, state?.round?.status, isRecording, isTranscribing, debateSecondsLeft]);
 
   useEffect(() => {
-    if (state?.round?.status === "Debate" && isRecording && debateSecondsLeft <= 0) stopRecording();
-  }, [state?.round?.status, isRecording, debateSecondsLeft]);
+    if (activeRoundStatus !== "Debate" || !activeRoundId || debateSecondsLeft > 0) return;
+
+    let finishTimeout: number | undefined;
+    let stopTimeout: number | undefined;
+    if (isLeader && autoFinishRoundIdRef.current !== activeRoundId) {
+      autoFinishRoundIdRef.current = activeRoundId;
+      finishAfterTranscribeRef.current = isRecording || isTranscribing;
+      if (!isRecording && !isTranscribing) finishTimeout = window.setTimeout(() => finishRoundFromTimer(), 0);
+    }
+
+    if (isRecording) {
+      stopTimeout = window.setTimeout(() => stopRecordingFromTimer(isLeader), 0);
+    }
+
+    return () => {
+      if (finishTimeout) window.clearTimeout(finishTimeout);
+      if (stopTimeout) window.clearTimeout(stopTimeout);
+    };
+  }, [activeRoundId, activeRoundStatus, isLeader, isRecording, isTranscribing, debateSecondsLeft]);
 
   if (state === null) {
     return (
@@ -784,10 +811,10 @@ export function StatieRoom({ code }: { code: string }) {
                           <Button onClick={prepareMic} disabled={isTranscribing} className="h-9">Aktifkan mic</Button>
                         ) : state.round.status === "Voting" ? (
                           <Button disabled className="h-9">Mic siap</Button>
-                        ) : !isRecording ? (
-                          <Button onClick={startRecording} disabled={isTranscribing} className="h-9">Mulai rekam sekarang</Button>
+                        ) : isRecording ? (
+                          <Button disabled className="h-9">Recording otomatis</Button>
                         ) : (
-                          <Button onClick={stopRecording} variant="outline" className="h-9 bg-background">Stop awal</Button>
+                          <Button disabled className="h-9">Menunggu timer</Button>
                         )}
                         <Button onClick={() => saveTranscript()} disabled={isPending || isRecording || isTranscribing || !transcriptText.trim()} variant="outline" className="h-9 bg-background">
                           Simpan text
