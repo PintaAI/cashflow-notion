@@ -27,6 +27,7 @@ type PopularTopic = Awaited<ReturnType<typeof getStatiePopularTopics>>[number];
 type Leaderboard = Awaited<ReturnType<typeof getStatieLeaderboard>>;
 
 const TIME_PRESETS = [300, 600, 900];
+const VOTING_PRESETS = [15, 30, 60, 90];
 const FALLBACK_TOPICS = ["kerja remote", "dating", "uang", "AI", "teknologi"];
 
 function parseTopicsLocal(input: string): string[] {
@@ -60,6 +61,7 @@ export function StatieHome({
   const [topicInput, setTopicInput] = useState("");
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [votingSeconds, setVotingSeconds] = useState(30);
   const [debateSeconds, setDebateSeconds] = useState(900);
   const [customDebateMinutes, setCustomDebateMinutes] = useState("");
   const [message, setMessage] = useState("");
@@ -77,6 +79,7 @@ export function StatieHome({
       const result = await createStatieRoom({
         topic: topicString || "random",
         leaderName: name,
+        votingSeconds,
         debateSeconds,
         statementId: selectedStatementId ?? undefined,
       });
@@ -187,7 +190,7 @@ export function StatieHome({
             <TabsList variant="line" className="w-full">
               <TabsTrigger value="create">
                 <HugeiconsIcon icon={AiGameIcon} size={14} strokeWidth={2} />
-                Buat room
+                Buka room
               </TabsTrigger>
               <TabsTrigger value="join">
                 <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={2} />
@@ -275,6 +278,25 @@ export function StatieHome({
               )}
 
               <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Timer voting</p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {VOTING_PRESETS.map((seconds) => {
+                    const active = votingSeconds === seconds;
+                    return (
+                      <button
+                        key={seconds}
+                        type="button"
+                        onClick={() => setVotingSeconds(seconds)}
+                        className={`rounded-full border px-2 py-1.5 text-xs font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
+                      >
+                        {`${seconds}s`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">Timer debat</p>
                 <label className={`flex w-full items-center rounded-full border bg-background px-3 py-2 text-xs font-semibold transition-colors ${!TIME_PRESETS.includes(debateSeconds) ? "border-primary text-primary" : "text-muted-foreground"}`}>
                   <Input
@@ -311,7 +333,7 @@ export function StatieHome({
               </div>
 
               <Button onClick={createRoom} disabled={isPending} className="mt-1 h-10 w-full">
-                Buat Room
+                Buka Room
               </Button>
             </TabsContent>
 

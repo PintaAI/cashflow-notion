@@ -12,13 +12,14 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 
 const ROOM_CODE_LENGTH = 6;
+const LEADER_ROOM_COOKIE_NAME = "statie-leader-room";
 const PARTICIPANT_COOKIE_DAYS = 14;
+const MIN_VOTING_SECONDS = 10;
+const MAX_VOTING_SECONDS = 120;
 const MIN_DEBATE_SECONDS = 30;
 const MAX_DEBATE_SECONDS = 15 * 60;
-const VOTING_SECONDS = 30;
 const MIN_PLAYER_LIMIT = 2;
 const MAX_PLAYER_LIMIT = 30;
-const ROOM_CLEANUP_MS = 24 * 60 * 60 * 1000;
 
 const statieScoreSchema = z.object({
   participants: z.array(z.object({
@@ -89,13 +90,18 @@ function clampDebateSeconds(seconds: number) {
   return Math.min(MAX_DEBATE_SECONDS, Math.max(MIN_DEBATE_SECONDS, Math.round(seconds)));
 }
 
+function clampVotingSeconds(seconds: number) {
+  if (!Number.isFinite(seconds)) return 30;
+  return Math.min(MAX_VOTING_SECONDS, Math.max(MIN_VOTING_SECONDS, Math.round(seconds)));
+}
+
 function clampPlayerLimit(limit: number) {
   if (!Number.isFinite(limit)) return 10;
   return Math.min(MAX_PLAYER_LIMIT, Math.max(MIN_PLAYER_LIMIT, Math.round(limit)));
 }
 
-function getVotingEndsAt(votingStartedAt: Date) {
-  return new Date(votingStartedAt.getTime() + VOTING_SECONDS * 1000);
+function getVotingEndsAt(votingStartedAt: Date, votingSeconds: number) {
+  return new Date(votingStartedAt.getTime() + clampVotingSeconds(votingSeconds) * 1000);
 }
 
 function roomCookieName(code: string) {
@@ -118,9 +124,25 @@ async function setParticipantCookie(code: string, token: string) {
   });
 }
 
+async function setLeaderRoomCookie(code: string) {
+  const store = await cookies();
+  store.set(LEADER_ROOM_COOKIE_NAME, normalizeRoomCode(code), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: PARTICIPANT_COOKIE_DAYS * 24 * 60 * 60,
+  });
+}
+
 async function getParticipantToken(code: string) {
   const store = await cookies();
   return store.get(roomCookieName(code))?.value ?? null;
+}
+
+async function getCachedLeaderRoomCode() {
+  const store = await cookies();
+  return normalizeRoomCode(store.get(LEADER_ROOM_COOKIE_NAME)?.value ?? "");
 }
 
 async function generateUniqueRoomCode() {
@@ -308,6 +330,7 @@ ${transcriptLines}`,
 export async function createStatieRoom(input: {
   topic: string;
   leaderName?: string;
+  votingSeconds?: number;
   debateSeconds?: number;
   statementId?: string;
 }): Promise<ActionResult<{ code: string }>> {
@@ -332,9 +355,67 @@ export async function createStatieRoom(input: {
       }
     }
 
+    const votingSeconds = clampVotingSeconds(input.votingSeconds ?? 30);
+    const debateSeconds = clampDebateSeconds(input.debateSeconds ?? 900);
+    const cachedLeaderCode = session ? "" : await getCachedLeaderRoomCode();
+    const existingRoom = session
+      ? await prisma.statieRoom.findFirst({
+          where: { leaderUserId: session.user.id },
+          orderBy: { createdAt: "desc" },
+          include: { participants: { where: { isLeader: true }, take: 1 } },
+        })
+      : cachedLeaderCode
+        ? await prisma.statieRoom.findFirst({
+            where: { code: cachedLeaderCode, leaderUserId: null },
+            include: { participants: { where: { isLeader: true }, take: 1 } },
+          })
+        : null;
+
+    if (existingRoom) {
+      const activeRound = await prisma.statieRound.findFirst({
+        where: { roomId: existingRoom.id, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+        select: { id: true },
+      });
+
+      if (!activeRound) {
+        await prisma.statieRoom.update({
+          where: { id: existingRoom.id },
+          data: {
+            topic,
+            topicKey: roomTopicsKey,
+            leaderGuestName: session ? null : leaderName,
+            votingSeconds,
+            debateSeconds,
+            pendingStatementId,
+            status: StatieRoomStatus.Lobby,
+            currentRoundId: null,
+          },
+        });
+      }
+
+      const leaderParticipant = existingRoom.participants[0]
+        ?? await prisma.statieParticipant.create({
+          data: {
+            roomId: existingRoom.id,
+            userId: session?.user.id,
+            guestName: session ? null : leaderName,
+            token: existingRoom.leaderToken,
+            isLeader: true,
+          },
+        });
+
+      if (leaderParticipant.guestName !== leaderName && !session) {
+        await prisma.statieParticipant.update({ where: { id: leaderParticipant.id }, data: { guestName: leaderName } });
+      }
+
+      await setParticipantCookie(existingRoom.code, existingRoom.leaderToken);
+      await setLeaderRoomCookie(existingRoom.code);
+      revalidatePath(`/statie/${existingRoom.code}`);
+      return { success: true, code: existingRoom.code };
+    }
+
     const code = await generateUniqueRoomCode();
     const token = crypto.randomBytes(24).toString("base64url");
-    const debateSeconds = clampDebateSeconds(input.debateSeconds ?? 900);
 
     await prisma.statieRoom.create({
       data: {
@@ -344,6 +425,7 @@ export async function createStatieRoom(input: {
         leaderUserId: session?.user.id,
         leaderGuestName: session ? null : leaderName,
         leaderToken: token,
+        votingSeconds,
         debateSeconds,
         pendingStatementId,
         participants: {
@@ -358,6 +440,7 @@ export async function createStatieRoom(input: {
     });
 
     await setParticipantCookie(code, token);
+    await setLeaderRoomCookie(code);
     return { success: true, code };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Gagal membuat room." };
@@ -434,7 +517,7 @@ export async function getStatieRoomState(code: string) {
   if (!room) return null;
   let currentRound = room.rounds[0] ?? null;
 
-  if (currentRound?.status === StatieRoundStatus.Voting && Date.now() >= getVotingEndsAt(currentRound.votingStartedAt).getTime()) {
+  if (currentRound?.status === StatieRoundStatus.Voting && Date.now() >= getVotingEndsAt(currentRound.votingStartedAt, room.votingSeconds).getTime()) {
     await startDebateWithRandomMissingVotes({
       roomId: room.id,
       roundId: currentRound.id,
@@ -481,6 +564,7 @@ export async function getStatieRoomState(code: string) {
     code: room.code,
     topic: room.topic,
     status: room.status,
+    votingSeconds: room.votingSeconds,
     debateSeconds: room.debateSeconds,
     playerLimit: room.playerLimit,
     hasPendingStatement: Boolean(room.pendingStatementId),
@@ -498,7 +582,7 @@ export async function getStatieRoomState(code: string) {
           id: currentRound.id,
           status: currentRound.status,
           statement: currentRound.statement.text,
-          votingEndsAt: getVotingEndsAt(currentRound.votingStartedAt).toISOString(),
+          votingEndsAt: getVotingEndsAt(currentRound.votingStartedAt, room.votingSeconds).toISOString(),
           debateEndsAt: currentRound.debateEndsAt?.toISOString() ?? null,
           myVote: currentParticipantVote,
           myTranscript: currentRound.transcripts.find((transcript) => transcript.participantId === participant?.id)?.text ?? null,
@@ -616,6 +700,30 @@ export async function updateStatieRoomTopic(code: string, topicInput: string): P
   }
 }
 
+export async function updateStatieRoomTimers(code: string, input: { votingSeconds: number; debateSeconds: number }): Promise<ActionResult<object>> {
+  try {
+    const leader = await requireLeader(code);
+    const activeRound = await prisma.statieRound.findFirst({
+      where: { roomId: leader.roomId, status: { in: [StatieRoundStatus.Voting, StatieRoundStatus.Debate] } },
+      select: { id: true },
+    });
+    if (activeRound) return { success: false, message: "Timer hanya bisa diganti saat tidak ada ronde aktif." };
+
+    await prisma.statieRoom.update({
+      where: { id: leader.roomId },
+      data: {
+        votingSeconds: clampVotingSeconds(input.votingSeconds),
+        debateSeconds: clampDebateSeconds(input.debateSeconds),
+      },
+    });
+
+    revalidatePath(`/statie/${leader.room.code}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal mengganti timer." };
+  }
+}
+
 export async function updateStatiePlayerLimit(code: string, limitInput: number): Promise<ActionResult<object>> {
   try {
     const leader = await requireLeader(code);
@@ -667,7 +775,7 @@ export async function submitStatieVote(code: string, choice: "Agree" | "Disagree
     });
     if (!round) return { success: false, message: "Belum ada voting aktif." };
 
-    if (Date.now() >= getVotingEndsAt(round.votingStartedAt).getTime()) {
+    if (Date.now() >= getVotingEndsAt(round.votingStartedAt, participant.room.votingSeconds).getTime()) {
       await startDebateWithRandomMissingVotes({
         roomId: participant.roomId,
         roundId: round.id,
@@ -824,15 +932,6 @@ export async function getStatieStatements(limit = 60) {
     voteCount: statement.agreeCount + statement.disagreeCount,
     createdAt: statement.createdAt.toISOString(),
   }));
-}
-
-export async function cleanupOldStatieRooms() {
-  const cutoff = new Date(Date.now() - ROOM_CLEANUP_MS);
-  const result = await prisma.statieRoom.deleteMany({
-    where: { updatedAt: { lt: cutoff } },
-  });
-
-  return { deleted: result.count, cutoff: cutoff.toISOString() };
 }
 
 export async function getStatieLeaderboard(limit = 10) {

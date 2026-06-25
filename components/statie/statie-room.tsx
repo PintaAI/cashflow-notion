@@ -37,6 +37,7 @@ import {
   submitStatieTranscript,
   submitStatieVote,
   updateStatiePlayerLimit,
+  updateStatieRoomTimers,
   updateStatieRoomTopic,
 } from "@/app/actions/statie";
 
@@ -98,6 +99,8 @@ export function StatieRoom({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [nextTopic, setNextTopic] = useState("");
+  const [votingSecondsInput, setVotingSecondsInput] = useState(30);
+  const [debateMinutesInput, setDebateMinutesInput] = useState(15);
   const [playerLimitInput, setPlayerLimitInput] = useState(10);
   const [customStatement, setCustomStatement] = useState("");
   const [transcriptText, setTranscriptText] = useState("");
@@ -117,6 +120,8 @@ export function StatieRoom({ code }: { code: string }) {
   function applyRoomState(nextState: RoomState) {
     setState(nextState);
     if (nextState) setPlayerLimitInput(nextState.playerLimit);
+    if (nextState) setVotingSecondsInput(nextState.votingSeconds);
+    if (nextState) setDebateMinutesInput(Math.round(nextState.debateSeconds / 60));
     setNextTopic((current) => current || nextState?.topic || "");
 
     const roundId = nextState?.round?.id ?? null;
@@ -233,6 +238,13 @@ export function StatieRoom({ code }: { code: string }) {
 
   function changePlayerLimit() {
     runAction(() => updateStatiePlayerLimit(code, playerLimitInput));
+  }
+
+  function changeTimers() {
+    runAction(() => updateStatieRoomTimers(code, {
+      votingSeconds: votingSecondsInput,
+      debateSeconds: debateMinutesInput * 60,
+    }));
   }
 
   function kickParticipant(participantId: string) {
@@ -410,8 +422,7 @@ export function StatieRoom({ code }: { code: string }) {
                 <span className="hidden sm:inline">orang</span>
                 <span className="mx-0.5 text-muted-foreground/40">|</span>
                 <HugeiconsIcon icon={Clock01Icon} size={14} className="text-muted-foreground" />
-                <span className="font-medium text-muted-foreground/70">{Math.round(state.debateSeconds / 60)}</span>
-                <span className="hidden sm:inline">menit</span>
+                <span className="font-medium text-muted-foreground/70">{state.votingSeconds}s/{Math.round(state.debateSeconds / 60)}m</span>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="xs" className="h-6 gap-1 rounded-full px-2 text-[11px]">
@@ -461,6 +472,55 @@ export function StatieRoom({ code }: { code: string }) {
                         ) : (
                           <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
                             Topik hanya bisa diganti leader sebelum ronde dimulai.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                            <HugeiconsIcon icon={Clock01Icon} strokeWidth={2} className="size-4" />
+                            Timer
+                          </h2>
+                          <span className="text-xs text-muted-foreground">Vote {state.votingSeconds}s · Debat {Math.round(state.debateSeconds / 60)}m</span>
+                        </div>
+
+                        {state.isLeader && !state.round ? (
+                          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                            <label className="space-y-1.5 text-xs text-muted-foreground">
+                              Voting (detik)
+                              <Input
+                                type="number"
+                                min={10}
+                                max={120}
+                                value={votingSecondsInput}
+                                onChange={(event) => setVotingSecondsInput(Number(event.target.value))}
+                                className="h-9 bg-background"
+                              />
+                            </label>
+                            <label className="space-y-1.5 text-xs text-muted-foreground">
+                              Debat (menit)
+                              <Input
+                                type="number"
+                                min={1}
+                                max={15}
+                                value={debateMinutesInput}
+                                onChange={(event) => setDebateMinutesInput(Number(event.target.value))}
+                                className="h-9 bg-background"
+                              />
+                            </label>
+                            <Button
+                              onClick={changeTimers}
+                              disabled={isPending || (votingSecondsInput === state.votingSeconds && debateMinutesInput * 60 === state.debateSeconds)}
+                              variant="outline"
+                              className="h-9 self-end"
+                            >
+                              Simpan timer
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
+                            Timer hanya bisa diganti leader sebelum ronde dimulai.
                           </p>
                         )}
                       </div>
@@ -550,7 +610,7 @@ export function StatieRoom({ code }: { code: string }) {
 
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/statie">Room Baru</Link>
+                  <Link href="/statie">Statie Home</Link>
                 </Button>
               </div>
             </div>

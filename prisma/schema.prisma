@@ -86,6 +86,7 @@ model StatieRoom {
   leaderUser         User?            @relation("StatieRoomLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
   leaderGuestName    String?
   leaderToken        String
+  votingSeconds      Int              @default(30)
   debateSeconds      Int              @default(900)
   playerLimit        Int              @default(10)
   currentRoundId     String?
@@ -97,6 +98,7 @@ model StatieRoom {
   rounds       StatieRound[]
 
   @@index([code])
+  @@index([leaderUserId])
   @@index([topicKey])
 }
 
