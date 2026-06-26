@@ -334,6 +334,33 @@ export function AppSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {publicTools.map((tool) => {
+              const isActiveTool = isOnPublicTools && (activeTool === tool.id || (!activeTool && tool.id === publicTools[0]?.id));
+
+              return (
+                <SidebarMenuItem key={tool.id}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActiveTool}
+                    className="h-10 rounded-lg px-3 text-sm data-active:bg-muted/70 data-active:font-medium"
+                  >
+                    <Link
+                      href={tool.id === publicTools[0]?.id ? toolsPath : `${toolsPath}?tool=${tool.id}`}
+                      onClick={() => setOpenMobile(false)}
+                    >
+                      <HugeiconsIcon icon={tool.icon} strokeWidth={2.1} className="size-4.5" />
+                      <span>{tool.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="px-3">Games</SidebarGroupLabel>
+          <SidebarMenu className="gap-1">
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
@@ -358,27 +385,6 @@ export function AppSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {publicTools.map((tool) => {
-              const isActiveTool = isOnPublicTools && (activeTool === tool.id || (!activeTool && tool.id === publicTools[0]?.id));
-
-              return (
-                <SidebarMenuItem key={tool.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActiveTool}
-                    className="h-10 rounded-lg px-3 text-sm data-active:bg-muted/70 data-active:font-medium"
-                  >
-                    <Link
-                      href={tool.id === publicTools[0]?.id ? toolsPath : `${toolsPath}?tool=${tool.id}`}
-                      onClick={() => setOpenMobile(false)}
-                    >
-                      <HugeiconsIcon icon={tool.icon} strokeWidth={2.1} className="size-4.5" />
-                      <span>{tool.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
           </SidebarMenu>
         </SidebarGroup>
 

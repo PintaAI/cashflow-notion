@@ -316,13 +316,7 @@ export function NoteIconPicker({
 }: NoteIconPickerProps) {
   const [open, setOpen] = React.useState(false)
   const [tab, setTab] = React.useState<NoteIconType>(iconType === "emoji" ? "emoji" : "hugeicon")
-  const [query, setQuery] = React.useState("")
-  const deferredQuery = React.useDeferredValue(query).trim().toLowerCase()
   const selectedColor = getIconColor(iconColor)
-  const filteredIcons = iconNames.filter((name) => name.toLowerCase().includes(deferredQuery))
-  const filteredEmojis = emojis.filter((item) =>
-    `${item.emoji} ${item.label}`.toLowerCase().includes(deferredQuery)
-  )
 
   function update(next: Partial<NoteIconValue>) {
     return onValueChange({
@@ -355,9 +349,9 @@ export function NoteIconPicker({
           />
         </button>
       </PopoverTrigger>
-      <PopoverContent align={align} className={cn("w-80 p-0", contentClassName)}>
-        <div className="border-b p-2">
-          <div className="mb-2 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+      <PopoverContent align={align} className={cn("w-auto overflow-y-auto p-0", contentClassName)}>
+        <div className="space-y-2 p-2">
+          <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
             <button
               type="button"
               onClick={() => setTab("hugeicon")}
@@ -379,18 +373,6 @@ export function NoteIconPicker({
               Emoji
             </button>
           </div>
-          <div className="flex items-center gap-2 rounded-md bg-background px-2 ring-1 ring-border">
-            <HugeiconsIcon icon={searchSvg} strokeWidth={2} className="size-3.5 shrink-0 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={tab === "emoji" ? "Cari emoji..." : "Cari ikon..."}
-              className="h-7 border-0 px-0 text-xs shadow-none focus-visible:ring-0"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2 p-2">
           <div className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
             <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
               <NoteIcon
@@ -400,15 +382,14 @@ export function NoteIconPicker({
                 className="size-7"
                 iconClassName="size-4 text-sm"
               />
-              <span>{selectedColor.label}</span>
             </div>
             <ColorSwatches value={iconColor} onValueChange={(nextColor) => update({ iconColor: nextColor })} />
           </div>
 
-          <div className="max-h-56 overflow-y-auto pr-1">
+          <div className="pr-1">
             {tab === "hugeicon" ? (
               <div className="grid grid-cols-6 gap-1">
-                {filteredIcons.map((name) => (
+                {iconNames.map((name) => (
                   <button
                     key={name}
                     type="button"
@@ -429,7 +410,7 @@ export function NoteIconPicker({
               </div>
             ) : (
               <div className="grid grid-cols-8 gap-1">
-                {filteredEmojis.map((item) => (
+                {emojis.map((item) => (
                   <button
                     key={`${item.emoji}-${item.label}`}
                     type="button"
@@ -449,9 +430,7 @@ export function NoteIconPicker({
                 ))}
               </div>
             )}
-            {((tab === "hugeicon" && filteredIcons.length === 0) || (tab === "emoji" && filteredEmojis.length === 0)) && (
-              <div className="py-6 text-center text-xs text-muted-foreground">Tidak ditemukan</div>
-            )}
+            
           </div>
         </div>
       </PopoverContent>

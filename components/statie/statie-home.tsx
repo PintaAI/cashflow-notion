@@ -8,6 +8,7 @@ import {
   AnalyticsUpIcon,
   BubbleChatSparkIcon,
   CheckmarkCircle04Icon,
+  Clock01Icon,
   Delete02Icon,
   PencilEdit01Icon,
   ThumbsDownIcon,
@@ -16,6 +17,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/lib/auth-client";
 
@@ -26,9 +28,18 @@ type Statement = Awaited<ReturnType<typeof getStatieStatements>>;
 type PopularTopic = Awaited<ReturnType<typeof getStatiePopularTopics>>[number];
 type Leaderboard = Awaited<ReturnType<typeof getStatieLeaderboard>>;
 
-const TIME_PRESETS = [300, 600, 900];
+const TIME_PRESETS = [300, 600, 900, 1800, 3600];
 const VOTING_PRESETS = [15, 30, 60, 90];
 const FALLBACK_TOPICS = ["kerja remote", "dating", "uang", "AI", "teknologi"];
+
+function formatVotingLabel(seconds: number) {
+  return `${seconds}s`;
+}
+
+function formatDebateLabel(seconds: number) {
+  if (seconds >= 3600) return "1 jam";
+  return `${seconds / 60}m`;
+}
 
 function parseTopicsLocal(input: string): string[] {
   const seen = new Set<string>();
@@ -63,7 +74,6 @@ export function StatieHome({
   const [joinCode, setJoinCode] = useState("");
   const [votingSeconds, setVotingSeconds] = useState(30);
   const [debateSeconds, setDebateSeconds] = useState(900);
-  const [customDebateMinutes, setCustomDebateMinutes] = useState("");
   const [message, setMessage] = useState("");
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
   const { data: session, isPending: sessionPending } = useSession();
@@ -200,15 +210,18 @@ export function StatieHome({
 
             <TabsContent value="create" className="space-y-3 pt-2">
               {isGuest && (
-                <label className="space-y-1.5 text-xs text-muted-foreground">
-                  Nama display
+                <div className="space-y-1.5">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <HugeiconsIcon icon={UserGroupIcon} size={14} className="text-muted-foreground" />
+                    Nama display
+                  </label>
                   <Input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Contoh: Raka"
                     className="h-10 bg-background"
                   />
-                </label>
+                </div>
               )}
 
               {session && (
@@ -221,8 +234,11 @@ export function StatieHome({
               )}
 
               <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">Topik room</label>
-                <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 py-1.5">
+                <label className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <HugeiconsIcon icon={BubbleChatSparkIcon} size={14} className="text-muted-foreground" />
+                  Topik room
+                </label>
+                <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 py-1.5 transition-colors focus-within:border-primary/40">
                   {topics.map((item) => (
                     <button
                       key={item}
@@ -277,60 +293,52 @@ export function StatieHome({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Timer voting</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {VOTING_PRESETS.map((seconds) => {
-                    const active = votingSeconds === seconds;
-                    return (
-                      <button
-                        key={seconds}
-                        type="button"
-                        onClick={() => setVotingSeconds(seconds)}
-                        className={`rounded-full border px-2 py-1.5 text-xs font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
-                      >
-                        {`${seconds}s`}
-                      </button>
-                    );
-                  })}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <HugeiconsIcon icon={Clock01Icon} size={14} className="text-muted-foreground" />
+                    Voting
+                  </label>
+                  <Select value={String(votingSeconds)} onValueChange={(value) => setVotingSeconds(Number(value))}>
+                    <SelectTrigger className="h-10 w-full bg-background font-semibold" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VOTING_PRESETS.map((seconds) => (
+                        <SelectItem key={seconds} value={String(seconds)}>
+                          {formatVotingLabel(seconds)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <HugeiconsIcon icon={Clock01Icon} size={14} className="text-muted-foreground" />
+                    Debat
+                  </label>
+                  <Select value={String(debateSeconds)} onValueChange={(value) => setDebateSeconds(Number(value))}>
+                    <SelectTrigger className="h-10 w-full bg-background font-semibold" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_PRESETS.map((seconds) => (
+                        <SelectItem key={seconds} value={String(seconds)}>
+                          {formatDebateLabel(seconds)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Timer debat</p>
-                <label className={`flex w-full items-center rounded-full border bg-background px-3 py-2 text-xs font-semibold transition-colors ${!TIME_PRESETS.includes(debateSeconds) ? "border-primary text-primary" : "text-muted-foreground"}`}>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={15}
-                    value={customDebateMinutes}
-                    onChange={(event) => {
-                      setCustomDebateMinutes(event.target.value);
-                      setDebateSeconds(Number(event.target.value) * 60);
-                    }}
-                    placeholder="Custom (menit)"
-                    className="h-4 w-full border-0 bg-transparent p-0 text-center text-xs font-semibold shadow-none focus-visible:ring-0"
-                  />
-                </label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {TIME_PRESETS.map((seconds) => {
-                    const active = debateSeconds === seconds;
-                    return (
-                      <button
-                        key={seconds}
-                        type="button"
-                        onClick={() => {
-                          setDebateSeconds(seconds);
-                          setCustomDebateMinutes("");
-                        }}
-                        className={`rounded-full border px-2 py-1.5 text-xs font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
-                      >
-                        {`${seconds / 60}m`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {debateSeconds > 900 && (
+                <p className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  <HugeiconsIcon icon={Clock01Icon} size={12} strokeWidth={2} />
+                  Debat &gt;15m: transcribe &amp; skor AI dinonaktifkan
+                </p>
+              )}
 
               <Button onClick={createRoom} disabled={isPending} className="mt-1 h-10 w-full">
                 Buat Room
@@ -343,19 +351,25 @@ export function StatieHome({
               </p>
 
               {isGuest && (
-                <label className="space-y-1.5 text-xs text-muted-foreground">
-                  Nama display
+                <div className="space-y-1.5">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <HugeiconsIcon icon={UserGroupIcon} size={14} className="text-muted-foreground" />
+                    Nama display
+                  </label>
                   <Input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Contoh: Raka"
                     className="h-10 bg-background"
                   />
-                </label>
+                </div>
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">Kode room</label>
+                <label className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <HugeiconsIcon icon={AiGameIcon} size={14} className="text-muted-foreground" />
+                  Kode room
+                </label>
                 <Input
                   value={joinCode}
                   onChange={(event) => setJoinCode(event.target.value.toUpperCase())}

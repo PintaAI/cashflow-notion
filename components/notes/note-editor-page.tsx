@@ -304,7 +304,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                 />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground/70 sm:gap-2 sm:text-xs">
-              <span>Update {new Date(currentNote.updatedAt).toLocaleDateString("id-ID")}</span>
+              <span>Update {new Date(currentNote.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>
               </div>
             </div>
           </div>

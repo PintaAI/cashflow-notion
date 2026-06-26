@@ -90,9 +90,8 @@ export function BlockNoteEditor({
         shadCNComponents={{}}
       />
       {saving && (
-        <div className="absolute bottom-2 right-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-          Saving...
+        <div className="absolute right-2 top-2">
+          <span className="inline-block size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
         </div>
       )}
     </div>

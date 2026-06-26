@@ -186,6 +186,7 @@ export function StatieRoom({ code }: { code: string }) {
   const votingSecondsLeft = state?.round?.votingEndsAt ? Math.ceil((new Date(state.round.votingEndsAt).getTime() - now) / 1000) : 0;
   const debateSecondsLeft = state?.round?.debateEndsAt ? Math.ceil((new Date(state.round.debateEndsAt).getTime() - now) / 1000) : 0;
   const collectingSecondsLeft = state?.round?.transcriptDeadlineAt ? Math.ceil((new Date(state.round.transcriptDeadlineAt).getTime() - now) / 1000) : 0;
+  const isLongDebate = (state?.debateSeconds ?? 0) > 900;
   const transcriptTargetCount = state?.round?.transcriptTargetCount ?? 0;
   const transcriptPendingCount = Math.max(0, transcriptTargetCount - (state?.round?.transcriptCount ?? 0));
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
@@ -437,6 +438,26 @@ export function StatieRoom({ code }: { code: string }) {
 
   function finishRoundAction() {
     if (realtime.status === "connected" && state?.round?.status === "Debate") {
+      if (isLongDebate) {
+        applyLiveState((current) => {
+          if (!current.round || current.round.status !== "Debate") return current;
+          return {
+            ...current,
+            status: "Lobby",
+            round: null,
+            lastResult: {
+              id: current.round.id,
+              statement: current.round.statement,
+              transcriptCount: 0,
+              aiScore: null,
+              aiScoreError: null,
+              aiScoredAt: new Date().toISOString(),
+              votes: current.round.votes,
+            },
+          };
+        });
+        return;
+      }
       applyLiveState((current) => {
         if (!current.round || current.round.status !== "Debate") return current;
         return {
@@ -700,6 +721,7 @@ export function StatieRoom({ code }: { code: string }) {
   }
 
   function renderMicControl() {
+    if (isLongDebate) return null;
     const isScoring = isPending && (activeRoundStatus === "Debate" || activeRoundStatus === "CollectingTranscripts");
     const isBusy = isTranscribing || isScoring;
     const micClass = !isMicReady
@@ -759,12 +781,12 @@ export function StatieRoom({ code }: { code: string }) {
 
   useEffect(() => {
     const round = state?.round;
-    if (round?.status !== "Debate" || !streamRef.current || isRecording || isTranscribing) return;
+    if (round?.status !== "Debate" || !streamRef.current || isRecording || isTranscribing || isLongDebate) return;
     if (debateSecondsLeft <= 0 || recordedRoundIdRef.current === round.id) return;
     startRecordingForRound(round, streamRef.current);
     // Auto-start is intentionally keyed to the round transition, not every recorder helper identity change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.round?.id, state?.round?.status, isRecording, isTranscribing, debateSecondsLeft]);
+  }, [state?.round?.id, state?.round?.status, isRecording, isTranscribing, debateSecondsLeft, isLongDebate]);
 
   useEffect(() => {
     if (activeRoundStatus !== "Debate" || !activeRoundId || debateSecondsLeft > 0) return;
@@ -930,11 +952,27 @@ export function StatieRoom({ code }: { code: string }) {
                               <Input
                                 type="number"
                                 min={1}
-                                max={15}
+                                max={60}
                                 value={debateMinutesInput}
                                 onChange={(event) => setDebateMinutesInput(Number(event.target.value))}
                                 className="h-9 bg-background"
                               />
+                              <div className="flex gap-1 pt-1">
+                                {[5, 10, 15, 30, 60].map((preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => setDebateMinutesInput(preset)}
+                                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                                      debateMinutesInput === preset
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                    }`}
+                                  >
+                                    {preset >= 60 ? "1 jam" : `${preset}m`}
+                                  </button>
+                                ))}
+                              </div>
                             </label>
                             <Button
                               onClick={changeTimers}

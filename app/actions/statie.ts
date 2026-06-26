@@ -971,6 +971,19 @@ export async function finishStatieRound(code: string): Promise<ActionResult<obje
     });
     if (!round) return { success: false, message: "Tidak ada ronde aktif." };
 
+    if (leader.room.debateSeconds > 900) {
+      await prisma.statieRound.updateMany({
+        where: { id: round.id, status: StatieRoundStatus.Debate },
+        data: { status: StatieRoundStatus.Finished, finishedAt: new Date() },
+      });
+      await prisma.statieRoom.update({
+        where: { id: leader.roomId },
+        data: { status: StatieRoomStatus.Lobby, currentRoundId: null },
+      });
+      revalidatePath(`/statie/${leader.room.code}`);
+      return { success: true };
+    }
+
     const existing = await prisma.statieRound.findUnique({ where: { id: round.id }, select: { status: true } });
     if (existing?.status === StatieRoundStatus.CollectingTranscripts) {
       await finalizeCollectingRound(round.id);
@@ -1193,6 +1206,7 @@ export async function getStatieLeaderboard(limit = 10) {
 export async function deleteStatieStatement(statementId: string): Promise<ActionResult<object>> {
   try {
     await requireAdmin();
+    await prisma.statieRound.deleteMany({ where: { statementId } });
     await prisma.statieStatement.delete({ where: { id: statementId } });
     revalidatePath("/statie");
     return { success: true };
