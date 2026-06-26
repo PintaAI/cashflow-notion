@@ -7,10 +7,14 @@ import { getSession } from "@/lib/management";
 
 const NOTE_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+export type UserNoteIconType = "hugeicon" | "emoji";
+
 export type UserNote = {
   id: string;
   title: string;
   icon: string;
+  iconType: UserNoteIconType;
+  iconColor: string;
   contentJson: string | null;
   contentHtml: string | null;
   contentMarkdown: string | null;
@@ -38,6 +42,10 @@ async function getNoteMembership(noteId: string, userId: string) {
     where: { noteId, userId },
     select: { id: true, role: true, noteId: true },
   });
+}
+
+function normalizeIconType(iconType: string): UserNoteIconType {
+  return iconType === "emoji" ? "emoji" : "hugeicon";
 }
 
 export async function getUserNotes(): Promise<UserNote[]> {
@@ -69,6 +77,8 @@ export async function getUserNotes(): Promise<UserNote[]> {
     id: membership.note.id,
     title: membership.note.title,
     icon: membership.note.icon,
+    iconType: normalizeIconType(membership.note.iconType),
+    iconColor: membership.note.iconColor,
     contentJson: membership.note.contentJson,
     contentHtml: membership.note.contentHtml,
     contentMarkdown: membership.note.contentMarkdown,
@@ -244,7 +254,10 @@ export async function acceptNoteInvite(code: string): Promise<AcceptNoteInviteRe
   return { success: true };
 }
 
-export async function updateNoteIcon(noteId: string, icon: string) {
+export async function updateNoteIcon(
+  noteId: string,
+  data: { icon: string; iconType: UserNoteIconType; iconColor: string }
+) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
@@ -253,7 +266,11 @@ export async function updateNoteIcon(noteId: string, icon: string) {
 
   await prisma.note.update({
     where: { id: noteId },
-    data: { icon },
+    data: {
+      icon: data.icon,
+      iconType: normalizeIconType(data.iconType),
+      iconColor: data.iconColor,
+    },
   });
 
   revalidatePath("/notes");
@@ -306,6 +323,8 @@ export async function getUserNote(noteId: string): Promise<UserNote | null> {
     id: membership.note.id,
     title: membership.note.title,
     icon: membership.note.icon,
+    iconType: normalizeIconType(membership.note.iconType),
+    iconColor: membership.note.iconColor,
     contentJson: membership.note.contentJson,
     contentHtml: membership.note.contentHtml,
     contentMarkdown: membership.note.contentMarkdown,

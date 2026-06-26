@@ -384,6 +384,8 @@ model Note {
   id              String   @id @default(uuid())
   title           String
   icon            String   @default("BookEditIcon")
+  iconType        String   @default("hugeicon")
+  iconColor       String   @default("default")
   contentJson     String?
   contentHtml     String?
   contentMarkdown String?

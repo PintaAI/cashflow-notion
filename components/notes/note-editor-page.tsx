@@ -26,7 +26,7 @@ import {
   type NoteInvitationInfo,
   type UserNote,
 } from "@/app/actions/notes";
-import { HugeiconByName, IconPicker } from "@/components/ui/icon-picker";
+import { NoteIconPicker, type NoteIconValue } from "@/components/ui/icon-picker";
 import { SidebarTrigger } from "@/components/layout";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,6 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
   const [invitations, setInvitations] = useState<NoteInvitationInfo[]>([]);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [iconDraft, setIconDraft] = useState(note.icon);
 
   const isOwner = currentNote.role === "owner";
 
@@ -93,6 +92,18 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
         setMessage(error instanceof Error ? error.message : "Gagal menyimpan judul.");
       }
     });
+  }
+
+  async function handleIconChange(nextIcon: NoteIconValue) {
+    const previousNote = currentNote;
+    setCurrentNote((prev) => ({ ...prev, ...nextIcon }));
+
+    try {
+      await updateNoteIcon(currentNote.id, nextIcon);
+    } catch (error) {
+      setCurrentNote(previousNote);
+      setMessage(error instanceof Error ? error.message : "Gagal menyimpan ikon.");
+    }
   }
 
   function handleDeleteNote() {
@@ -137,7 +148,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
       <div className="mb-4 flex items-center justify-between sm:mb-6">
         <div className="flex items-center gap-2">
           <SidebarTrigger />
-          <HugeiconByName name={currentNote.icon} className="size-5 text-muted-foreground" />
+          <HugeiconsIcon icon={BookEditIcon} strokeWidth={2} className="size-5 text-muted-foreground" />
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Notes</h1>
         </div>
         <Link href="/notes" className="text-xs text-muted-foreground hover:text-foreground">
@@ -179,23 +190,6 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                   </DialogHeader>
 
                   <div className="space-y-5">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                          <HugeiconByName name={currentNote.icon} className="size-4" />
-                          Ikon Catatan
-                        </h2>
-                        <IconPicker
-                          value={iconDraft}
-                          onValueChange={async (nextIcon) => {
-                            setIconDraft(nextIcon)
-                            setCurrentNote((prev) => ({ ...prev, icon: nextIcon }))
-                            await updateNoteIcon(currentNote.id, nextIcon)
-                          }}
-                        />
-                      </div>
-                    </div>
-
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
@@ -287,15 +281,24 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
 
           <div className="flex flex-col gap-3">
             <div className="min-w-0">
-              <Input
-                value={titleDraft}
-                onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.currentTarget.blur();
-                }}
-                className="h-auto border-0 bg-transparent px-0 text-2xl font-bold leading-tight tracking-tight shadow-none transition-all focus-visible:ring-0 sm:text-3xl md:text-4xl"
-              />
+              <div className="flex min-w-0 items-center gap-1.5">
+                <NoteIconPicker
+                  icon={currentNote.icon}
+                  iconType={currentNote.iconType}
+                  iconColor={currentNote.iconColor}
+                  onValueChange={handleIconChange}
+                  triggerClassName="size-8 rounded-lg"
+                />
+                <Input
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={handleTitleSave}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                  className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-2xl font-bold leading-tight tracking-tight shadow-none transition-all focus-visible:ring-0 sm:text-3xl md:text-4xl"
+                />
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground/70 sm:gap-2 sm:text-xs">
               <span>Update {new Date(currentNote.updatedAt).toLocaleDateString("id-ID")}</span>
               </div>
