@@ -160,8 +160,6 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
             Belum ada catatan. Buat catatan baru untuk mulai menulis.
           </p>
         ) : notes.map((note) => {
-          const shared = note.memberCount > 1;
-          const sharedWithUser = note.role !== "owner";
           const isOwner = note.role === "owner";
 
           return (
@@ -182,14 +180,6 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
                     iconClassName="size-4 text-sm"
                   />
                   <span className="truncate text-sm font-medium">{note.title}</span>
-                  {shared ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                      <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-3" />
-                      {sharedWithUser ? "Dibagikan ke saya" : `${note.memberCount} anggota`}
-                    </span>
-                  ) : (
-                    <span className="shrink-0 text-[10px] text-muted-foreground">Pribadi</span>
-                  )}
                 </div>
                 <p className="line-clamp-1 sm:line-clamp-2 text-xs text-muted-foreground">
                   {note.contentMarkdown?.trim() || "Mulai tulis catatan..."}
