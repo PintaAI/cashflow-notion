@@ -45,6 +45,7 @@ import { useAnalytics, useCategories, useCategoryEntries, useCategoriesWithDetai
 import type { AnalyticsData, CategoryAnalytics } from "@/lib/analytics";
 import type { IOType, CategoryType } from "@/lib/db";
 import { getCategoryConfig } from "@/lib/categories";
+import { HugeiconByName } from "@/components/ui/icon-picker";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { formatEntryAmount } from "@/lib/currency";
 import { useManagement } from "@/components/providers/management-provider";
@@ -608,7 +609,7 @@ function CategoryDetailDrawer({
                                         key={cat.id}
                                         onClick={() => handleMoveEntry(entry.id, cat.name)}
                                       >
-                                        <HugeiconsIcon icon={config.icon} strokeWidth={2} className={cn("size-3.5 shrink-0", config.color)} />
+                                        <HugeiconByName name={config.iconName} className={cn("size-3.5 shrink-0", config.color)} />
                                         <span>{cat.name}</span>
                                       </DropdownMenuItem>
                                     );

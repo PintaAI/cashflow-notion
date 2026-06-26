@@ -28,6 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { addEntry, editEntry } from "@/app/actions/cashflow"
 import type { CashflowEntry, CategoryType, IOType } from "@/lib/db"
 import { getCategoryConfig } from "@/lib/categories"
+import { HugeiconByName } from "@/components/ui/icon-picker"
 import { cashflowQueryKeys, useCategoriesWithDetails, useQuickFills, useCreateCategory } from "@/hooks/use-cashflow-data"
 import { useManagement } from "@/components/providers/management-provider"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -471,7 +472,7 @@ export function CashflowFormDrawer({
                       const config = catData ? getCategoryConfig(catData.name, catData.color, catData.icon) : getCategoryConfig(category)
                       return (
                         <span className="inline-flex items-center gap-1.5">
-                          <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-4" />
+                          <HugeiconByName name={config.iconName} className="size-4" />
                           {category}
                         </span>
                       )
@@ -485,7 +486,7 @@ export function CashflowFormDrawer({
                       return (
                         <SelectItem key={cat.id} value={cat.name} className="p-1 text-base">
                           <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
-                            <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3.5" />
+                            <HugeiconByName name={config.iconName} className="size-3.5" />
                             {cat.name}
                           </span>
                         </SelectItem>

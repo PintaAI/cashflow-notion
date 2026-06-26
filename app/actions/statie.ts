@@ -26,21 +26,25 @@ const statieScoreSchema = z.object({
     participantId: z.string(),
     score: z.number().min(0).max(100),
     reason: z.string(),
-    criteria: z.object({
-      clarity: z.number().min(0).max(20),
-      logic: z.number().min(0).max(25),
-      evidence: z.number().min(0).max(15),
-      rebuttal: z.number().min(0).max(20),
-      sportsmanship: z.number().min(0).max(20),
-    }),
   })),
-  winnerParticipantId: z.string().nullable(),
   summary: z.string(),
 });
 
 type ActionResult<T> =
   | ({ success: true } & T)
   | { success: false; message: string };
+
+type StatieSyncedVote = {
+  participantId: string;
+  choice: "Agree" | "Disagree";
+};
+
+type StatieLiveScoreParticipant = {
+  participantId: string;
+  participantName: string;
+  side: "Agree" | "Disagree";
+  transcript: string;
+};
 
 function normalizeTopic(topic: string) {
   return topic.trim().replace(/\s+/g, " ").slice(0, 80);
@@ -186,6 +190,7 @@ async function startDebateWithRandomMissingVotes(input: {
   roomId: string;
   roundId: string;
   debateSeconds: number;
+  votes?: StatieSyncedVote[];
 }) {
   const now = new Date();
   const debateEndsAt = new Date(now.getTime() + input.debateSeconds * 1000);
@@ -201,7 +206,23 @@ async function startDebateWithRandomMissingVotes(input: {
       tx.statieParticipant.findMany({ where: { roomId: input.roomId }, select: { id: true } }),
       tx.statieVote.findMany({ where: { roundId: input.roundId }, select: { participantId: true } }),
     ]);
-    const votedParticipantIds = new Set(votes.map((vote) => vote.participantId));
+    const participantIds = new Set(participants.map((participant) => participant.id));
+    const syncedVotes = new Map<string, StatieVoteChoice>();
+
+    for (const vote of input.votes ?? []) {
+      if (!participantIds.has(vote.participantId)) continue;
+      syncedVotes.set(vote.participantId, StatieVoteChoice[vote.choice]);
+    }
+
+    if (syncedVotes.size > 0) {
+      await Promise.all(Array.from(syncedVotes, ([participantId, choice]) => tx.statieVote.upsert({
+        where: { roundId_participantId: { roundId: input.roundId, participantId } },
+        create: { roundId: input.roundId, participantId, choice },
+        update: { choice },
+      })));
+    }
+
+    const votedParticipantIds = new Set([...votes.map((vote) => vote.participantId), ...syncedVotes.keys()]);
     const randomVotes = participants
       .filter((participant) => !votedParticipantIds.has(participant.id))
       .map((participant) => ({
@@ -296,20 +317,20 @@ async function scoreStatieRound(roundId: string) {
     temperature: 0.2,
     output: Output.object({
       name: "StatieDebateScore",
-      description: "AI judging result for a casual debate game round.",
+      description: "Point scores and summary for a casual debate game round.",
       schema: statieScoreSchema,
     }),
-    prompt: `Nilai debat game Statie berikut dalam Bahasa Indonesia.
+    prompt: `Beri poin untuk ronde debat game Statie berikut dalam Bahasa Indonesia.
 
 Pernyataan debat: ${round.statement.text}
 
 Aturan scoring:
-- Skor total 0-100 per peserta.
-- clarity maksimal 20, logic maksimal 25, evidence maksimal 15, rebuttal maksimal 20, sportsmanship maksimal 20.
+- Beri score 0-100 untuk setiap peserta berdasarkan kualitas argumen/transcript mereka.
 - Jangan beri skor tinggi untuk argumen kosong, hinaan personal, atau transcript yang tidak relevan.
 - Peserta dengan [MISSING_TRANSCRIPT] harus diberi skor 0 dan reason bahwa transcript tidak tersedia.
-- Pilih winnerParticipantId dari participantId yang tersedia, atau null jika semua transcript terlalu lemah.
+- Jangan menentukan pemenang. Aplikasi akan memilih pemenang dari score tertinggi.
 - Reason singkat, spesifik, dan aman untuk ditampilkan ke pemain.
+- Summary harus merangkum jalannya ronde, bukan mengumumkan pemenang.
 
 Transcript peserta:
 
@@ -364,7 +385,7 @@ async function finalizeCollectingRound(roundId: string) {
   } catch (scoreError) {
     await prisma.statieRound.update({
       where: { id: round.id },
-      data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "AI scoring gagal." },
+      data: { aiScoreError: scoreError instanceof Error ? scoreError.message : "Gagal menghitung poin ronde." },
     });
   }
 
@@ -663,6 +684,94 @@ export async function startStatieRound(code: string, customStatement?: string): 
   }
 }
 
+export async function getStatieRoundStatement(code: string, customStatement?: string): Promise<ActionResult<{ statementId: string; statement: string }>> {
+  try {
+    const leader = await requireLeader(code);
+
+    let statement: { id: string; text: string };
+    const roomTopics = parseTopics(leader.room.topic);
+    const activeTopic = roomTopics.length > 0
+      ? roomTopics[Math.floor(Math.random() * roomTopics.length)]
+      : leader.room.topic;
+    const activeTopicKey = topicKey(activeTopic);
+
+    const customText = normalizeStatementText(customStatement ?? "");
+    if (customText) {
+      statement = await prisma.statieStatement.upsert({
+        where: { topicKey_text: { topicKey: activeTopicKey, text: customText } },
+        create: { topic: activeTopic, topicKey: activeTopicKey, text: customText, generatedByAi: false },
+        update: {},
+      });
+    } else if (leader.room.pendingStatementId) {
+      const pending = await prisma.statieStatement.findUnique({
+        where: { id: leader.room.pendingStatementId },
+        select: { id: true, text: true },
+      });
+      if (!pending) throw new Error("Statement tersimpan tidak ditemukan.");
+      statement = pending;
+    } else {
+      const usedRounds = await prisma.statieRound.findMany({
+        where: { roomId: leader.roomId },
+        select: { statementId: true },
+      });
+      statement = await getReusableOrGeneratedStatement(activeTopic, usedRounds.map((round) => round.statementId));
+    }
+
+    await prisma.statieStatement.update({ where: { id: statement.id }, data: { usedCount: { increment: 1 } } });
+    return { success: true, statementId: statement.id, statement: statement.text };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal mengambil statement." };
+  }
+}
+
+export async function scoreStatieLiveRound(input: {
+  code: string;
+  statement: string;
+  participants: StatieLiveScoreParticipant[];
+}): Promise<ActionResult<{ score: z.infer<typeof statieScoreSchema> }>> {
+  try {
+    await requireLeader(input.code);
+    const participants = input.participants.slice(0, MAX_PLAYER_LIMIT);
+    if (participants.length === 0) return { success: false, message: "Tidak ada peserta untuk dinilai." };
+
+    const transcriptLines = participants.map((participant) => [
+      `Participant ID: ${participant.participantId}`,
+      `Name: ${participant.participantName}`,
+      `Side: ${participant.side}`,
+      `Transcript: ${participant.transcript.trim() || "[MISSING_TRANSCRIPT]"}`,
+    ].join("\n")).join("\n\n---\n\n");
+
+    const result = await generateText({
+      model: google("gemini-2.5-flash-lite"),
+      temperature: 0.2,
+      output: Output.object({
+        name: "StatieDebateScore",
+        description: "Point scores and summary for a casual debate game round.",
+        schema: statieScoreSchema,
+      }),
+      prompt: `Beri poin untuk ronde debat game Statie berikut dalam Bahasa Indonesia.
+
+Pernyataan debat: ${input.statement}
+
+Aturan scoring:
+- Beri score 0-100 untuk setiap peserta berdasarkan kualitas argumen/transcript mereka.
+- Jangan beri skor tinggi untuk argumen kosong, hinaan personal, atau transcript yang tidak relevan.
+- Peserta dengan [MISSING_TRANSCRIPT] harus diberi skor 0 dan reason bahwa transcript tidak tersedia.
+- Jangan menentukan pemenang. Aplikasi akan memilih pemenang dari score tertinggi.
+- Reason singkat, spesifik, dan aman untuk ditampilkan ke pemain.
+- Summary harus merangkum jalannya ronde, bukan mengumumkan pemenang.
+
+Transcript peserta:
+
+${transcriptLines}`,
+    });
+
+    return { success: true, score: result.output };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal menghitung poin ronde." };
+  }
+}
+
 export async function updateStatieRoomTopic(code: string, topicInput: string): Promise<ActionResult<object>> {
   try {
     const leader = await requireLeader(code);
@@ -828,7 +937,7 @@ export async function submitStatieTranscript(code: string, roundId: string, text
   }
 }
 
-export async function startStatieDebate(code: string): Promise<ActionResult<object>> {
+export async function startStatieDebate(code: string, votes: StatieSyncedVote[] = []): Promise<ActionResult<object>> {
   try {
     const leader = await requireLeader(code);
     const round = await prisma.statieRound.findFirst({
@@ -842,6 +951,7 @@ export async function startStatieDebate(code: string): Promise<ActionResult<obje
       roomId: leader.roomId,
       roundId: round.id,
       debateSeconds: leader.room.debateSeconds,
+      votes,
     });
 
     revalidatePath(`/statie/${leader.room.code}`);
@@ -918,7 +1028,7 @@ export async function finalizeStatieRoundIfReady(code: string): Promise<ActionRe
     revalidatePath(`/statie/${participant.room.code}`);
     return { success: true, finalized: result.finalized, expected: result.expected, received: result.received, pending: result.pending };
   } catch (error) {
-    return { success: false, message: error instanceof Error ? error.message : "Gagal finalisasi scoring." };
+    return { success: false, message: error instanceof Error ? error.message : "Gagal finalisasi hasil ronde." };
   }
 }
 

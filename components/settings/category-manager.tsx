@@ -12,8 +12,8 @@ import {
   Wallet01Icon,
 } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
+import { IconPicker, HugeiconByName } from "@/components/ui/icon-picker"
 import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   useCategoriesWithDetails,
@@ -21,7 +21,7 @@ import {
   useDeleteCategory,
   useUpdateCategory,
 } from "@/hooks/use-cashflow-data"
-import { getCategoryConfig, CATEGORY_ICON_NAMES, CATEGORY_COLORS, categoryIconRegistry } from "@/lib/categories"
+import { getCategoryConfig, CATEGORY_COLORS } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/components/providers/currency-provider"
 import { formatCurrencyAmount } from "@/lib/currency"
@@ -178,8 +178,6 @@ export function CategoryManager() {
   }
 
   const categories = categoriesQuery.data ?? []
-  const SelectedIconComp = categoryIconRegistry[selectedIcon] ?? categoryIconRegistry["More01Icon"]
-
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="text-sm text-muted-foreground">
@@ -207,41 +205,7 @@ export function CategoryManager() {
             onBlur={() => setIsNameFocused(false)}
             style={{ "--ring": colorHexMap[selectedColor] ?? colorHexMap.default } as React.CSSProperties}
           />
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-          
-                title="Pilih ikon"
-              >
-                <HugeiconsIcon icon={SelectedIconComp} strokeWidth={2} className="size-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-64 p-0">
-              <ScrollArea className="h-48">
-                <div className="flex flex-wrap gap-1 p-2">
-                  {CATEGORY_ICON_NAMES.map((name) => {
-                    const Icon = categoryIconRegistry[name]
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => { setSelectedIcon(name) }}
-                        className={cn(
-                          "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                          selectedIcon === name && "bg-primary/10 text-primary ring-1 ring-primary"
-                        )}
-                        title={name}
-                      >
-                        <HugeiconsIcon icon={Icon} strokeWidth={2} className="size-4" />
-                      </button>
-                    )
-                  })}
-                </div>
-              </ScrollArea>
-            </PopoverContent>
-          </Popover>
+          <IconPicker value={selectedIcon} onValueChange={setSelectedIcon} disabled={createCategory.isPending} />
           <Button
             onClick={handleCreate}
             disabled={!newCategoryName.trim() || createCategory.isPending}
@@ -340,8 +304,6 @@ export function CategoryManager() {
             categories.map((category) => {
               const isEditing = editingId === category.id
               const config = getCategoryConfig(category.name, category.color as string, category.icon)
-              const EditIconComp = categoryIconRegistry[editIcon] ?? categoryIconRegistry["More01Icon"]
-
               if (isEditing) {
                 return (
                   <div
@@ -357,41 +319,7 @@ export function CategoryManager() {
                         onBlur={() => setIsEditFocused(false)}
                         style={{ "--ring": colorHexMap[editColor] ?? colorHexMap.default } as React.CSSProperties}
                       />
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="size-9 shrink-0"
-                            title="Pilih ikon"
-                          >
-                            <HugeiconsIcon icon={EditIconComp} strokeWidth={2} className="size-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="w-64 p-0">
-                          <ScrollArea className="h-48">
-                            <div className="flex flex-wrap gap-1 p-2">
-                              {CATEGORY_ICON_NAMES.map((name) => {
-                                const Icon = categoryIconRegistry[name]
-                                return (
-                                  <button
-                                    key={name}
-                                    type="button"
-                                    onClick={() => { setEditIcon(name) }}
-                                    className={cn(
-                                      "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                                      editIcon === name && "bg-primary/10 text-primary ring-1 ring-primary"
-                                    )}
-                                    title={name}
-                                  >
-                                    <HugeiconsIcon icon={Icon} strokeWidth={2} className="size-4" />
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
+                      <IconPicker value={editIcon} onValueChange={setEditIcon} className="size-9" />
                       <Button
                         size="icon"
                         className="size-9 shrink-0"
@@ -479,7 +407,7 @@ export function CategoryManager() {
                     onClick={() => startEditing(category)}
                   >
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1", config.bgColor, config.color)}>
-                      <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3" />
+                      <HugeiconByName name={config.iconName} className="size-3" />
                       <span className="text-sm font-medium">{category.name}</span>
                     </span>
                     {category.usageCount > 0 && (

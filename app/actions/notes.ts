@@ -13,6 +13,7 @@ export type UserNote = {
   contentJson: string | null;
   contentHtml: string | null;
   contentMarkdown: string | null;
+  pinned: boolean;
   role: string;
   memberCount: number;
   updatedAt: string;
@@ -55,15 +56,21 @@ export async function getUserNotes(): Promise<UserNote[]> {
         },
       },
     },
-    orderBy: { note: { updatedAt: "desc" } },
   });
 
-  return memberships.map((membership) => ({
+  const sorted = memberships.sort((a, b) => {
+    if (a.note.pinned && !b.note.pinned) return -1;
+    if (!a.note.pinned && b.note.pinned) return 1;
+    return b.note.updatedAt.getTime() - a.note.updatedAt.getTime();
+  });
+
+  return sorted.map((membership) => ({
     id: membership.note.id,
     title: membership.note.title,
     contentJson: membership.note.contentJson,
     contentHtml: membership.note.contentHtml,
     contentMarkdown: membership.note.contentMarkdown,
+    pinned: membership.note.pinned,
     role: membership.role,
     memberCount: membership.note._count.members,
     updatedAt: membership.note.updatedAt.toISOString(),
@@ -235,6 +242,28 @@ export async function acceptNoteInvite(code: string): Promise<AcceptNoteInviteRe
   return { success: true };
 }
 
+export async function togglePinNote(noteId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const membership = await getNoteMembership(noteId, session.user.id);
+  if (!membership) throw new Error("Anda bukan anggota catatan ini");
+
+  const note = await prisma.note.findUnique({
+    where: { id: noteId },
+    select: { pinned: true },
+  });
+  if (!note) throw new Error("Catatan tidak ditemukan");
+
+  await prisma.note.update({
+    where: { id: noteId },
+    data: { pinned: !note.pinned },
+  });
+
+  revalidatePath("/notes");
+  return { success: true, pinned: !note.pinned };
+}
+
 export async function getUserNote(noteId: string): Promise<UserNote | null> {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
@@ -261,6 +290,7 @@ export async function getUserNote(noteId: string): Promise<UserNote | null> {
     contentJson: membership.note.contentJson,
     contentHtml: membership.note.contentHtml,
     contentMarkdown: membership.note.contentMarkdown,
+    pinned: membership.note.pinned,
     role: membership.role,
     memberCount: membership.note._count.members,
     updatedAt: membership.note.updatedAt.toISOString(),

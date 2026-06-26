@@ -35,9 +35,11 @@ import { useStatieRealtime } from "@/hooks/use-statie-realtime";
 import {
   finalizeStatieRoundIfReady,
   finishStatieRound,
+  getStatieRoundStatement,
   getStatieRoomState,
   joinStatieRoom,
   kickStatieParticipant,
+  scoreStatieLiveRound,
   startStatieDebate,
   startStatieRound,
   submitStatieTranscript,
@@ -48,17 +50,18 @@ import {
 } from "@/app/actions/statie";
 
 type RoomState = Awaited<ReturnType<typeof getStatieRoomState>>;
+type LoadedRoomState = NonNullable<RoomState>;
 type ActiveRound = NonNullable<NonNullable<RoomState>["round"]>;
 type VoteChoice = "Agree" | "Disagree";
+type StatieVoteSnapshot = ActiveRound["votes"][number];
+type LiveTranscript = { participantId: string; participantName: string; text: string };
 
 type StatieAiScore = {
   participants: {
     participantId: string;
     score: number;
     reason: string;
-    criteria?: Record<string, number>;
   }[];
-  winnerParticipantId: string | null;
   summary: string;
 };
 
@@ -110,8 +113,10 @@ export function StatieRoom({ code }: { code: string }) {
   const transcriptRoundIdRef = useRef<string | null>(null);
   const recordedRoundIdRef = useRef<string | null>(null);
   const votingExpiredRoundIdRef = useRef<string | null>(null);
+  const allVotesStartedRoundIdRef = useRef<string | null>(null);
   const autoFinishRoundIdRef = useRef<string | null>(null);
   const finalizeRoundIdRef = useRef<string | null>(null);
+  const liveSnapshotAtRef = useRef(0);
   const finishAfterTranscribeRef = useRef(false);
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
@@ -128,6 +133,7 @@ export function StatieRoom({ code }: { code: string }) {
       transcriptRoundIdRef.current = roundId;
       recordedRoundIdRef.current = nextState?.round?.myTranscript ? roundId : null;
       votingExpiredRoundIdRef.current = null;
+      allVotesStartedRoundIdRef.current = null;
       autoFinishRoundIdRef.current = null;
       finalizeRoundIdRef.current = null;
       setTranscriptText(nextState?.round?.myTranscript ?? "");
@@ -169,6 +175,8 @@ export function StatieRoom({ code }: { code: string }) {
   }, []);
 
   const votes = state?.round?.votes ?? [];
+  const voteCount = votes.length;
+  const participantCount = state?.participants.length ?? 0;
   const voteByParticipantId = new Map(votes.map((vote) => [vote.participantId, vote]));
   const agreeVotes = votes.filter((vote) => vote.choice === "Agree");
   const disagreeVotes = votes.filter((vote) => vote.choice === "Disagree");
@@ -182,10 +190,24 @@ export function StatieRoom({ code }: { code: string }) {
   const transcriptPendingCount = Math.max(0, transcriptTargetCount - (state?.round?.transcriptCount ?? 0));
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/statie/${code}`), [code]);
   const resultScore = getAiScore(state?.lastResult?.aiScore);
+  const winnerParticipantId = resultScore?.participants.length
+    ? resultScore.participants.slice().sort((a, b) => b.score - a.score)[0]?.participantId ?? null
+    : null;
   const realtime = useStatieRealtime(code, async () => {
     await refresh();
   }, (text) => {
     setCustomStatement(text);
+  }, (voteEvent) => {
+    applyVote({
+      roundId: voteEvent.roundId,
+      participantId: voteEvent.participantId,
+      participantName: voteEvent.participantName,
+      choice: voteEvent.choice,
+    });
+  }, (snapshot) => {
+    if (snapshot.at <= liveSnapshotAtRef.current) return;
+    liveSnapshotAtRef.current = snapshot.at;
+    applyRoomState(snapshot.room as RoomState);
   });
 
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,6 +232,30 @@ export function StatieRoom({ code }: { code: string }) {
         ? "Realtime error"
         : "Connecting";
 
+  useEffect(() => {
+    if (!state || state.isJoined || realtime.status !== "connected") return;
+
+    const stored = window.localStorage.getItem(`statie:${code}:participant`);
+    if (!stored) return;
+
+    try {
+      const participant = JSON.parse(stored) as LoadedRoomState["participants"][number];
+      if (!participant.id || !participant.name) return;
+      applyLiveState((current) => ({
+        ...current,
+        isJoined: true,
+        me: participant,
+        participants: current.participants.some((item) => item.id === participant.id)
+          ? current.participants
+          : [...current.participants, participant],
+      }));
+    } catch {
+      window.localStorage.removeItem(`statie:${code}:participant`);
+    }
+    // Rejoin should run only when the room becomes available on realtime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, realtime.status, state?.isJoined]);
+
   function runAction(action: () => Promise<{ success: boolean; message?: string }>, realtimeAction = "action") {
     setMessage("");
     startTransition(async () => {
@@ -221,24 +267,271 @@ export function StatieRoom({ code }: { code: string }) {
   }
 
   function joinRoom() {
+    if (realtime.status === "connected" && state) {
+      const displayName = session?.user.name || session?.user.email?.split("@")[0] || name.trim();
+      if (!displayName) {
+        setMessage("Nama wajib diisi untuk guest.");
+        return;
+      }
+
+      const participant = {
+        id: crypto.randomUUID(),
+        name: displayName,
+        isLeader: false,
+        lastSeenAt: new Date().toISOString(),
+      };
+      window.localStorage.setItem(`statie:${code}:participant`, JSON.stringify(participant));
+      applyLiveState((current) => ({
+        ...current,
+        isJoined: true,
+        me: participant,
+        participants: current.participants.some((item) => item.id === participant.id)
+          ? current.participants
+          : [...current.participants, participant],
+      }));
+      return;
+    }
+
     runAction(() => joinStatieRoom(code, name), "join");
   }
 
-  function vote(choice: VoteChoice) {
-    runAction(() => submitStatieVote(code, choice), "vote");
+  function applyLiveState(updater: (current: LoadedRoomState) => LoadedRoomState) {
+    setState((current) => {
+      if (!current) return current;
+      const next = updater(current);
+      liveSnapshotAtRef.current = Date.now();
+      realtime.publishLiveSnapshot(next);
+      return next;
+    });
   }
 
+  function applyVote(vote: StatieVoteSnapshot & { roundId: string }) {
+    setState((current) => {
+      if (!current?.round || current.round.id !== vote.roundId) return current;
+
+      const nextVote = {
+        participantId: vote.participantId,
+        participantName: vote.participantName,
+        choice: vote.choice,
+      };
+
+      return {
+        ...current,
+        round: {
+          ...current.round,
+          myVote: current.me?.id === vote.participantId ? vote.choice : current.round.myVote,
+          votes: current.round.votes.some((item) => item.participantId === vote.participantId)
+            ? current.round.votes.map((item) => (item.participantId === vote.participantId ? nextVote : item))
+            : [...current.round.votes, nextVote],
+        },
+      };
+    });
+  }
+
+  function currentRoundVotes() {
+    return state?.round?.votes.map((vote) => ({ participantId: vote.participantId, choice: vote.choice })) ?? [];
+  }
+
+  function getLiveTranscripts(round: ActiveRound) {
+    return ((round as ActiveRound & { transcripts?: LiveTranscript[] }).transcripts ?? []);
+  }
+
+  async function startLiveRound(statementText: string) {
+    if (!state?.isLeader) return;
+    setMessage("");
+    startTransition(async () => {
+      const result = await getStatieRoundStatement(code, statementText);
+      if (!result.success) {
+        setMessage(result.message ?? "Gagal memulai ronde.");
+        return;
+      }
+
+      const nowMs = Date.now();
+      const round = {
+        id: crypto.randomUUID(),
+        status: "Voting" as const,
+        statement: result.statement,
+        votingEndsAt: new Date(nowMs + state.votingSeconds * 1000).toISOString(),
+        debateEndsAt: null,
+        transcriptDeadlineAt: null,
+        myVote: null,
+        myTranscript: null,
+        transcriptCount: 0,
+        transcriptTargetCount: 0,
+        aiScore: null,
+        aiScoreError: null,
+        aiScoredAt: null,
+        votes: [],
+        transcripts: [],
+      } satisfies ActiveRound & { transcripts: LiveTranscript[] };
+
+      applyLiveState((current) => ({ ...current, status: "Voting", round, lastResult: current.lastResult }));
+      setCustomStatement("");
+    });
+  }
+
+  function fillMissingVotes(round: ActiveRound, participants: LoadedRoomState["participants"]) {
+    const existingVotes = new Map(round.votes.map((vote) => [vote.participantId, vote]));
+    const nextVotes = [...round.votes];
+    for (const participant of participants) {
+      if (existingVotes.has(participant.id)) continue;
+      nextVotes.push({
+        participantId: participant.id,
+        participantName: participant.name,
+        choice: Math.random() < 0.5 ? "Agree" : "Disagree",
+      });
+    }
+    return nextVotes;
+  }
+
+  function startLiveDebate() {
+    if (!state?.round || state.round.status !== "Voting") return;
+    applyLiveState((current) => {
+      if (!current.round || current.round.status !== "Voting") return current;
+      const votes = fillMissingVotes(current.round, current.participants);
+      return {
+        ...current,
+        status: "Debate",
+        round: {
+          ...current.round,
+          status: "Debate",
+          votes,
+          transcriptTargetCount: votes.length,
+          debateEndsAt: new Date(Date.now() + current.debateSeconds * 1000).toISOString(),
+        },
+      };
+    });
+  }
+
+  function startDebateAction() {
+    if (realtime.status === "connected") {
+      startLiveDebate();
+      return;
+    }
+
+    runAction(() => startStatieDebate(code, currentRoundVotes()), "start-debate");
+  }
+
+  function vote(choice: VoteChoice) {
+    if (!state?.round || state.round.status !== "Voting" || !state.me) return;
+
+    if (realtime.status !== "connected") {
+      runAction(() => submitStatieVote(code, choice), "vote");
+      return;
+    }
+
+    setMessage("");
+    const votePayload = {
+      roundId: state.round.id,
+      participantId: state.me.id,
+      participantName: state.me.name,
+      choice,
+    };
+    applyVote(votePayload);
+    realtime.publishVote(votePayload);
+  }
+
+  const startDebateFromVotes = useEffectEvent(() => {
+    startDebateAction();
+  });
+
   function finishRoundAction() {
+    if (realtime.status === "connected" && state?.round?.status === "Debate") {
+      applyLiveState((current) => {
+        if (!current.round || current.round.status !== "Debate") return current;
+        return {
+          ...current,
+          status: "Collecting",
+          round: {
+            ...current.round,
+            status: "CollectingTranscripts",
+            transcriptTargetCount: current.round.votes.length,
+            transcriptDeadlineAt: new Date(Date.now() + 30_000).toISOString(),
+          },
+        };
+      });
+      return;
+    }
+
     runAction(() => finishStatieRound(code), "finish-round");
   }
 
   function finalizeRoundAction() {
+    if (realtime.status === "connected" && state?.round?.status === "CollectingTranscripts" && state.isLeader) {
+      const round = state.round;
+      const transcripts = getLiveTranscripts(round);
+      setMessage("");
+      startTransition(async () => {
+        const score = await scoreStatieLiveRound({
+          code,
+          statement: round.statement,
+          participants: round.votes.map((vote) => ({
+            participantId: vote.participantId,
+            participantName: vote.participantName,
+            side: vote.choice,
+            transcript: transcripts.find((item) => item.participantId === vote.participantId)?.text ?? "",
+          })),
+        });
+        if (!score.success) {
+          setMessage(score.message ?? "Gagal menghitung poin ronde.");
+          return;
+        }
+
+        applyLiveState((current) => ({
+          ...current,
+          status: "Lobby",
+          round: null,
+          lastResult: {
+            id: round.id,
+            statement: round.statement,
+            transcriptCount: transcripts.length,
+            aiScore: score.score,
+            aiScoreError: null,
+            aiScoredAt: new Date().toISOString(),
+            votes: round.votes,
+          },
+        }));
+      });
+      return;
+    }
+
     runAction(() => finalizeStatieRoundIfReady(code), "finalize-round");
   }
 
   function saveTranscript(text = transcriptText) {
     const roundId = state?.round?.id;
     if (!roundId) return;
+
+    if (realtime.status === "connected" && state?.me && state.round) {
+      const normalizedText = text.trim().replace(/\s+/g, " ");
+      if (!normalizedText) return;
+      applyLiveState((current) => {
+        if (!current.round || current.round.id !== roundId) return current;
+        const transcripts = getLiveTranscripts(current.round);
+        const nextTranscript = {
+          participantId: current.me?.id ?? state.me!.id,
+          participantName: current.me?.name ?? state.me!.name,
+          text: normalizedText,
+        };
+        const nextTranscripts = transcripts.some((item) => item.participantId === nextTranscript.participantId)
+          ? transcripts.map((item) => (item.participantId === nextTranscript.participantId ? nextTranscript : item))
+          : [...transcripts, nextTranscript];
+
+        return {
+          ...current,
+          round: {
+            ...current.round,
+            myTranscript: nextTranscript.text,
+            transcriptCount: nextTranscripts.length,
+            transcriptTargetCount: current.round.votes.length || current.round.transcriptTargetCount,
+            transcripts: nextTranscripts,
+          } as ActiveRound & { transcripts: LiveTranscript[] },
+        };
+      });
+      setRecorderMessage("Transcript tersimpan untuk penilaian poin.");
+      return;
+    }
+
     runAction(() => submitStatieTranscript(code, roundId, text), "transcript");
   }
 
@@ -258,6 +551,14 @@ export function StatieRoom({ code }: { code: string }) {
   }
 
   function kickParticipant(participantId: string) {
+    if (realtime.status === "connected") {
+      applyLiveState((current) => ({
+        ...current,
+        participants: current.participants.filter((participant) => participant.id !== participantId),
+      }));
+      return;
+    }
+
     runAction(() => kickStatieParticipant(code, participantId), "kick");
   }
 
@@ -285,12 +586,16 @@ export function StatieRoom({ code }: { code: string }) {
       const text = String(result.text || "").trim();
       setTranscriptText(text);
       if (text) {
-        const saved = await submitStatieTranscript(code, round.id, text);
-        if (!saved.success) throw new Error(saved.message);
-        realtime.publish("transcript");
+        if (realtime.status === "connected") {
+          saveTranscript(text);
+        } else {
+          const saved = await submitStatieTranscript(code, round.id, text);
+          if (!saved.success) throw new Error(saved.message);
+          realtime.publish("transcript");
+        }
       }
-      setRecorderMessage("Transcript tersimpan untuk AI scoring.");
-      await refresh();
+      setRecorderMessage("Transcript tersimpan untuk penilaian poin.");
+      if (realtime.status !== "connected") await refresh();
     } catch (error) {
       setRecorderMessage(error instanceof Error ? error.message : "Transkripsi gagal.");
     } finally {
@@ -405,7 +710,7 @@ export function StatieRoom({ code }: { code: string }) {
           ? "size-12 rounded-full border-amber-500/30 bg-amber-500/10 text-amber-600 shadow-md dark:text-amber-400"
           : "size-12 rounded-full shadow-md";
     const micLabel = isScoring
-      ? "AI scoring"
+      ? "Menghitung poin"
       : isTranscribing
         ? "Transcribing"
         : isRecording
@@ -426,16 +731,31 @@ export function StatieRoom({ code }: { code: string }) {
   }
 
   useEffect(() => {
+    if (!isLeader || activeRoundStatus !== "Voting" || !activeRoundId || participantCount === 0) return;
+    if (voteCount < participantCount) return;
+    if (allVotesStartedRoundIdRef.current === activeRoundId) return;
+
+    allVotesStartedRoundIdRef.current = activeRoundId;
+    const startTimeout = window.setTimeout(() => startDebateFromVotes(), 0);
+    return () => window.clearTimeout(startTimeout);
+  }, [activeRoundId, activeRoundStatus, isLeader, participantCount, voteCount]);
+
+  useEffect(() => {
     if (activeRoundStatus !== "Voting" || !activeRoundId || votingSecondsLeft > 0) return;
     if (votingExpiredRoundIdRef.current === activeRoundId) return;
 
     votingExpiredRoundIdRef.current = activeRoundId;
     const refreshTimeout = window.setTimeout(() => {
+      if (isLeader) {
+        startDebateFromVotes();
+        return;
+      }
+      if (realtime.status === "connected") return;
       void refreshFromVotingTimer();
     }, 0);
 
     return () => window.clearTimeout(refreshTimeout);
-  }, [activeRoundId, activeRoundStatus, votingSecondsLeft]);
+  }, [activeRoundId, activeRoundStatus, isLeader, realtime.status, votingSecondsLeft]);
 
   useEffect(() => {
     const round = state?.round;
@@ -470,6 +790,7 @@ export function StatieRoom({ code }: { code: string }) {
   useEffect(() => {
     if (activeRoundStatus !== "CollectingTranscripts" || !activeRoundId) return;
     if (transcriptPendingCount > 0 && collectingSecondsLeft > 0) return;
+    if (realtime.status === "connected" && !isLeader) return;
     if (finalizeRoundIdRef.current === activeRoundId) return;
 
     finalizeRoundIdRef.current = activeRoundId;
@@ -477,7 +798,7 @@ export function StatieRoom({ code }: { code: string }) {
     return () => window.clearTimeout(timeout);
     // Finalization is intentionally keyed to collection readiness only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoundId, activeRoundStatus, transcriptPendingCount, collectingSecondsLeft]);
+  }, [activeRoundId, activeRoundStatus, isLeader, realtime.status, transcriptPendingCount, collectingSecondsLeft]);
 
   if (state === null) {
     return (
@@ -728,7 +1049,10 @@ export function StatieRoom({ code }: { code: string }) {
                     />
                     {state.isLeader && (
                       <Button
-                        onClick={() => { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }}
+                        onClick={() => {
+                          if (realtime.status === "connected") void startLiveRound(customStatement);
+                          else { runAction(() => startStatieRound(code, customStatement), "start-round"); setCustomStatement(""); }
+                        }}
                         disabled={isPending}
                         size="sm"
                         className="h-8 shrink-0"
@@ -812,7 +1136,7 @@ export function StatieRoom({ code }: { code: string }) {
                           {formatTime(votingSecondsLeft)}
                         </div>
                         {state.isLeader && (
-                          <Button onClick={() => runAction(() => startStatieDebate(code), "start-debate")} disabled={isPending} size="sm" className="h-9">
+                          <Button onClick={startDebateAction} disabled={isPending} size="sm" className="h-9">
                             Mulai debat
                           </Button>
                         )}
@@ -907,7 +1231,7 @@ export function StatieRoom({ code }: { code: string }) {
                         {state.round.status === "CollectingTranscripts" ? (
                           <span className="text-center text-[10px] font-semibold text-muted-foreground">Collecting<br />{state.round.transcriptCount}/{state.round.transcriptTargetCount}</span>
                         ) : state.isLeader ? (
-                          <Button onClick={finishRound} disabled={isPending} variant="outline" size="sm" className="h-auto flex-col gap-0.5 rounded-full bg-background px-2 py-1" aria-label="Selesai & scoring">
+                          <Button onClick={finishRound} disabled={isPending} variant="outline" size="sm" className="h-auto flex-col gap-0.5 rounded-full bg-background px-2 py-1" aria-label="Selesai dan hitung poin">
                             <HugeiconsIcon icon={StopIcon} strokeWidth={2} className="size-4" />
                             <span className="text-[10px] font-semibold">Stop</span>
                           </Button>
@@ -939,7 +1263,7 @@ export function StatieRoom({ code }: { code: string }) {
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Mengumpulkan transcript</p>
                     <p className="mt-2 text-2xl font-black tabular-nums text-foreground">{state.round.transcriptCount}/{state.round.transcriptTargetCount}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      AI scoring mulai otomatis saat semua transcript masuk atau dalam {formatTime(collectingSecondsLeft)}.
+                      Penilaian poin mulai otomatis saat semua transcript masuk atau dalam {formatTime(collectingSecondsLeft)}.
                     </p>
                   </div>
                 )}
@@ -973,7 +1297,7 @@ export function StatieRoom({ code }: { code: string }) {
                   <div className="space-y-3 rounded-md border bg-muted/30 p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">AI scoring ronde terakhir</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Hasil ronde terakhir</p>
                         <p className="mt-1 text-sm font-semibold">{state.lastResult.statement}</p>
                       </div>
                       <span className="shrink-0 rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -989,7 +1313,7 @@ export function StatieRoom({ code }: { code: string }) {
                             .sort((a, b) => b.score - a.score)
                             .map((item) => {
                               const participant = state.participants.find((p) => p.id === item.participantId);
-                              const isWinner = resultScore.winnerParticipantId === item.participantId;
+                              const isWinner = winnerParticipantId === item.participantId;
                               return (
                                 <div key={item.participantId} className={`rounded-md border bg-background p-3 ${isWinner ? "border-primary/40" : ""}`}>
                                   <div className="flex items-center justify-between gap-3">
@@ -1005,7 +1329,7 @@ export function StatieRoom({ code }: { code: string }) {
                     ) : state.lastResult.aiScoreError ? (
                       <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{state.lastResult.aiScoreError}</p>
                     ) : (
-                      <p className="text-sm text-muted-foreground">AI scoring belum tersedia.</p>
+                      <p className="text-sm text-muted-foreground">Hasil ronde belum tersedia.</p>
                     )}
                   </div>
                 )}

@@ -500,12 +500,12 @@ export function StatieHome({
                     </div>
                     <div className="rounded-lg border bg-background px-3 py-2 text-center">
                       <p className="text-xl font-black leading-none">{player.averageScore}</p>
-                      <p className="mt-1 text-[10px] font-medium text-muted-foreground">AVG AI</p>
+                      <p className="mt-1 text-[10px] font-medium text-muted-foreground">AVG POIN</p>
                     </div>
                   </div>
                 )) : (
                   <div className="rounded-md border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
-                    Leaderboard muncul setelah ada ronde yang selesai dengan AI scoring.
+                    Leaderboard muncul setelah ada ronde yang selesai dinilai.
                   </div>
                 )}
               </TabsContent>

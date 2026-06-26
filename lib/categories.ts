@@ -29,6 +29,7 @@ export interface CategoryConfig {
   color: string;
   bgColor: string;
   icon: typeof More01Icon;
+  iconName: string;
 }
 
 const colorToTailwind: Record<string, { color: string; bgColor: string }> = {
@@ -136,11 +137,13 @@ export function getCategoryConfig(
   const icon = iconName
     ? (categoryIconRegistry[iconName] ?? knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length])
     : (knownCategoryIcons[category] ?? fallbackIcons[hashString(category) % fallbackIcons.length]);
+  const resolvedIconName = iconName ?? Object.entries(categoryIconRegistry).find(([, registeredIcon]) => registeredIcon === icon)?.[0] ?? "More01Icon";
 
   if (color && colorToTailwind[color]) {
     return {
       ...colorToTailwind[color],
       icon,
+      iconName: resolvedIconName,
     };
   }
 
@@ -150,5 +153,6 @@ export function getCategoryConfig(
   return {
     ...colorToTailwind[fallbackColorKey],
     icon,
+    iconName: resolvedIconName,
   };
 }

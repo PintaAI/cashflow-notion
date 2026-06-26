@@ -7,6 +7,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   BookEditIcon,
+  Delete02Icon,
+  MoreVerticalIcon,
+  PinIcon,
+  PinOffIcon,
   Share01Icon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
@@ -14,12 +18,21 @@ import {
 import {
   acceptNoteInvite,
   createNote,
+  deleteNote,
   getUserNotes,
+  togglePinNote,
   type UserNote,
 } from "@/app/actions/notes";
 import { NoteShareDialog } from "@/components/notes/note-share-dialog";
 import { SidebarTrigger } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +47,7 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
   const [newTitle, setNewTitle] = useState("");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [sharingNoteId, setSharingNoteId] = useState<string | null>(null);
   const sharedCount = notes.filter((note) => note.memberCount > 1).length;
   const privateCount = notes.length - sharedCount;
 
@@ -147,11 +161,15 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
         ) : notes.map((note) => {
           const shared = note.memberCount > 1;
           const sharedWithUser = note.role !== "owner";
+          const isOwner = note.role === "owner";
 
           return (
             <div
               key={note.id}
-              className="flex items-center gap-2.5 rounded-md border bg-muted/30 p-2 transition-colors hover:bg-muted/60 sm:gap-3"
+              className={cn(
+                "flex items-center gap-2.5 rounded-md border bg-muted/30 p-2 transition-colors hover:bg-muted/60 sm:gap-3",
+                note.pinned && "border-l-primary/50"
+              )}
             >
               <Link href={`/notes/${note.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
                 <div className="inline-flex items-center gap-1.5">
@@ -174,11 +192,71 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
                   {note.contentMarkdown?.trim() || "Mulai tulis catatan..."}
                 </p>
               </Link>
+
+              {note.pinned && (
+                <HugeiconsIcon icon={PinIcon} strokeWidth={2} className="size-3 shrink-0 text-primary/60" />
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-xs" aria-label="Opsi catatan">
+                    <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} className="size-4 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[140px]">
+                  <DropdownMenuItem onClick={() => setSharingNoteId(note.id)}>
+                    <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-3.5" />
+                    Share
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      const result = await togglePinNote(note.id);
+                      setNotes((prev) =>
+                        prev
+                          .map((n) => (n.id === note.id ? { ...n, pinned: result.pinned } : n))
+                          .sort((a, b) => {
+                            if (a.pinned && !b.pinned) return -1;
+                            if (!a.pinned && b.pinned) return 1;
+                            return 0;
+                          })
+                      );
+                    }}
+                  >
+                    <HugeiconsIcon
+                      icon={note.pinned ? PinOffIcon : PinIcon}
+                      strokeWidth={2}
+                      className="size-3.5"
+                    />
+                    {note.pinned ? "Unpin" : "Pin"}
+                  </DropdownMenuItem>
+                  {isOwner && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => {
+                          if (confirm(`Hapus catatan "${note.title}"?`)) {
+                            startTransition(async () => {
+                              await deleteNote(note.id);
+                              await refreshNotes();
+                            });
+                          }
+                        }}
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
+                        Hapus
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <NoteShareDialog
                 noteId={note.id}
                 role={note.role}
                 memberCount={note.memberCount}
                 members={note.members}
+                open={sharingNoteId === note.id}
+                onOpenChange={(open) => { if (!open) setSharingNoteId(null); }}
               />
             </div>
           );

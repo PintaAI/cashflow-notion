@@ -35,9 +35,11 @@ type NoteShareDialogProps = {
     role: string;
     user: { id: string; name: string | null; email: string; image: string | null };
   }[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function NoteShareDialog({ noteId, role, members }: NoteShareDialogProps) {
+export function NoteShareDialog({ noteId, role, members, open, onOpenChange }: NoteShareDialogProps) {
   const [invitations, setInvitations] = useState<NoteInvitationInfo[]>([]);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -93,16 +95,18 @@ export function NoteShareDialog({ noteId, role, members }: NoteShareDialogProps)
   }
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          size="xs"
-          className="h-6 gap-1 rounded-full px-2 text-[11px]"
-        >
-          <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-3" />
-          Share
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open === undefined && (
+        <DialogTrigger asChild>
+          <Button
+            size="xs"
+            className="h-6 gap-1 rounded-full px-2 text-[11px]"
+          >
+            <HugeiconsIcon icon={Share01Icon} strokeWidth={2} className="size-3" />
+            Share
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Bagikan catatan</DialogTitle>

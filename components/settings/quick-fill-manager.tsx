@@ -28,6 +28,7 @@ import {
   useCategoriesWithDetails,
 } from "@/hooks/use-cashflow-data"
 import { getCategoryConfig } from "@/lib/categories"
+import { HugeiconByName } from "@/components/ui/icon-picker"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/components/providers/currency-provider"
 import { formatCurrencyAmount } from "@/lib/currency"
@@ -174,7 +175,7 @@ export function QuickFillManager() {
                 return (
                   <SelectItem key={cat.id} value={cat.id}>
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5", config.bgColor, config.color)}>
-                      <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-3" />
+                      <HugeiconByName name={config.iconName} className="size-3" />
                       {cat.name}
                     </span>
                   </SelectItem>
@@ -273,7 +274,7 @@ export function QuickFillManager() {
                     </span>
                     {config && (
                       <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0", config.bgColor, config.color)}>
-                        <HugeiconsIcon icon={config.icon} strokeWidth={2} className="size-2.5" />
+                        <HugeiconByName name={config.iconName} className="size-2.5" />
                         <span className="text-xs">{preset.category}</span>
                       </span>
                     )}

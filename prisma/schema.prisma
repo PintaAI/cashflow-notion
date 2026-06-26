@@ -386,6 +386,7 @@ model Note {
   contentJson     String?
   contentHtml     String?
   contentMarkdown String?
+  pinned          Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
