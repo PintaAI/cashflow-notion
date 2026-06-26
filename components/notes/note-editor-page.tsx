@@ -21,10 +21,12 @@ import {
   deleteNoteInvite,
   getNoteInvitations,
   updateNoteContent,
+  updateNoteIcon,
   updateNoteTitle,
   type NoteInvitationInfo,
   type UserNote,
 } from "@/app/actions/notes";
+import { HugeiconByName, IconPicker } from "@/components/ui/icon-picker";
 import { SidebarTrigger } from "@/components/layout";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -59,6 +61,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
   const [invitations, setInvitations] = useState<NoteInvitationInfo[]>([]);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [iconDraft, setIconDraft] = useState(note.icon);
 
   const isOwner = currentNote.role === "owner";
 
@@ -134,7 +137,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
       <div className="mb-4 flex items-center justify-between sm:mb-6">
         <div className="flex items-center gap-2">
           <SidebarTrigger />
-          <HugeiconsIcon icon={BookEditIcon} strokeWidth={2} className="size-5 text-muted-foreground" />
+          <HugeiconByName name={currentNote.icon} className="size-5 text-muted-foreground" />
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Notes</h1>
         </div>
         <Link href="/notes" className="text-xs text-muted-foreground hover:text-foreground">
@@ -176,6 +179,23 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
                   </DialogHeader>
 
                   <div className="space-y-5">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                          <HugeiconByName name={currentNote.icon} className="size-4" />
+                          Ikon Catatan
+                        </h2>
+                        <IconPicker
+                          value={iconDraft}
+                          onValueChange={async (nextIcon) => {
+                            setIconDraft(nextIcon)
+                            setCurrentNote((prev) => ({ ...prev, icon: nextIcon }))
+                            await updateNoteIcon(currentNote.id, nextIcon)
+                          }}
+                        />
+                      </div>
+                    </div>
+
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">

@@ -10,6 +10,7 @@ const NOTE_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export type UserNote = {
   id: string;
   title: string;
+  icon: string;
   contentJson: string | null;
   contentHtml: string | null;
   contentMarkdown: string | null;
@@ -67,6 +68,7 @@ export async function getUserNotes(): Promise<UserNote[]> {
   return sorted.map((membership) => ({
     id: membership.note.id,
     title: membership.note.title,
+    icon: membership.note.icon,
     contentJson: membership.note.contentJson,
     contentHtml: membership.note.contentHtml,
     contentMarkdown: membership.note.contentMarkdown,
@@ -242,6 +244,22 @@ export async function acceptNoteInvite(code: string): Promise<AcceptNoteInviteRe
   return { success: true };
 }
 
+export async function updateNoteIcon(noteId: string, icon: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const membership = await getNoteMembership(noteId, session.user.id);
+  if (!membership) throw new Error("Anda bukan anggota catatan ini");
+
+  await prisma.note.update({
+    where: { id: noteId },
+    data: { icon },
+  });
+
+  revalidatePath("/notes");
+  return { success: true };
+}
+
 export async function togglePinNote(noteId: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
@@ -287,6 +305,7 @@ export async function getUserNote(noteId: string): Promise<UserNote | null> {
   return {
     id: membership.note.id,
     title: membership.note.title,
+    icon: membership.note.icon,
     contentJson: membership.note.contentJson,
     contentHtml: membership.note.contentHtml,
     contentMarkdown: membership.note.contentMarkdown,

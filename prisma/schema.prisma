@@ -383,6 +383,7 @@ model Invitation {
 model Note {
   id              String   @id @default(uuid())
   title           String
+  icon            String   @default("BookEditIcon")
   contentJson     String?
   contentHtml     String?
   contentMarkdown String?

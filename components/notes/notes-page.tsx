@@ -23,6 +23,7 @@ import {
   togglePinNote,
   type UserNote,
 } from "@/app/actions/notes";
+import { HugeiconByName } from "@/components/ui/icon-picker";
 import { NoteShareDialog } from "@/components/notes/note-share-dialog";
 import { SidebarTrigger } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -173,11 +174,7 @@ export function NotesPage({ initialNotes, inviteCode }: NotesPageProps) {
             >
               <Link href={`/notes/${note.id}`} className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
                 <div className="inline-flex items-center gap-1.5">
-                  <HugeiconsIcon
-                    icon={sharedWithUser ? Share01Icon : BookEditIcon}
-                    strokeWidth={2.1}
-                    className={cn("size-4 shrink-0", sharedWithUser ? "text-primary" : "text-muted-foreground")}
-                  />
+                  <HugeiconByName name={note.icon} className="size-4 shrink-0 text-muted-foreground" />
                   <span className="truncate text-sm font-medium">{note.title}</span>
                   {shared ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
