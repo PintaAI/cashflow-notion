@@ -45,7 +45,11 @@ const Editor = dynamic(
   () => import("@/components/notes/block-note-editor").then((mod) => mod.BlockNoteEditor),
   {
     ssr: false,
-    loading: () => <div className="min-h-[420px] rounded-xl border bg-card p-4 text-sm text-muted-foreground">Memuat editor...</div>,
+    loading: () => (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="size-5 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground/60" />
+      </div>
+    ),
   }
 );
 
