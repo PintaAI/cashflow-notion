@@ -21,8 +21,13 @@ const searchSvg: IconSvgElement = [
 
 type IconPage = {
   items: string[]
+  icons?: Record<string, IconSvgElement>
   total: number
   hasMore: boolean
+}
+
+type IconResponse = {
+  icons?: Record<string, IconSvgElement>
 }
 
 type IconPickerProps = {
@@ -36,10 +41,6 @@ type IconPickerProps = {
   placeholder?: string
 }
 
-type HugeiconModule = {
-  default: IconSvgElement
-}
-
 const loadedIcons = new Map<string, IconSvgElement>()
 
 async function loadHugeicon(name: string) {
@@ -47,9 +48,15 @@ async function loadHugeicon(name: string) {
   if (cachedIcon) return cachedIcon
 
   try {
-    const mod = (await import(`@hugeicons/core-free-icons/${name}`)) as HugeiconModule
-    loadedIcons.set(name, mod.default)
-    return mod.default
+    const response = await fetch(`/api/icons/hugeicons?names=${encodeURIComponent(name)}`)
+    if (!response.ok) throw new Error("Failed to load icon")
+
+    const data = (await response.json()) as IconResponse
+    const icon = data.icons?.[name]
+    if (!icon) throw new Error("Icon not found")
+
+    loadedIcons.set(name, icon)
+    return icon
   } catch {
     loadedIcons.set(name, fallbackIcon)
     return fallbackIcon
@@ -145,6 +152,10 @@ export function IconPicker({
 
         const data = (await response.json()) as IconPage
         if (requestId !== requestRef.current) return
+
+        Object.entries(data.icons ?? {}).forEach(([name, icon]) => {
+          loadedIcons.set(name, icon)
+        })
 
         setItems((currentItems) =>
           mode === "replace"
