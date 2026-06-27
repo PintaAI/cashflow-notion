@@ -35,17 +35,8 @@ enum StatieVoteChoice {
 
 enum WerewolfRoomStatus {
   Lobby
-  Night
-  Day
-  Voting
-  Revote
+  Active
   Finished
-}
-
-enum WerewolfRole {
-  Werewolf
-  Seer
-  Villager
 }
 
 model User {
@@ -202,23 +193,14 @@ model WerewolfRoom {
   leaderGuestName String?
   leaderToken     String
   playerLimit     Int                @default(10)
-  phaseNumber     Int                @default(0)
-  finishedReason  String?
-  phaseEndsAt     DateTime?
   nightSeconds    Int                @default(60)
   daySeconds      Int                @default(120)
   votingSeconds   Int                @default(60)
   revoteSeconds   Int                @default(30)
-  currentVoteRound Int              @default(1)
-  revoteCandidates String?
-  lastEliminatedId String?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  participants  WerewolfParticipant[]
-  votes         WerewolfVote[]
-  nightActions WerewolfNightAction[]
-  seerChecks   WerewolfSeerCheck[]
+  participants WerewolfParticipant[]
 
   @@index([code])
 }
@@ -232,68 +214,13 @@ model WerewolfParticipant {
   guestName    String?
   token        String
   isLeader     Boolean       @default(false)
-  role         WerewolfRole?
-  isAlive      Boolean       @default(true)
-  eliminatedAt DateTime?
+  isModerator  Boolean       @default(false)
   joinedAt     DateTime      @default(now())
   lastSeenAt   DateTime      @default(now())
-
-  votesCast     WerewolfVote[] @relation("WerewolfVoteVoter")
-  votesReceived WerewolfVote[] @relation("WerewolfVoteTarget")
-  nightActions  WerewolfNightAction[] @relation("WerewolfNightActor")
-  nightTargets  WerewolfNightAction[] @relation("WerewolfNightTarget")
-  seerChecks    WerewolfSeerCheck[]   @relation("WerewolfSeerActor")
-  seerTargets   WerewolfSeerCheck[]   @relation("WerewolfSeerTarget")
 
   @@unique([roomId, token])
   @@index([roomId])
   @@index([userId])
-}
-
-model WerewolfVote {
-  id        String              @id @default(uuid())
-  roomId    String
-  room      WerewolfRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  voterId   String
-  voter     WerewolfParticipant @relation("WerewolfVoteVoter", fields: [voterId], references: [id], onDelete: Cascade)
-  targetId  String
-  target    WerewolfParticipant @relation("WerewolfVoteTarget", fields: [targetId], references: [id], onDelete: Cascade)
-  round     Int                 @default(1)
-  createdAt DateTime            @default(now())
-
-  @@unique([roomId, round, voterId])
-  @@index([roomId, round, targetId])
-}
-
-model WerewolfNightAction {
-  id          String               @id @default(uuid())
-  roomId      String
-  room        WerewolfRoom         @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  phaseNumber Int
-  actorId     String
-  actor       WerewolfParticipant  @relation("WerewolfNightActor", fields: [actorId], references: [id], onDelete: Cascade)
-  targetId    String
-  target      WerewolfParticipant  @relation("WerewolfNightTarget", fields: [targetId], references: [id], onDelete: Cascade)
-  createdAt   DateTime             @default(now())
-
-  @@unique([roomId, phaseNumber, actorId])
-  @@index([roomId, phaseNumber])
-}
-
-model WerewolfSeerCheck {
-  id            String               @id @default(uuid())
-  roomId        String
-  room          WerewolfRoom         @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  phaseNumber   Int
-  actorId       String
-  actor         WerewolfParticipant  @relation("WerewolfSeerActor", fields: [actorId], references: [id], onDelete: Cascade)
-  targetId      String
-  target        WerewolfParticipant  @relation("WerewolfSeerTarget", fields: [targetId], references: [id], onDelete: Cascade)
-  inspectedRole WerewolfRole
-  createdAt     DateTime             @default(now())
-
-  @@unique([roomId, phaseNumber, actorId])
-  @@index([roomId, phaseNumber])
 }
 
 model Session {

@@ -3,9 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { AiGameIcon, Clock01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
+import { AiGameIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/lib/auth-client";
 import { createWerewolfRoom, joinWerewolfRoom } from "@/app/actions/werewolf";
@@ -15,10 +17,10 @@ export function WerewolfHome() {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [hasModerator, setHasModerator] = useState(true);
   const [playerLimit, setPlayerLimit] = useState(10);
   const [nightSeconds, setNightSeconds] = useState(60);
   const [daySeconds, setDaySeconds] = useState(120);
-  const [votingSeconds, setVotingSeconds] = useState(60);
   const [revoteSeconds, setRevoteSeconds] = useState(30);
   const [message, setMessage] = useState("");
   const { data: session, isPending: sessionPending } = useSession();
@@ -27,7 +29,7 @@ export function WerewolfHome() {
   function createRoom() {
     setMessage("");
     startTransition(async () => {
-      const result = await createWerewolfRoom({ leaderName: name, playerLimit, nightSeconds, daySeconds, votingSeconds, revoteSeconds });
+      const result = await createWerewolfRoom({ leaderName: name, hasModerator, playerLimit, nightSeconds, daySeconds, revoteSeconds });
       if (!result.success) {
         setMessage(result.message);
         return;
@@ -60,7 +62,7 @@ export function WerewolfHome() {
             Desa gelap, semua orang mencurigakan.
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-300">
-            Buat room, bagi role rahasia. Sistem mengatur fase malam, diskusi, dan voting lewat timer. Leader juga bisa majuin fase manual.
+            Buat room dengan moderator khusus, atau ikut bermain sebagai host sambil tetap bisa mengontrol fase.
           </p>
         </section>
 
@@ -79,77 +81,129 @@ export function WerewolfHome() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="create" className="space-y-3 pt-2">
+            <TabsContent value="create" className="space-y-4 pt-2">
               {isGuest ? (
-                <label className="space-y-1.5 text-xs text-muted-foreground">
-                  Nama display
-                  <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Raka" className="h-10 bg-background" />
+                <label className="flex items-center gap-3 rounded-md border bg-background px-4 py-3">
+                  <span className="text-xs font-medium text-muted-foreground">Nama</span>
+                  <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Raka" className="h-9 flex-1 bg-muted/50" />
                 </label>
               ) : (
-                <div className="rounded-md border border-border/50 px-3 py-2 text-xs text-muted-foreground">
-                  Kamu masuk sebagai {session?.user.name || session?.user.email}.
+                <div className="flex items-center gap-3 rounded-md border bg-background px-4 py-3 text-xs">
+                  <span className="font-medium text-muted-foreground">Masuk sebagai</span>
+                  <span className="text-foreground">{session?.user.name || session?.user.email}</span>
                 </div>
               )}
 
-              <label className="space-y-1.5 text-xs text-muted-foreground">
-                Limit pemain (4-16)
-                <Input
-                  type="number"
-                  min={4}
-                  max={16}
-                  value={playerLimit}
-                  onChange={(event) => setPlayerLimit(Number(event.target.value))}
-                  className="h-10 bg-background"
-                />
-              </label>
-
-              <div className="rounded-md border border-border/50 p-3">
-                <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <HugeiconsIcon icon={Clock01Icon} size={14} strokeWidth={2} className="size-3.5" />
-                  Durasi tiap fase (detik)
+              <div className="rounded-md border bg-background p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <label htmlFor="moderator-switch" className="text-sm font-medium">Moderator</label>
+                    <p className="text-xs text-muted-foreground">{hasModerator ? "Game akan diatur oleh room leader sebagai moderator" : "Fase siang akan diatur oleh sistem dan durasi fase bisa diatur"}</p>
+                  </div>
+                  <Switch id="moderator-switch" checked={hasModerator} onCheckedChange={setHasModerator} />
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <label className="space-y-1 text-xs text-muted-foreground">
-                    Malam
-                    <Input type="number" min={15} max={300} value={nightSeconds} onChange={(event) => setNightSeconds(Number(event.target.value))} className="h-9 bg-background" />
-                  </label>
-                  <label className="space-y-1 text-xs text-muted-foreground">
-                    Siang
-                    <Input type="number" min={30} max={600} value={daySeconds} onChange={(event) => setDaySeconds(Number(event.target.value))} className="h-9 bg-background" />
-                  </label>
-                  <label className="space-y-1 text-xs text-muted-foreground">
-                    Voting
-                    <Input type="number" min={15} max={300} value={votingSeconds} onChange={(event) => setVotingSeconds(Number(event.target.value))} className="h-9 bg-background" />
-                  </label>
-                  <label className="space-y-1 text-xs text-muted-foreground">
-                    Revote
-                    <Input type="number" min={10} max={120} value={revoteSeconds} onChange={(event) => setRevoteSeconds(Number(event.target.value))} className="h-9 bg-background" />
-                  </label>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Limit</span>
+                  <Input
+                    type="number"
+                    min={4}
+                    max={16}
+                    value={playerLimit}
+                    onChange={(event) => setPlayerLimit(Number(event.target.value))}
+                    className="h-8 w-16 bg-muted/50 text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">pemain</span>
                 </div>
               </div>
 
+              {!hasModerator && (
+                <div className="rounded-md border bg-background p-4">
+                  <h3 className="mb-3 text-xs font-semibold text-muted-foreground">DURASI FASE</h3>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Malam</span>
+                      <Select value={String(nightSeconds)} onValueChange={(v) => setNightSeconds(Number(v))}>
+                        <SelectTrigger className="h-8 w-24 bg-muted/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="15">15 dtk</SelectItem>
+                          <SelectItem value="30">30 dtk</SelectItem>
+                          <SelectItem value="45">45 dtk</SelectItem>
+                          <SelectItem value="60">1 mnt</SelectItem>
+                          <SelectItem value="90">1,5 mnt</SelectItem>
+                          <SelectItem value="120">2 mnt</SelectItem>
+                          <SelectItem value="180">3 mnt</SelectItem>
+                          <SelectItem value="300">5 mnt</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Siang</span>
+                      <Select value={String(daySeconds)} onValueChange={(v) => setDaySeconds(Number(v))}>
+                        <SelectTrigger className="h-8 w-24 bg-muted/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="30">30 dtk</SelectItem>
+                          <SelectItem value="60">1 mnt</SelectItem>
+                          <SelectItem value="90">1,5 mnt</SelectItem>
+                          <SelectItem value="120">2 mnt</SelectItem>
+                          <SelectItem value="180">3 mnt</SelectItem>
+                          <SelectItem value="240">4 mnt</SelectItem>
+                          <SelectItem value="300">5 mnt</SelectItem>
+                          <SelectItem value="600">10 mnt</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Revote</span>
+                      <Select value={String(revoteSeconds)} onValueChange={(v) => setRevoteSeconds(Number(v))}>
+                        <SelectTrigger className="h-8 w-24 bg-muted/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10 dtk</SelectItem>
+                          <SelectItem value="15">15 dtk</SelectItem>
+                          <SelectItem value="20">20 dtk</SelectItem>
+                          <SelectItem value="30">30 dtk</SelectItem>
+                          <SelectItem value="45">45 dtk</SelectItem>
+                          <SelectItem value="60">1 mnt</SelectItem>
+                          <SelectItem value="90">1,5 mnt</SelectItem>
+                          <SelectItem value="120">2 mnt</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <Button onClick={createRoom} disabled={isPending} className="h-10 w-full">
-                Buat Room Werewolf
+                {hasModerator ? "Buat Room sebagai Moderator" : "Buat Room sebagai Pemain"}
               </Button>
             </TabsContent>
 
-            <TabsContent value="join" className="space-y-3 pt-2">
-              <p className="text-xs text-muted-foreground">Masuk dengan kode 6 karakter dari leader.</p>
+            <TabsContent value="join" className="space-y-4 pt-2">
+              <p className="text-xs text-muted-foreground">Masukkan kode room 6 karakter dari host.</p>
               {isGuest && (
-                <label className="space-y-1.5 text-xs text-muted-foreground">
-                  Nama display
-                  <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Raka" className="h-10 bg-background" />
-                </label>
+                <div className="space-y-2 rounded-md border bg-background p-4">
+                  <label className="flex items-center gap-3">
+                    <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">Nama</span>
+                    <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Raka" className="h-9 flex-1 bg-muted/50" />
+                  </label>
+                </div>
               )}
-              <label className="space-y-1.5 text-xs text-muted-foreground">
-                Kode room
-                <Input
-                  value={joinCode}
-                  onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-                  placeholder="ABC123"
-                  className="h-14 bg-background text-center text-xl font-bold uppercase tracking-[0.3em]"
-                />
-              </label>
+              <div className="space-y-2 rounded-md border bg-background p-4">
+                <label className="flex flex-col items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Kode Room</span>
+                  <Input
+                    value={joinCode}
+                    onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                    placeholder="ABC123"
+                    className="h-14 bg-muted/50 text-center text-xl font-bold uppercase tracking-[0.3em]"
+                  />
+                </label>
+              </div>
               <Button variant="outline" onClick={joinRoom} disabled={isPending} className="h-10 w-full bg-background">
                 Gabung Room
               </Button>
