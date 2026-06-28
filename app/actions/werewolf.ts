@@ -128,7 +128,7 @@ export async function createWerewolfRoom(input: {
   try {
     const session = await getOptionalSession();
     const leaderName = normalizeName(input.leaderName ?? "");
-    const hasModerator = input.hasModerator ?? true;
+    const hasModerator = input.hasModerator ?? false;
     if (!session && !leaderName) return { success: false, message: "Nama display wajib diisi untuk guest." };
 
     const code = await generateUniqueRoomCode();

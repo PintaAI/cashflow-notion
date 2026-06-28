@@ -28,7 +28,7 @@ export function WerewolfHome() {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
-  const [hasModerator, setHasModerator] = useState(true);
+  const [hasModerator, setHasModerator] = useState(false);
   const [playerLimit, setPlayerLimit] = useState(10);
   const [availableRoles, setAvailableRoles] = useState<string[]>(["Werewolf", "Villager"]);
   const [maxWerewolves, setMaxWerewolves] = useState(2);
