@@ -15,6 +15,7 @@ type SaveContent = {
 }
 
 type BlockNoteEditorProps = {
+  noteId: string
   initialContent?: string
   onSave?: (content: SaveContent) => Promise<void>
   debounceMs?: number
@@ -23,6 +24,7 @@ type BlockNoteEditorProps = {
 }
 
 export function BlockNoteEditor({
+  noteId,
   initialContent,
   onSave,
   debounceMs = 1000,
@@ -39,6 +41,24 @@ export function BlockNoteEditor({
 
   const editor = useCreateBlockNote({
     initialContent: parsedContent,
+    uploadFile: async (file) => {
+      const formData = new FormData()
+      formData.append("noteId", noteId)
+      formData.append("file", file)
+
+      const response = await fetch("/api/notes/files", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as { message?: string } | null
+        throw new Error(result?.message ?? "Gagal mengupload file.")
+      }
+
+      const result = (await response.json()) as { url: string }
+      return result.url
+    },
   })
 
   const performSave = useCallback(async () => {

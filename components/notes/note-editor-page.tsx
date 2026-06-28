@@ -314,6 +314,7 @@ export function NoteEditorPage({ note }: NoteEditorPageProps) {
       <section className="space-y-3">
         <Editor
           key={currentNote.id}
+          noteId={currentNote.id}
           initialContent={currentNote.contentJson ?? undefined}
           debounceMs={900}
           onSave={async (content) => {
