@@ -51,21 +51,17 @@ export interface GetResult {
   etag: string;
 }
 
-type R2Body = {
-  transformToWebStream?: () => ReadableStream;
-} | ReadableStream | import("stream").Readable;
-
-async function toWebStream(body: R2Body): Promise<ReadableStream> {
-  if ("transformToWebStream" in body && typeof body.transformToWebStream === "function") {
-    return body.transformToWebStream();
-  }
-
+async function toWebStream(body: unknown): Promise<ReadableStream> {
   if (body instanceof ReadableStream) {
     return body;
   }
 
+  if (body && typeof (body as Record<string, unknown>).transformToWebStream === "function") {
+    return (body as { transformToWebStream: () => ReadableStream }).transformToWebStream();
+  }
+
   const { Readable } = await import("node:stream");
-  return Readable.toWeb(body) as ReadableStream;
+  return Readable.toWeb(body as import("stream").Readable) as ReadableStream;
 }
 
 export async function getObject(key: string): Promise<GetResult | null> {
@@ -79,7 +75,7 @@ export async function getObject(key: string): Promise<GetResult | null> {
 
     if (!result.Body) return null;
 
-    const stream = await toWebStream(result.Body as R2Body);
+    const stream = await toWebStream(result.Body);
 
     return {
       stream,
