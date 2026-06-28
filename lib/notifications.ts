@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Redis } from "@upstash/redis";
-import { get, put } from "@vercel/blob";
 import webPush, { type PushSubscription } from "web-push";
+import { putObject, getObjectText, getR2Client } from "@/lib/r2";
 
 const SUBSCRIPTIONS_FILE = path.join(process.cwd(), "data", "push-subscriptions.json");
 const SUBSCRIPTIONS_KV_KEY = "push-subscriptions";
@@ -33,19 +33,12 @@ export async function writeSubscriptions(subscriptions: StoredPushSubscription[]
     return;
   }
 
-  const blobOptions = getBlobOptions();
-
-  if (blobOptions) {
+  if (getR2Client()) {
     try {
-      await put(SUBSCRIPTIONS_BLOB_PATH, JSON.stringify(subscriptions), {
-        ...blobOptions,
-        access: "public",
-        allowOverwrite: true,
-        contentType: "application/json",
-      });
+      await putObject(SUBSCRIPTIONS_BLOB_PATH, JSON.stringify(subscriptions), "application/json");
       return;
     } catch {
-      // Blob write failed, fall through to JSON
+      // R2 write failed, fall through to JSON
     }
   }
 
@@ -62,73 +55,6 @@ function getRedisClient() {
   }
 
   return new Redis({ url, token });
-}
-
-function getBlobToken() {
-  return process.env.NOTIF_READ_WRITE_TOKEN || null;
-}
-
-function getStoreId() {
-  const storeId = process.env.NOTIF_STORE_ID;
-  if (storeId) {
-    return storeId.replace(/^store_/, "");
-  }
-
-  const token = process.env.NOTIF_READ_WRITE_TOKEN;
-  if (token) {
-    const parts = token.split("_");
-    if (parts.length >= 3 && parts[0] === "rwt") {
-      return parts[1];
-    }
-  }
-
-  return null;
-}
-
-function getBlobUrl(pathname: string) {
-  const storeId = getStoreId();
-  if (!storeId) return null;
-  const normalizedPath = pathname.replace(/^\//, "");
-  return `https://${storeId}.public.blob.vercel-storage.com/${normalizedPath}`;
-}
-
-function getBlobOptions() {
-  const token = getBlobToken();
-  const storeId = process.env.NOTIF_STORE_ID;
-  const oidcToken = process.env.VERCEL_OIDC_TOKEN;
-
-  if (token) {
-    return { token };
-  }
-
-  if (storeId && oidcToken) {
-    return { storeId, oidcToken };
-  }
-
-  if (storeId) {
-    return { storeId };
-  }
-
-  return null;
-}
-
-async function readTextStream(stream: ReadableStream<Uint8Array>) {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let output = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    output += decoder.decode(value, { stream: true });
-  }
-
-  output += decoder.decode();
-  return output;
 }
 
 function normalizeSubscriptions(value: unknown): StoredPushSubscription[] {
@@ -154,37 +80,13 @@ export async function readSubscriptions(): Promise<StoredPushSubscription[]> {
     return normalizeSubscriptions(subscriptions);
   }
 
-  const blobUrl = getBlobUrl(SUBSCRIPTIONS_BLOB_PATH);
-
-  if (blobUrl) {
+  if (getR2Client()) {
     try {
-      const response = await fetch(blobUrl);
-
-      if (response.ok) {
-        return normalizeSubscriptions(await response.json());
+      const data = await getObjectText(SUBSCRIPTIONS_BLOB_PATH);
+      if (data !== null) {
+        return normalizeSubscriptions(JSON.parse(data));
       }
-
-      if (response.status === 404) {
-        return [];
-      }
-    } catch {
       return [];
-    }
-  }
-
-  const blobOptions = getBlobOptions();
-
-  if (blobOptions) {
-    try {
-      const blob = await get(SUBSCRIPTIONS_BLOB_PATH, {
-        ...blobOptions,
-        access: "public",
-        useCache: false,
-      });
-
-      if (blob && blob.statusCode === 200) {
-        return normalizeSubscriptions(JSON.parse(await readTextStream(blob.stream)));
-      }
     } catch {
       return [];
     }

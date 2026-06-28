@@ -1,7 +1,7 @@
 "use server";
 
-import { put } from "@vercel/blob";
 import { prisma } from "@/lib/db";
+import { putObject } from "@/lib/r2";
 import { getBlobOptions } from "@/lib/blob";
 import { getSession } from "@/lib/management";
 import { parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
@@ -77,21 +77,21 @@ export async function updateProfile(
     }
 
     try {
-      const blobOptions = getBlobOptions();
-      if (!blobOptions) {
-        return { status: "error", message: "Upload foto gagal. Vercel Blob belum dikonfigurasi." };
+      if (!getBlobOptions()) {
+        return { status: "error", message: "Upload foto gagal. R2 storage belum dikonfigurasi." };
       }
 
       const extension = file.type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-      const blob = await put(`profiles/${session.user.id}/${crypto.randomUUID()}.${extension}`, file, {
-        ...blobOptions,
-        access: "private",
-        contentType: file.type,
-      });
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const blob = await putObject(
+        `profiles/${session.user.id}/${crypto.randomUUID()}.${extension}`,
+        buffer,
+        file.type,
+      );
 
       imageUrl = blob.pathname;
     } catch {
-      return { status: "error", message: "Upload foto gagal. Pastikan Vercel Blob sudah dikonfigurasi." };
+      return { status: "error", message: "Upload foto gagal. Pastikan R2 storage sudah dikonfigurasi." };
     }
   }
 

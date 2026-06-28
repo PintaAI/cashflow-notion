@@ -1,19 +1,7 @@
 export function getBlobOptions() {
-  const token = process.env.BLOB_READ_WRITE_TOKEN || process.env.NOTIF_READ_WRITE_TOKEN;
-  const storeId = process.env.BLOB_STORE_ID || process.env.NOTIF_STORE_ID;
-  const oidcToken = process.env.VERCEL_OIDC_TOKEN;
-
-  if (token) {
-    return { token };
-  }
-
-  if (storeId && oidcToken) {
-    return { storeId, oidcToken };
-  }
-
-  if (storeId) {
-    return { storeId };
-  }
-
-  return null;
+  const endpoint = process.env.R2_ENDPOINT;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_NAME;
+  return !!(endpoint && accessKeyId && secretAccessKey && bucket);
 }

@@ -1,5 +1,5 @@
-import { get } from "@vercel/blob";
 import { auth } from "@/lib/auth";
+import { getObject } from "@/lib/r2";
 import { getBlobOptions } from "@/lib/blob";
 import { prisma } from "@/lib/db";
 
@@ -31,35 +31,20 @@ export async function GET(request: Request) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const blobOptions = getBlobOptions();
-  if (!blobOptions) {
-    return new Response("Blob storage is not configured", { status: 500 });
+  if (!getBlobOptions()) {
+    return new Response("R2 storage is not configured", { status: 500 });
   }
 
-  const result = await get(pathname, {
-    ...blobOptions,
-    access: "private",
-  });
+  const result = await getObject(pathname);
 
   if (!result) {
     return new Response("Not found", { status: 404 });
   }
 
-  if (result.statusCode === 304) {
-    return new Response(null, {
-      status: 304,
-      headers: { "Cache-Control": "private, max-age=300" },
-    });
-  }
-
-  if (!result.stream) {
-    return new Response("Not found", { status: 404 });
-  }
-
   const headers = new Headers();
-  headers.set("Content-Type", result.blob.contentType);
+  headers.set("Content-Type", result.contentType);
   headers.set("Cache-Control", "private, max-age=300");
-  headers.set("ETag", result.blob.etag);
+  headers.set("ETag", result.etag);
 
   return new Response(result.stream, { headers });
 }

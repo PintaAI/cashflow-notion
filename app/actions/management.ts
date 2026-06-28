@@ -1,10 +1,10 @@
 "use server";
 
 import crypto from "crypto";
-import { put } from "@vercel/blob";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { putObject } from "@/lib/r2";
 import { getBlobOptions } from "@/lib/blob";
 import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
 import { getSession, resolveManagementId } from "@/lib/management";
@@ -215,17 +215,17 @@ export async function updateManagementImage(
   }
 
   try {
-    const blobOptions = getBlobOptions();
-    if (!blobOptions) {
-      return { status: "error", message: "Upload foto gagal. Vercel Blob belum dikonfigurasi." };
+    if (!getBlobOptions()) {
+      return { status: "error", message: "Upload foto gagal. R2 storage belum dikonfigurasi." };
     }
 
     const extension = file.type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-    const blob = await put(`managements/${targetManagementId}/${crypto.randomUUID()}.${extension}`, file, {
-      ...blobOptions,
-      access: "private",
-      contentType: file.type,
-    });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const blob = await putObject(
+      `managements/${targetManagementId}/${crypto.randomUUID()}.${extension}`,
+      buffer,
+      file.type,
+    );
 
     const management = await prisma.management.update({
       where: { id: targetManagementId },
@@ -248,7 +248,7 @@ export async function updateManagementImage(
       },
     };
   } catch {
-    return { status: "error", message: "Upload foto gagal. Pastikan Vercel Blob sudah dikonfigurasi." };
+    return { status: "error", message: "Upload foto gagal. Pastikan R2 storage sudah dikonfigurasi." };
   }
 }
 
