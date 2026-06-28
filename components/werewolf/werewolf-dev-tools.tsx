@@ -25,7 +25,7 @@ export interface WerewolfDevPatches {
   mockParticipants?: DevParticipant[];
 }
 
-const ROLES: Array<WerewolfRoleName | ""> = ["", "Werewolf", "Seer", "Villager"];
+const ROLES: Array<WerewolfRoleName | ""> = ["", "Werewolf", "Seer", "Doctor", "Jester", "Villager"];
 const MOCK_PRESETS = [
   {
     label: "4P basic",
@@ -34,6 +34,19 @@ const MOCK_PRESETS = [
       ["Sari", "Seer"],
       ["Budi", "Villager"],
       ["Citra", "Villager"],
+    ],
+  },
+  {
+    label: "8P chaos",
+    players: [
+      ["Raka", "Werewolf"],
+      ["Dewi", "Werewolf"],
+      ["Sari", "Seer"],
+      ["Budi", "Doctor"],
+      ["Citra", "Jester"],
+      ["Doni", "Villager"],
+      ["Eka", "Villager"],
+      ["Fajar", "Villager"],
     ],
   },
   {

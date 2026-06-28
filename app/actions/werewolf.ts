@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { WerewolfRoomStatus } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { DEFAULT_WEREWOLF_CONTROL_MODE } from "@/lib/werewolf/game-state";
+import { DEFAULT_WEREWOLF_CONTROL_MODE, type WerewolfRoleName } from "@/lib/werewolf/game-state";
 
 const ROOM_CODE_LENGTH = 6;
 const PARTICIPANT_COOKIE_DAYS = 14;
@@ -18,6 +18,8 @@ const DEFAULT_NIGHT_SECONDS = 60;
 const DEFAULT_DAY_SECONDS = 120;
 const DEFAULT_VOTING_SECONDS = 60;
 const DEFAULT_REVOTE_SECONDS = 30;
+const WEREWOLF_ROLES = ["Werewolf", "Seer", "Doctor", "Jester", "Villager"] as const satisfies readonly WerewolfRoleName[];
+const DEFAULT_AVAILABLE_ROLES = [...WEREWOLF_ROLES];
 
 type ActionResult<T = object> = ({ success: true } & T) | { success: false; message: string };
 
@@ -36,6 +38,17 @@ function clampInt(value: number, min: number, max: number, fallback: number) {
 
 function clampPlayerLimit(limit: number) {
   return clampInt(limit, MIN_PLAYER_LIMIT, MAX_PLAYER_LIMIT, 10);
+}
+
+function normalizeAvailableRoles(roles: string[] | undefined): WerewolfRoleName[] {
+  const selected = new Set((roles?.length ? roles : DEFAULT_AVAILABLE_ROLES).filter((role): role is WerewolfRoleName => WEREWOLF_ROLES.includes(role as WerewolfRoleName)));
+  selected.add("Werewolf");
+  selected.add("Villager");
+  return WEREWOLF_ROLES.filter((role) => selected.has(role));
+}
+
+function clampMaxWerewolves(value: number | undefined) {
+  return clampInt(value ?? 2, 1, 4, 2);
 }
 
 function roomCookieName(code: string) {
@@ -105,6 +118,8 @@ export async function createWerewolfRoom(input: {
   leaderName?: string;
   hasModerator?: boolean;
   playerLimit?: number;
+  availableRoles?: string[];
+  maxWerewolves?: number;
   nightSeconds?: number;
   daySeconds?: number;
   votingSeconds?: number;
@@ -126,6 +141,8 @@ export async function createWerewolfRoom(input: {
         leaderGuestName: session ? null : leaderName,
         leaderToken: token,
         playerLimit: clampPlayerLimit(input.playerLimit ?? 10),
+        availableRoles: normalizeAvailableRoles(input.availableRoles),
+        maxWerewolves: clampMaxWerewolves(input.maxWerewolves),
         nightSeconds: clampInt(input.nightSeconds ?? DEFAULT_NIGHT_SECONDS, 15, 300, DEFAULT_NIGHT_SECONDS),
         daySeconds: clampInt(input.daySeconds ?? DEFAULT_DAY_SECONDS, 30, 600, DEFAULT_DAY_SECONDS),
         votingSeconds: clampInt(input.votingSeconds ?? DEFAULT_VOTING_SECONDS, 15, 300, DEFAULT_VOTING_SECONDS),
@@ -221,6 +238,8 @@ export async function getWerewolfRoomState(code: string) {
       controlMode: hasModerator ? "Moderator" as const : DEFAULT_WEREWOLF_CONTROL_MODE,
       phaseNumber: 0,
     playerLimit: room.playerLimit,
+    availableRoles: normalizeAvailableRoles(room.availableRoles),
+    maxWerewolves: clampMaxWerewolves(room.maxWerewolves),
     minPlayers: MIN_PLAYERS,
     finishedReason: null,
     phaseEndsAt: null,
@@ -303,6 +322,19 @@ export async function startWerewolfGame(code: string): Promise<ActionResult> {
   }
 }
 
+export async function restartWerewolfGame(code: string): Promise<ActionResult> {
+  try {
+    const leader = await requireLeader(code);
+    const participantCount = await prisma.werewolfParticipant.count({ where: { roomId: leader.roomId, isModerator: false } });
+    if (participantCount < MIN_PLAYERS) return { success: false, message: `Butuh minimal ${MIN_PLAYERS} pemain.` };
+    await prisma.werewolfRoom.update({ where: { id: leader.roomId }, data: { status: WerewolfRoomStatus.Active } });
+    revalidatePath(`/werewolf-multiplayer/${leader.room.code}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Gagal restart game." };
+  }
+}
+
 export async function submitWerewolfKillTarget(code: string, _targetId: string): Promise<ActionResult> {
   void _targetId;
   const participant = await requireParticipant(code);
@@ -311,6 +343,13 @@ export async function submitWerewolfKillTarget(code: string, _targetId: string):
 }
 
 export async function submitSeerCheck(code: string, _targetId: string): Promise<ActionResult> {
+  void _targetId;
+  const participant = await requireParticipant(code);
+  if (!participant) return { success: false, message: "Bergabung ke room terlebih dahulu." };
+  return { success: true };
+}
+
+export async function submitDoctorProtect(code: string, _targetId: string): Promise<ActionResult> {
   void _targetId;
   const participant = await requireParticipant(code);
   if (!participant) return { success: false, message: "Bergabung ke room terlebih dahulu." };

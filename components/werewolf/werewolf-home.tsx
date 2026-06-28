@@ -5,12 +5,23 @@ import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AiGameIcon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/lib/auth-client";
 import { createWerewolfRoom, joinWerewolfRoom } from "@/app/actions/werewolf";
+
+const roleOptions = [
+  { value: "Werewolf", label: "Werewolf", description: "Musuh utama desa." },
+  { value: "Villager", label: "Villager", description: "Warga biasa tanpa aksi malam." },
+  { value: "Seer", label: "Seer", description: "Cek role pemain tiap malam." },
+  { value: "Doctor", label: "Doctor", description: "Lindungi pemain dari serangan." },
+  { value: "Jester", label: "Jester", description: "Menang kalau tervoting." },
+] as const;
+
+const requiredRoles = new Set(["Werewolf", "Villager"]);
 
 export function WerewolfHome() {
   const router = useRouter();
@@ -19,6 +30,8 @@ export function WerewolfHome() {
   const [joinCode, setJoinCode] = useState("");
   const [hasModerator, setHasModerator] = useState(true);
   const [playerLimit, setPlayerLimit] = useState(10);
+  const [availableRoles, setAvailableRoles] = useState<string[]>(roleOptions.map((role) => role.value));
+  const [maxWerewolves, setMaxWerewolves] = useState(2);
   const [nightSeconds, setNightSeconds] = useState(60);
   const [daySeconds, setDaySeconds] = useState(120);
   const [revoteSeconds, setRevoteSeconds] = useState(30);
@@ -29,13 +42,18 @@ export function WerewolfHome() {
   function createRoom() {
     setMessage("");
     startTransition(async () => {
-      const result = await createWerewolfRoom({ leaderName: name, hasModerator, playerLimit, nightSeconds, daySeconds, revoteSeconds });
+      const result = await createWerewolfRoom({ leaderName: name, hasModerator, playerLimit, availableRoles, maxWerewolves, nightSeconds, daySeconds, revoteSeconds });
       if (!result.success) {
         setMessage(result.message);
         return;
       }
       router.push(`/werewolf-multiplayer/${result.code}`);
     });
+  }
+
+  function toggleRole(role: string, checked: boolean) {
+    if (requiredRoles.has(role)) return;
+    setAvailableRoles((current) => checked ? [...current, role] : current.filter((item) => item !== role));
   }
 
   function joinRoom() {
@@ -113,6 +131,43 @@ export function WerewolfHome() {
                     className="h-8 w-16 bg-muted/50 text-center"
                   />
                   <span className="text-xs text-muted-foreground">pemain</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-md border bg-background p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-medium">Role tersedia</h3>
+                    <p className="text-xs text-muted-foreground">Werewolf dan Villager wajib ada. Role lain bisa dimatikan.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Max werewolf</span>
+                    <Select value={String(maxWerewolves)} onValueChange={(value) => setMaxWerewolves(Number(value))}>
+                      <SelectTrigger className="h-8 w-20 bg-muted/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1</SelectItem>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="4">4</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {roleOptions.map((role) => {
+                    const required = requiredRoles.has(role.value);
+                    return (
+                      <label key={role.value} className="flex items-start gap-3 rounded-md border bg-muted/30 p-3">
+                        <Checkbox checked={availableRoles.includes(role.value)} disabled={required} onCheckedChange={(checked) => toggleRole(role.value, checked === true)} className="mt-0.5" />
+                        <span className="space-y-0.5">
+                          <span className="block text-sm font-semibold">{role.label}</span>
+                          <span className="block text-xs text-muted-foreground">{required ? "Wajib dipakai. " : ""}{role.description}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

@@ -34,6 +34,7 @@ import {
   DEFAULT_WEREWOLF_CONTROL_MODE,
   getWerewolfRoomView,
   maybeAdvanceExpiredWerewolfGame,
+  submitWerewolfGameDoctorProtect,
   submitWerewolfGameKill,
   submitWerewolfGameSeerCheck,
   submitWerewolfGameVote,
@@ -45,7 +46,9 @@ import {
   getWerewolfRoomState,
   joinWerewolfRoom,
   resolveWerewolfVoting,
+  restartWerewolfGame,
   startWerewolfGame,
+  submitDoctorProtect,
   submitSeerCheck,
   submitWerewolfKillTarget,
   submitWerewolfVote,
@@ -65,6 +68,8 @@ const ACTIVE_POLL_MS = 2500;
 const roleCopy: Record<string, { title: string; hint: string }> = {
   Werewolf: { title: "Werewolf", hint: "Kenali sesama werewolf pada Malam 1. Kill baru dimulai pada Malam 2." },
   Seer: { title: "Seer", hint: "Periksa satu pemain tiap malam untuk mengetahui rolenya. Jangan ketahuan." },
+  Doctor: { title: "Doctor", hint: "Lindungi satu pemain tiap malam agar selamat dari serangan werewolf." },
+  Jester: { title: "Jester", hint: "Buat desa memvoting kamu. Kalau kamu tervoting, kamu menang sendiri." },
   Villager: { title: "Warga", hint: "Cari werewolf dari diskusi dan pola voting." },
 };
 
@@ -411,7 +416,7 @@ export function WerewolfRoom({ code }: { code: string }) {
   }, [state?.status]);
 
   useEffect(() => {
-    if (!realtime.enabled || hasDevPatches || !rawState || !state?.isLeader || !gameState?.phaseEndsAt) return;
+    if (hasDevPatches || !rawState || !state?.isLeader || !gameState?.phaseEndsAt) return;
     if ((gameState.controlMode ?? DEFAULT_WEREWOLF_CONTROL_MODE) === "Moderator") return;
     if (gameState.status === "Lobby" || gameState.status === "Finished") return;
     const delay = Math.max(0, new Date(gameState.phaseEndsAt).getTime() - Date.now()) + 300;
@@ -422,7 +427,7 @@ export function WerewolfRoom({ code }: { code: string }) {
     return () => window.clearTimeout(timer);
     // updateGameState reads the latest store snapshot; depending on its identity would reschedule every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.controlMode, gameState?.phaseEndsAt, gameState?.status, hasDevPatches, rawState, realtime.enabled, state?.isLeader]);
+  }, [gameState?.controlMode, gameState?.phaseEndsAt, gameState?.status, hasDevPatches, rawState, state?.isLeader]);
 
   useEffect(() => {
     if (!hasDevPatches || !state?.phaseEndsAt) return;
@@ -494,7 +499,7 @@ export function WerewolfRoom({ code }: { code: string }) {
       ...game,
       participants: game.participants.map((participant) => {
         const role = roleOverrides.get(participant.id);
-        return role === "Werewolf" || role === "Seer" || role === "Villager" ? { ...participant, role } : participant;
+        return role === "Werewolf" || role === "Seer" || role === "Doctor" || role === "Jester" || role === "Villager" ? { ...participant, role } : participant;
       }),
       updatedAt: Date.now(),
     } satisfies WerewolfGameState;
@@ -504,6 +509,16 @@ export function WerewolfRoom({ code }: { code: string }) {
     realtime.publishGameState(nextGame);
     realtime.publish("start_game");
     return nextGame;
+  }
+
+  function startGame() {
+    if (hasDevPatches && startDevGame()) return;
+    runAction("start_game", () => startWerewolfGame(code), () => (rawState ? updateGameState(() => createWerewolfGame(rawState)) : null));
+  }
+
+  function restartGame() {
+    if (hasDevPatches && startDevGame()) return;
+    runAction("restart_game", () => restartWerewolfGame(code), () => (rawState ? updateGameState(() => createWerewolfGame(rawState)) : null));
   }
 
   function devResolveCurrentPhase() {
@@ -555,30 +570,36 @@ export function WerewolfRoom({ code }: { code: string }) {
   const fellowWerewolfIds = new Set((state.fellowWerewolves ?? []).map((w) => w.id));
   const killTargets = state.myRole === "Werewolf" && !isOpeningNight ? aliveParticipants.filter((p) => p.id !== state.me?.id && !fellowWerewolfIds.has(p.id)) : [];
   const seerTargets = state.myRole === "Seer" ? aliveParticipants.filter((p) => p.id !== state.me?.id) : [];
+  const protectTargets = state.myRole === "Doctor" ? aliveParticipants : [];
   const voteTargets = state.status === "Day" || state.status === "Voting" ? aliveParticipants : [];
   const revoteCandidateIds = state.revoteCandidateIds ?? [];
   const revoteTargets = state.status === "Revote" ? aliveParticipants.filter((p) => revoteCandidateIds.includes(p.id)) : [];
   const currentSeerCheck = state.mySeerChecks?.find((c) => c.phaseNumber === state.phaseNumber);
   const secondsLeft = state.phaseEndsAt ? Math.max(0, Math.ceil((new Date(state.phaseEndsAt).getTime() - now) / 1000)) : 0;
   const realtimeLabel = realtime.status === "connected" ? "Live" : realtime.status === "error" ? "Offline" : realtime.status === "disabled" ? "Polling" : "Connect";
+  const canEditSetup = state.isLeader && state.status === "Lobby" && rawState?.status === "Lobby";
   const actionTargetIds = new Set(
     state.status === "Night" && state.myRole === "Werewolf" && !isOpeningNight
       ? killTargets.map((p) => p.id)
       : state.status === "Night" && state.myRole === "Seer" && !currentSeerCheck
         ? seerTargets.map((p) => p.id)
-        : (state.status === "Day" || state.status === "Voting") && state.me?.isAlive && !state.me.isModerator
-          ? voteTargets.map((p) => p.id)
-          : state.status === "Revote" && state.me?.isAlive && !state.me.isModerator
-            ? revoteTargets.map((p) => p.id)
-            : [],
+        : state.status === "Night" && state.myRole === "Doctor"
+          ? protectTargets.map((p) => p.id)
+          : (state.status === "Day" || state.status === "Voting") && state.me?.isAlive && !state.me.isModerator
+            ? voteTargets.map((p) => p.id)
+            : state.status === "Revote" && state.me?.isAlive && !state.me.isModerator
+              ? revoteTargets.map((p) => p.id)
+              : [],
   );
   const selectedPlayerId = state.status === "Night" && state.myRole === "Werewolf"
     ? state.myKillTargetId
     : state.status === "Night" && state.myRole === "Seer"
       ? state.mySeerCheckTargetId
-      : state.status === "Day" || state.status === "Voting" || state.status === "Revote"
-        ? state.myVoteTargetId
-        : null;
+      : state.status === "Night" && state.myRole === "Doctor"
+        ? state.myProtectTargetId
+        : state.status === "Day" || state.status === "Voting" || state.status === "Revote"
+          ? state.myVoteTargetId
+          : null;
   const seerRevealedRoles = new Map((state.mySeerChecks ?? []).map((check) => [check.targetName, check.inspectedRole]));
   const visiblePlayers = state.participants.map((participant) => ({
     ...participant,
@@ -672,6 +693,16 @@ export function WerewolfRoom({ code }: { code: string }) {
       runAction("seer_check", () => submitSeerCheck(code, player.id), () => state.me ? mutateGame((game) => submitWerewolfGameSeerCheck(game, state.me!.id, player.id)) : null);
       return;
     }
+    if (state.status === "Night" && state.myRole === "Doctor") {
+      if (hasDevPatches && state.me?.id) {
+        const nextGame = mutateGame((game) => submitWerewolfGameDoctorProtect(game, state.me!.id, player.id));
+        publishGame(nextGame);
+        realtime.publish("doctor_protect");
+        return;
+      }
+      runAction("doctor_protect", () => submitDoctorProtect(code, player.id), () => state.me ? mutateGame((game) => submitWerewolfGameDoctorProtect(game, state.me!.id, player.id)) : null);
+      return;
+    }
     if (state.status === "Day" || state.status === "Voting" || state.status === "Revote") {
       if (hasDevPatches && state.me?.id) {
         const nextGame = mutateGame((game, room) => {
@@ -745,12 +776,12 @@ export function WerewolfRoom({ code }: { code: string }) {
                           </h2>
                           <span className="text-xs text-muted-foreground">{state.status}</span>
                         </div>
-                        {state.isLeader && state.status === "Lobby" && !isModeratorMode ? (
+                        {canEditSetup && !isModeratorMode ? (
                           <div className="grid gap-2 sm:grid-cols-2">
                             <label className="space-y-1.5 text-xs text-muted-foreground">Malam<Input type="number" min={15} max={300} value={nightInput} onChange={(e) => setNightInput(Number(e.target.value))} className="h-9 bg-background" /></label>
                             <label className="space-y-1.5 text-xs text-muted-foreground">Siang<Input type="number" min={30} max={600} value={dayInput} onChange={(e) => setDayInput(Number(e.target.value))} className="h-9 bg-background" /></label>
                             <label className="space-y-1.5 text-xs text-muted-foreground">Revote<Input type="number" min={10} max={120} value={revoteInput} onChange={(e) => setRevoteInput(Number(e.target.value))} className="h-9 bg-background" /></label>
-                            <Button variant="outline" onClick={() => runAction("update_timers", () => updateWerewolfTimers(code, { nightSeconds: nightInput, daySeconds: dayInput, revoteSeconds: revoteInput }))} disabled={isPending} className="h-9 sm:col-span-2">Simpan timer</Button>
+                            <Button variant="outline" onClick={() => { if (!canEditSetup) return; runAction("update_timers", () => updateWerewolfTimers(code, { nightSeconds: nightInput, daySeconds: dayInput, revoteSeconds: revoteInput })); }} disabled={isPending || !canEditSetup} className="h-9 sm:col-span-2">Simpan timer</Button>
                           </div>
                         ) : (
                           <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">{isModeratorMode ? "Room moderator memakai kontrol fase manual tanpa timer." : "Timer hanya bisa diganti host room sebelum game dimulai."}</p>
@@ -803,10 +834,10 @@ export function WerewolfRoom({ code }: { code: string }) {
                           </h2>
                           <span className="text-xs text-muted-foreground">{playerCount}/{state.playerLimit} pemain</span>
                         </div>
-                        {state.isLeader && state.status === "Lobby" ? (
+                        {canEditSetup ? (
                           <div className="flex gap-2">
                             <Input type="number" min={4} max={16} value={playerLimitInput} onChange={(event) => setPlayerLimitInput(Number(event.target.value))} className="h-9 min-w-0 flex-1" />
-                            <Button variant="outline" onClick={() => runAction("update_player_limit", () => updateWerewolfPlayerLimit(code, playerLimitInput))} disabled={isPending} className="h-9">Simpan limit</Button>
+                            <Button variant="outline" onClick={() => { if (!canEditSetup) return; runAction("update_player_limit", () => updateWerewolfPlayerLimit(code, playerLimitInput)); }} disabled={isPending || !canEditSetup} className="h-9">Simpan limit</Button>
                           </div>
                         ) : null}
                         <div className="space-y-1.5">
@@ -900,14 +931,14 @@ export function WerewolfRoom({ code }: { code: string }) {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     {playerCount < state.minPlayers ? <p className="text-xs text-muted-foreground">Butuh {state.minPlayers - playerCount} pemain lagi untuk mulai.</p> : <p className="text-xs text-muted-foreground">Semua siap. Host room bisa mulai kapan saja.</p>}
                     {state.isLeader && (
-                      <Button onClick={() => { if (hasDevPatches && startDevGame()) return; runAction("start_game", () => startWerewolfGame(code), () => (rawState ? updateGameState(() => createWerewolfGame(rawState)) : null)); }} disabled={isPending || playerCount < state.minPlayers} className="hidden h-9 sm:inline-flex">
+                      <Button onClick={startGame} disabled={isPending || playerCount < state.minPlayers} className="hidden h-9 sm:inline-flex">
                         Mulai Game
                       </Button>
                     )}
                   </div>
                   {phasePlayerList}
                   {state.isLeader && (
-                    <Button onClick={() => { if (hasDevPatches && startDevGame()) return; runAction("start_game", () => startWerewolfGame(code), () => (rawState ? updateGameState(() => createWerewolfGame(rawState)) : null)); }} disabled={isPending || playerCount < state.minPlayers} className="mt-3 inline-flex h-9 w-full sm:hidden">
+                    <Button onClick={startGame} disabled={isPending || playerCount < state.minPlayers} className="mt-3 inline-flex h-9 w-full sm:hidden">
                       Mulai Game
                     </Button>
                   )}
@@ -957,6 +988,20 @@ export function WerewolfRoom({ code }: { code: string }) {
                             <p className="mt-2 text-xs text-muted-foreground">Belum ada penerawangan.</p>
                           )}
                         </div>
+                        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                          <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Doctor</p>
+                          {state.moderatorProtectActions.length > 0 ? (
+                            <div className="mt-2 space-y-1 text-xs">
+                              {state.moderatorProtectActions.map((action, index) => (
+                                <p key={`${action.actorName}-${action.targetName}-${index}`}>
+                                  <span className="font-semibold">{action.actorName}</span> melindungi <span className="font-semibold">{action.targetName}</span>
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-muted-foreground">Belum ada perlindungan.</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -989,6 +1034,18 @@ export function WerewolfRoom({ code }: { code: string }) {
                         {currentSeerCheck && <p className="mt-3 text-xs text-muted-foreground">Kamu memeriksa: <span className="font-semibold text-primary">{currentSeerCheck.targetName} ({roleLabel(currentSeerCheck.inspectedRole)})</span>. Pemeriksaan malam ini sudah digunakan.</p>}
                       </div>
 
+                    </div>
+                  ) : state.myRole === "Doctor" ? (
+                    <div className="space-y-3">
+                      <div className="overflow-hidden rounded-md border border-emerald-500/30 bg-card p-5 text-center text-card-foreground shadow-lg">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground">Jaga Malam</p>
+                        <p className="mt-3 text-lg font-black leading-snug tracking-tight sm:text-2xl">pilih siapa yang mau kamu lindungi malam ini</p>
+                        {state.myProtectTargetId && (
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            Dilindungi: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{aliveParticipants.find((p) => p.id === state.myProtectTargetId)?.name}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <p className="rounded-md bg-background/60 p-3 text-sm text-muted-foreground">Malam hari, tunggu sampai pagi.</p>
@@ -1042,11 +1099,16 @@ export function WerewolfRoom({ code }: { code: string }) {
                 <PhasePanel>
                   {(() => {
                     const isWerewolfWin = state.finishedReason?.startsWith("Werewolf") ?? false;
+                    const isJesterWin = state.finishedReason?.startsWith("Jester") ?? false;
                     const winPlayers = state.participants.filter(
-                      (p) => isWerewolfWin ? p.role === "Werewolf" : p.role === "Villager" || p.role === "Seer",
+                      (p) => isJesterWin
+                        ? p.role === "Jester" && p.name === state.lastEliminatedName
+                        : isWerewolfWin
+                          ? p.role === "Werewolf"
+                          : p.role === "Villager" || p.role === "Seer" || p.role === "Doctor",
                     );
-                    const emoji = isWerewolfWin ? "🐺" : "🌾";
-                    const teamLabel = isWerewolfWin ? "Werewolf" : "Warga Desa";
+                    const emoji = isJesterWin ? "🃏" : isWerewolfWin ? "🐺" : "🌾";
+                    const teamLabel = isJesterWin ? "Jester" : isWerewolfWin ? "Werewolf" : "Warga Desa";
                     return (
                       <div className={`overflow-hidden rounded-md border p-6 text-center text-card-foreground shadow-lg ${isWerewolfWin ? "border-destructive/30 bg-card" : "border-secondary/30 bg-card"}`}>
                         <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground">Game Selesai</p>
@@ -1061,6 +1123,11 @@ export function WerewolfRoom({ code }: { code: string }) {
                           ))}
                         </div>
                         <p className="mt-4 text-[11px] text-muted-foreground">{teamLabel} ({winPlayers.length} pemain)</p>
+                        {state.isLeader && (
+                          <Button onClick={restartGame} disabled={isPending || playerCount < state.minPlayers} className="mt-5 h-9">
+                            Restart Game
+                          </Button>
+                        )}
                       </div>
                     );
                   })()}

@@ -1,4 +1,4 @@
-export type WerewolfRoleName = "Werewolf" | "Seer" | "Villager";
+export type WerewolfRoleName = "Werewolf" | "Seer" | "Doctor" | "Jester" | "Villager";
 export type WerewolfPhase = "Lobby" | "Night" | "Day" | "Voting" | "Revote" | "Finished";
 export type WerewolfControlMode = "Auto" | "Moderator";
 export type WerewolfEliminationSource = "Werewolf" | "Vote";
@@ -38,6 +38,7 @@ export type WerewolfGameState = {
   participants: WerewolfGameParticipant[];
   nightActions: Record<string, string>;
   seerChecks: WerewolfSeerCheckRecord[];
+  doctorActions: Record<string, string>;
   votes: Record<string, string>;
   updatedAt: number;
 };
@@ -45,6 +46,8 @@ export type WerewolfGameState = {
 export type WerewolfRoomMeta = {
   code: string;
   playerLimit: number;
+  availableRoles: WerewolfRoleName[];
+  maxWerewolves: number;
   minPlayers: number;
   nightSeconds: number;
   daySeconds: number;
@@ -69,6 +72,7 @@ export type WerewolfRoomView = Omit<WerewolfRoomMeta, "participants"> & {
   mySeerChecks: Array<{ phaseNumber: number; targetName: string; inspectedRole: WerewolfRoleName }> | null;
   myKillTargetId: string | null;
   mySeerCheckTargetId: string | null;
+  myProtectTargetId: string | null;
   myVoteTargetId: string | null;
   lastEliminatedName: string | null;
   lastEliminatedRole: WerewolfRoleName | null;
@@ -81,6 +85,7 @@ export type WerewolfRoomView = Omit<WerewolfRoomMeta, "participants"> & {
   totalAliveVoters: number;
   moderatorKillActions: Array<{ actorName: string; targetName: string }>;
   moderatorSeerActions: Array<{ actorName: string; targetName: string; inspectedRole: WerewolfRoleName }>;
+  moderatorProtectActions: Array<{ actorName: string; targetName: string }>;
   participants: Array<WerewolfParticipantMeta & { isAlive: boolean; role: WerewolfRoleName | null; voteCount: number; hasVoted: boolean }>;
 };
 
@@ -93,12 +98,18 @@ function shuffle<T>(items: T[]) {
   return next;
 }
 
-function roleDeck(playerCount: number): WerewolfRoleName[] {
-  const werewolfCount = playerCount >= 8 ? 2 : 1;
+function roleDeck(playerCount: number, availableRoles: WerewolfRoleName[], maxWerewolves: number): WerewolfRoleName[] {
+  const roleSet = new Set(availableRoles);
+  const werewolfCount = Math.max(1, Math.min(maxWerewolves, Math.floor(playerCount / 4), playerCount - 1));
+  const specialRoles: WerewolfRoleName[] = ["Seer"];
+  if (!roleSet.has("Seer")) specialRoles.pop();
+  if (playerCount >= 5 && roleSet.has("Doctor")) specialRoles.push("Doctor");
+  if (playerCount >= 7 && roleSet.has("Jester")) specialRoles.push("Jester");
+  const villagerCount = Math.max(0, playerCount - werewolfCount - specialRoles.length);
   return shuffle([
     ...Array.from({ length: werewolfCount }, () => "Werewolf" as const),
-    "Seer" as const,
-    ...Array.from({ length: playerCount - werewolfCount - 1 }, () => "Villager" as const),
+    ...specialRoles,
+    ...Array.from({ length: villagerCount }, () => "Villager" as const),
   ]);
 }
 
@@ -109,7 +120,7 @@ function phaseEndsAt(seconds: number) {
 function winReason(participants: Pick<WerewolfGameParticipant, "role" | "isAlive">[]) {
   const alive = participants.filter((participant) => participant.isAlive);
   const werewolves = alive.filter((participant) => participant.role === "Werewolf").length;
-  const villagers = alive.length - werewolves;
+  const villagers = alive.filter((participant) => participant.role !== "Werewolf" && participant.role !== "Jester").length;
   if (werewolves === 0) return "Warga menang. Semua werewolf sudah tersingkir.";
   if (werewolves >= villagers) return "Werewolf menang. Jumlah mereka sudah menguasai desa.";
   return null;
@@ -117,7 +128,7 @@ function winReason(participants: Pick<WerewolfGameParticipant, "role" | "isAlive
 
 export function createWerewolfGame(meta: WerewolfRoomMeta): WerewolfGameState {
   const players = meta.participants.filter((participant) => !participant.isModerator);
-  const roles = roleDeck(players.length);
+  const roles = roleDeck(players.length, meta.availableRoles, meta.maxWerewolves);
   const controlMode = meta.controlMode ?? DEFAULT_WEREWOLF_CONTROL_MODE;
   return {
     status: "Night",
@@ -140,6 +151,7 @@ export function createWerewolfGame(meta: WerewolfRoomMeta): WerewolfGameState {
     })),
     nightActions: {},
     seerChecks: [],
+    doctorActions: {},
     votes: {},
     updatedAt: Date.now(),
   };
@@ -176,6 +188,10 @@ export function submitWerewolfGameSeerCheck(game: WerewolfGameState, actorId: st
   };
 }
 
+export function submitWerewolfGameDoctorProtect(game: WerewolfGameState, actorId: string, targetId: string): WerewolfGameState {
+  return { ...game, doctorActions: { ...(game.doctorActions ?? {}), [actorId]: targetId }, updatedAt: Date.now() };
+}
+
 export function submitWerewolfGameVote(game: WerewolfGameState, voterId: string, targetId: string): WerewolfGameState {
   return { ...game, votes: { ...game.votes, [voterId]: targetId }, updatedAt: Date.now() };
 }
@@ -191,7 +207,13 @@ export function resolveWerewolfNight(game: WerewolfGameState, daySeconds: number
   }
   const topCount = tally.size ? Math.max(...tally.values()) : 0;
   const topTargets = [...tally.entries()].filter(([, count]) => count === topCount).map(([id]) => id);
-  const eliminatedId = topTargets[0] ?? null;
+  const protectedIds = new Set(
+    Object.entries(game.doctorActions ?? {})
+      .filter(([actorId]) => game.participants.some((p) => p.id === actorId && p.isAlive && p.role === "Doctor"))
+      .map(([, targetId]) => targetId),
+  );
+  const targetId = topTargets[0] ?? null;
+  const eliminatedId = targetId && !protectedIds.has(targetId) ? targetId : null;
   const participants = game.participants.map((participant) =>
     participant.id === eliminatedId ? { ...participant, isAlive: false } : participant,
   );
@@ -205,6 +227,7 @@ export function resolveWerewolfNight(game: WerewolfGameState, daySeconds: number
     finishedReason,
     participants,
     nightActions: {},
+    doctorActions: {},
     currentVoteRound: 1,
     revoteCandidateIds: null,
     votes: {},
@@ -233,13 +256,13 @@ export function resolveWerewolfVotes(game: WerewolfGameState, nightSeconds: numb
     };
   }
 
-  const requiredVotes = Math.ceil(aliveIds.size / 2);
-  const canEliminate = topCount >= requiredVotes && topTargets.length > 0;
+  const canEliminate = topCount > 0 && topTargets.length === 1;
   const eliminatedId = canEliminate ? topTargets[0] : null;
+  const eliminatedRole = eliminatedId ? game.participants.find((participant) => participant.id === eliminatedId)?.role ?? null : null;
   const participants = game.participants.map((participant) =>
     participant.id === eliminatedId ? { ...participant, isAlive: false } : participant,
   );
-  const finishedReason = winReason(participants);
+  const finishedReason = eliminatedRole === "Jester" ? "Jester menang. Dia berhasil membuat desa memvoting dirinya." : winReason(participants);
   return {
     ...game,
     status: finishedReason ? "Finished" : "Night",
@@ -285,6 +308,7 @@ export function getWerewolfRoomView(meta: WerewolfRoomMeta, game: WerewolfGameSt
       mySeerChecks: null,
       myKillTargetId: null,
       mySeerCheckTargetId: null,
+      myProtectTargetId: null,
       myVoteTargetId: null,
       lastEliminatedName: null,
       lastEliminatedRole: null,
@@ -297,6 +321,7 @@ export function getWerewolfRoomView(meta: WerewolfRoomMeta, game: WerewolfGameSt
       totalAliveVoters: players.length,
       moderatorKillActions: [],
       moderatorSeerActions: [],
+      moderatorProtectActions: [],
     };
   }
 
@@ -328,6 +353,13 @@ export function getWerewolfRoomView(meta: WerewolfRoomMeta, game: WerewolfGameSt
           return actor && target ? [{ actorName: actor.name, targetName: target.name, inspectedRole: check.inspectedRole }] : [];
         })
     : [];
+  const moderatorProtectActions = meta.me?.isModerator
+    ? Object.entries(game.doctorActions ?? {}).flatMap(([actorId, targetId]) => {
+        const actor = game.participants.find((p) => p.id === actorId);
+        const target = game.participants.find((p) => p.id === targetId);
+        return actor && target ? [{ actorName: actor.name, targetName: target.name }] : [];
+      })
+    : [];
 
   return {
     ...meta,
@@ -358,6 +390,7 @@ export function getWerewolfRoomView(meta: WerewolfRoomMeta, game: WerewolfGameSt
       !meta.me?.isModerator && myRole === "Seer" && game.status === "Night" && meId
         ? game.seerChecks.find((check) => check.actorId === meId && check.phaseNumber === game.phaseNumber)?.targetId ?? null
         : null,
+    myProtectTargetId: !meta.me?.isModerator && myRole === "Doctor" && game.status === "Night" && meId ? (game.doctorActions ?? {})[meId] ?? null : null,
     myVoteTargetId: !meta.me?.isModerator && (game.status === "Day" || game.status === "Voting" || game.status === "Revote") && meId ? game.votes[meId] ?? null : null,
     lastEliminatedName: showEliminationSummary ? lastEliminated?.name ?? null : null,
     lastEliminatedRole: showEliminatedRole ? lastEliminated?.role ?? null : null,
@@ -367,12 +400,14 @@ export function getWerewolfRoomView(meta: WerewolfRoomMeta, game: WerewolfGameSt
     nightActionSubmitted:
       game.status === "Night" &&
       (game.phaseNumber === 1 || game.participants.filter((p) => p.isAlive && p.role === "Werewolf").every((p) => Boolean(game.nightActions[p.id]))) &&
-      !game.participants.some((p) => p.isAlive && p.role === "Seer" && !game.seerChecks.some((check) => check.actorId === p.id && check.phaseNumber === game.phaseNumber)),
+      !game.participants.some((p) => p.isAlive && p.role === "Seer" && !game.seerChecks.some((check) => check.actorId === p.id && check.phaseNumber === game.phaseNumber)) &&
+      !game.participants.some((p) => p.isAlive && p.role === "Doctor" && !(game.doctorActions ?? {})[p.id]),
     revoteCandidateIds: game.revoteCandidateIds,
     votedCount: Object.keys(game.votes).filter((voterId) => game.participants.some((p) => p.id === voterId && p.isAlive)).length,
     totalAliveVoters: aliveParticipants.length,
     moderatorKillActions,
     moderatorSeerActions,
+    moderatorProtectActions,
     participants: [
       ...moderatorMetas.map((participant) => ({
         ...participant,

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 
-type WerewolfRole = "Werewolf" | "Seer" | "Villager";
+type WerewolfRole = "Werewolf" | "Seer" | "Doctor" | "Jester" | "Villager";
 
 interface RoleInfo {
   title: string;
@@ -40,6 +40,24 @@ const ROLE_INFO: Record<WerewolfRole, RoleInfo> = {
     front: "bg-gradient-to-br from-indigo-500/15 via-indigo-500/5 to-transparent border-indigo-500/30",
     back: "bg-gradient-to-br from-indigo-500/20 via-indigo-500/10 to-transparent border-indigo-500/40",
     accent: "text-indigo-600 dark:text-indigo-400",
+  },
+  Doctor: {
+    title: "Doctor",
+    emoji: "🩺",
+    description:
+      "Setiap malam, pilih satu pemain untuk dilindungi. Kalau werewolf menyerang pemain itu, serangan gagal dan tidak ada korban malam.",
+    front: "bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent border-emerald-500/30",
+    back: "bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-transparent border-emerald-500/40",
+    accent: "text-emerald-600 dark:text-emerald-400",
+  },
+  Jester: {
+    title: "Jester",
+    emoji: "🃏",
+    description:
+      "Kamu menang sendiri kalau desa memvoting kamu keluar. Berpura-puralah mencurigakan, tapi jangan sampai dibunuh werewolf duluan.",
+    front: "bg-gradient-to-br from-fuchsia-500/15 via-fuchsia-500/5 to-transparent border-fuchsia-500/30",
+    back: "bg-gradient-to-br from-fuchsia-500/20 via-fuchsia-500/10 to-transparent border-fuchsia-500/40",
+    accent: "text-fuchsia-600 dark:text-fuchsia-400",
   },
   Villager: {
     title: "Warga",

@@ -193,6 +193,8 @@ model WerewolfRoom {
   leaderGuestName String?
   leaderToken     String
   playerLimit     Int                @default(10)
+  availableRoles  String[]           @default(["Werewolf", "Seer", "Doctor", "Jester", "Villager"])
+  maxWerewolves   Int                @default(2)
   nightSeconds    Int                @default(60)
   daySeconds      Int                @default(120)
   votingSeconds   Int                @default(60)
