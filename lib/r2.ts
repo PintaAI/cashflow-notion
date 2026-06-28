@@ -51,6 +51,23 @@ export interface GetResult {
   etag: string;
 }
 
+type R2Body = {
+  transformToWebStream?: () => ReadableStream;
+} | ReadableStream | import("stream").Readable;
+
+async function toWebStream(body: R2Body): Promise<ReadableStream> {
+  if ("transformToWebStream" in body && typeof body.transformToWebStream === "function") {
+    return body.transformToWebStream();
+  }
+
+  if (body instanceof ReadableStream) {
+    return body;
+  }
+
+  const { Readable } = await import("node:stream");
+  return Readable.toWeb(body) as ReadableStream;
+}
+
 export async function getObject(key: string): Promise<GetResult | null> {
   const r2 = getR2Client();
   if (!r2) throw new Error("R2 storage is not configured");
@@ -62,8 +79,7 @@ export async function getObject(key: string): Promise<GetResult | null> {
 
     if (!result.Body) return null;
 
-    const { Readable } = await import("node:stream");
-    const stream = Readable.toWeb(result.Body as import("stream").Readable) as ReadableStream;
+    const stream = await toWebStream(result.Body as R2Body);
 
     return {
       stream,

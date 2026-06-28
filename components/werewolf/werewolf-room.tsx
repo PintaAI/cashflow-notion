@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef, useTransition } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import QRCode from "qrcode";
 import Link from "next/link";
 import { useShallow } from "zustand/react/shallow";
 import confetti from "canvas-confetti";
@@ -8,6 +9,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AiGameIcon,
   ArrowLeft01Icon,
+  BarcodeScanIcon,
   Clock01Icon,
   CogIcon,
   CopyLinkIcon,
@@ -115,7 +117,7 @@ function roleLabel(role: string | null) {
 
 function phaseTitle(status: string, phaseNumber: number) {
   const dayNumber = Math.max(1, phaseNumber);
-  if (status === "Lobby") return "Kumpulkan desa dulu.";
+  if (status === "Lobby") return "Kumpulkan Warga Desa";
   if (status === "Night") return `Malam ke-${dayNumber}`;
   if (status === "Day") return `Siang hari ke-${dayNumber}`;
   if (status === "Revote") return `Revote hari ke-${dayNumber}`;
@@ -321,6 +323,10 @@ export function WerewolfRoom({ code }: { code: string }) {
   const { data: session, isPending: sessionPending } = useSession();
   const isGuest = !sessionPending && !session;
   const shareUrl = useMemo(() => (typeof window === "undefined" ? "" : `${window.location.origin}/werewolf-multiplayer/${code}`), [code]);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  useEffect(() => {
+    if (shareUrl) QRCode.toDataURL(shareUrl, { width: 224, margin: 1 }).then(setQrDataUrl);
+  }, [shareUrl]);
   const realtime = useWerewolfRealtime(
     code,
     () => {
@@ -843,11 +849,34 @@ export function WerewolfRoom({ code }: { code: string }) {
                   {phaseCopy[state.status]}
                 </p>
               </div>
-              {secondsLeft > 0 && (
-                <div className="rounded-full border border-border bg-background px-3 py-2 text-sm font-black tabular-nums shadow-sm sm:text-base">
-                  {formatTime(secondsLeft)}
-                </div>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {state.status === "Lobby" && qrDataUrl && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button type="button" className="flex flex-col items-center gap-0.5" aria-label="Tampilkan QR Code undangan">
+                        <span className="flex size-10 items-center justify-center rounded-md border bg-background hover:bg-muted transition-colors">
+                          <HugeiconsIcon icon={BarcodeScanIcon} strokeWidth={2} className="size-5" />
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">Invite</span>
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-xs sm:max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>Scan untuk gabung</DialogTitle>
+                        <DialogDescription>Buka kamera dan scan QR code ini untuk masuk room Werewolf.</DialogDescription>
+                      </DialogHeader>
+                      <div className="flex flex-col items-center py-4">
+                        <img src={qrDataUrl} alt="QR Code undangan" className="size-56" />
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+                {secondsLeft > 0 && (
+                  <div className="rounded-full border border-border bg-background px-3 py-2 text-sm font-black tabular-nums shadow-sm sm:text-base">
+                    {formatTime(secondsLeft)}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
