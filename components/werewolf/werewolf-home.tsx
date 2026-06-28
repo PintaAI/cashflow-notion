@@ -30,7 +30,7 @@ export function WerewolfHome() {
   const [joinCode, setJoinCode] = useState("");
   const [hasModerator, setHasModerator] = useState(true);
   const [playerLimit, setPlayerLimit] = useState(10);
-  const [availableRoles, setAvailableRoles] = useState<string[]>(roleOptions.map((role) => role.value));
+  const [availableRoles, setAvailableRoles] = useState<string[]>(["Werewolf", "Villager"]);
   const [maxWerewolves, setMaxWerewolves] = useState(2);
   const [nightSeconds, setNightSeconds] = useState(60);
   const [daySeconds, setDaySeconds] = useState(120);

@@ -19,7 +19,7 @@ const DEFAULT_DAY_SECONDS = 120;
 const DEFAULT_VOTING_SECONDS = 60;
 const DEFAULT_REVOTE_SECONDS = 30;
 const WEREWOLF_ROLES = ["Werewolf", "Seer", "Doctor", "Jester", "Villager"] as const satisfies readonly WerewolfRoleName[];
-const DEFAULT_AVAILABLE_ROLES = [...WEREWOLF_ROLES];
+const DEFAULT_AVAILABLE_ROLES: WerewolfRoleName[] = ["Werewolf", "Villager"];
 
 type ActionResult<T = object> = ({ success: true } & T) | { success: false; message: string };
 
