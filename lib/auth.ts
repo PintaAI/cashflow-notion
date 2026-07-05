@@ -10,11 +10,27 @@ function generateApiKey(): string {
   return "mcp_" + crypto.randomBytes(32).toString("hex");
 }
 
+const socialProviders = {
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  },
+  ...(process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET
+    ? {
+        apple: {
+          clientId: process.env.APPLE_CLIENT_ID,
+          clientSecret: process.env.APPLE_CLIENT_SECRET,
+        },
+      }
+    : {}),
+};
+
 export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_URL ?? "https://cashflow-notion.vercel.app",
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
-  trustedOrigins: ["https://jennie-linux.tail2268a1.ts.net", "ethos://", "ethos://*"],
+  trustedOrigins: ["https://cashflow-notion.vercel.app", "https://jennie-linux.tail2268a1.ts.net", "ethos://", "ethos://*"],
   emailAndPassword: {
     enabled: true,
   },
@@ -25,16 +41,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [expo(), nextCookies()],
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
-    apple: {
-      clientId: process.env.APPLE_CLIENT_ID!,
-      clientSecret: process.env.APPLE_CLIENT_SECRET!,
-    },
-  },
+  socialProviders,
   schema: {
     user: {
       additionalFields: {
