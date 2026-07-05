@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth/minimal";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { expo } from "@better-auth/expo";
 import { nextCookies } from "better-auth/next-js";
 import crypto from "crypto";
 import { prisma } from "@/lib/db";
@@ -13,7 +14,7 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
-  trustedOrigins: ["https://jennie-linux.tail2268a1.ts.net"],
+  trustedOrigins: ["https://jennie-linux.tail2268a1.ts.net", "ethos://", "ethos://*"],
   emailAndPassword: {
     enabled: true,
   },
@@ -23,11 +24,15 @@ export const auth = betterAuth({
       requireLocalEmailVerified: false,
     },
   },
-  plugins: [nextCookies()],
+  plugins: [expo(), nextCookies()],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+    apple: {
+      clientId: process.env.APPLE_CLIENT_ID!,
+      clientSecret: process.env.APPLE_CLIENT_SECRET!,
     },
   },
   schema: {

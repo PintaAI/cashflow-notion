@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useCreateBlockNote } from "@blocknote/react"
 import { BlockNoteView } from "@blocknote/shadcn"
 import type { Block } from "@blocknote/core"
+import { en } from "@blocknote/core/locales"
 import { useTheme } from "next-themes"
 import "@blocknote/shadcn/style.css"
 import { cn } from "@/lib/utils"
@@ -41,6 +42,18 @@ export function BlockNoteEditor({
 
   const editor = useCreateBlockNote({
     initialContent: parsedContent,
+    dictionary: {
+      ...en,
+      placeholders: {
+        ...en.placeholders,
+        default: "Ketik teks atau '/' untuk perintah",
+        heading: "Judul",
+        bulletListItem: "Daftar",
+        numberedListItem: "Daftar",
+        checkListItem: "Daftar",
+        toggleListItem: "Toggle",
+      },
+    },
     uploadFile: async (file) => {
       const formData = new FormData()
       formData.append("noteId", noteId)

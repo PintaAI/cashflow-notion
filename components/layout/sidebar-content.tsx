@@ -142,7 +142,7 @@ export function AppSidebar() {
       ? ((searchParams.get("tab") as AppTab) || "home")
       : "home";
   const isOnAdmin = pathname === "/admin";
-  const isOnNotes = pathname === notesPath;
+  const isOnNotes = pathname.startsWith(notesPath);
   const isOnStatie = pathname.startsWith(statiePath);
   const isOnWerewolf = pathname.startsWith(werewolfPath);
   const isOnPublicTools = pathname === toolsPath;
@@ -167,10 +167,14 @@ export function AppSidebar() {
     void switchManagement(id).catch(console.error);
   }
 
-  function handleNavClick(tab: AppTab) {
+  function handleNavClick(tab: AppTab, e: React.MouseEvent) {
+    e.preventDefault();
     setOpenMobile(false);
     if (pathname === managementPath) {
       setActiveTab(tab);
+    } else {
+      const url = tab === "home" ? managementPath : `${managementPath}?tab=${tab}`;
+      router.push(url);
     }
   }
 
@@ -289,7 +293,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={active}
-                    onClick={() => handleNavClick(item.value)}
+                    onClick={(e) => handleNavClick(item.value, e)}
                     className="h-10 rounded-lg px-3 text-sm data-active:bg-muted/70 data-active:font-medium"
                   >
                     <Link href={href}>
