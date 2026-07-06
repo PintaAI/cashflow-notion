@@ -1,6 +1,7 @@
 import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { fetchEntriesFiltered, addEntry } from "@/app/actions/cashflow";
 import type { IOType } from "@/lib/db";
+import { normalizeEntryAmount } from "@/lib/api/entry-amount";
 
 export async function GET(request: Request) {
   try {
@@ -34,9 +35,10 @@ export async function POST(request: Request) {
     if (!body?.name || typeof body.name !== "string") {
       return Response.json({ error: "name is required" }, { status: 400 });
     }
-    if (typeof body?.nominal !== "number" || body.nominal <= 0) {
+    const amount = await normalizeEntryAmount(body);
+    if (typeof amount.nominal !== "number" || amount.nominal <= 0) {
       return Response.json(
-        { error: "nominal must be a positive number" },
+        { error: "nominal or original amount must be a positive number" },
         { status: 400 },
       );
     }
@@ -44,11 +46,11 @@ export async function POST(request: Request) {
     const entry = await addEntry({
       managementId: body.managementId,
       name: body.name,
-      nominal: body.nominal,
-      originalNominal: body.originalNominal,
-      originalCurrency: body.originalCurrency,
-      exchangeRateToIdr: body.exchangeRateToIdr,
-      exchangeRateAt: body.exchangeRateAt ? new Date(body.exchangeRateAt) : undefined,
+      nominal: amount.nominal,
+      originalNominal: amount.originalNominal,
+      originalCurrency: amount.originalCurrency,
+      exchangeRateToIdr: amount.exchangeRateToIdr,
+      exchangeRateAt: amount.exchangeRateAt,
       category: body.category,
       date: body.date,
       io: body.io,

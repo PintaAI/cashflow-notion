@@ -1,5 +1,6 @@
 import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { editEntry, removeEntry } from "@/app/actions/cashflow";
+import { normalizeEntryAmount } from "@/lib/api/entry-amount";
 
 export async function PATCH(
   request: Request,
@@ -9,12 +10,11 @@ export async function PATCH(
     await requireSession(request);
     const { id } = await params;
     const body = await request.json();
+    const amount = await normalizeEntryAmount(body);
 
     const entry = await editEntry(id, {
       ...body,
-      exchangeRateAt: body.exchangeRateAt
-        ? new Date(body.exchangeRateAt)
-        : undefined,
+      ...amount,
     });
 
     return ok(entry);

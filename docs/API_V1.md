@@ -58,12 +58,12 @@ Most endpoints accept an optional `management_id` query param (or `managementId`
 | Method | Path | Description | Params / Body |
 |--------|------|-------------|---------------|
 | GET | `/entries` | List entries (filtered + paginated) | `?page_size=&skip=&io=&date=&created_by_id=&management_id=` |
-| POST | `/entries` | Create entry | `{ name, nominal, category?, date?, io?, originalNominal?, originalCurrency?, exchangeRateToIdr?, exchangeRateAt?, managementId? }` |
+| POST | `/entries` | Create entry | `{ name, nominal?, category?, date?, io?, originalNominal?, originalCurrency?, exchangeRateToIdr?, exchangeRateAt?, managementId? }` |
 | GET | `/entries/summary` | Wallet summary | `?management_id=` |
 | GET | `/entries/count` | Total entry count | `?management_id=` |
 | GET | `/entries/calendar` | Calendar data | `?year=&month=&io=&management_id=` |
 | GET | `/entries/category/{category}` | Entries by category | `?from=&to=&limit=&management_id=` |
-| POST | `/entries/transfer` | Transfer between wallets | `{ toManagementId, nominal, fromManagementId?, originalNominal?, originalCurrency?, exchangeRateToIdr?, exchangeRateAt?, date?, note? }` |
+| POST | `/entries/transfer` | Transfer between wallets | `{ toManagementId, nominal?, fromManagementId?, originalNominal?, originalCurrency?, exchangeRateToIdr?, exchangeRateAt?, date?, note? }` |
 | PATCH | `/entries/{id}` | Edit entry | partial entry fields |
 | DELETE | `/entries/{id}` | Delete entry | `?management_id=` |
 
@@ -72,7 +72,7 @@ Most endpoints accept an optional `management_id` query param (or `managementId`
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | `name` | string | yes | |
-| `nominal` | number | yes | positive |
+| `nominal` | number | no | Positive IDR amount. If omitted, server derives it from `originalNominal` + `originalCurrency`. |
 | `io` | `"Income" \| "Expenses"` | no | |
 | `category` | string | no | category name |
 | `date` | string | no | `YYYY-MM-DD` |
@@ -222,6 +222,16 @@ One of: `"daily"`, `"weekly"`, `"monthly"`, `"yearly"`.
 | GET | `/profile/theme` | Get profile theme | — |
 | PUT | `/profile/theme` | Save theme | `{ theme }` |
 | PUT | `/profile` | Update profile (FormData) | `name`, `image?` (file) |
+
+---
+
+## Account
+
+| Method | Path | Description | Params / Body |
+|--------|------|-------------|---------------|
+| DELETE | `/account` | Delete the authenticated account and private related data | — → `{ success, deletedManagements, deletedNotes, removedPushSubscriptions }` |
+
+Deletion removes the user, auth sessions/accounts, OAuth tokens/consents/codes, MCP API key, push subscriptions for the user, and any wallet or note where the user is the only member. Shared wallets and notes are preserved; if the deleted user was the only owner, ownership is assigned to the oldest remaining member.
 
 ---
 

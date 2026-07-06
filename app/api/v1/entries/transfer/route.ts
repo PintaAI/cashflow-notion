@@ -1,5 +1,6 @@
 import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { transferBetweenManagements } from "@/app/actions/cashflow";
+import { normalizeEntryAmount } from "@/lib/api/entry-amount";
 
 export async function POST(request: Request) {
   try {
@@ -12,9 +13,10 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (typeof body?.nominal !== "number" || body.nominal <= 0) {
+    const amount = await normalizeEntryAmount(body);
+    if (typeof amount.nominal !== "number" || amount.nominal <= 0) {
       return Response.json(
-        { error: "nominal must be a positive number" },
+        { error: "nominal or original amount must be a positive number" },
         { status: 400 },
       );
     }
@@ -22,13 +24,11 @@ export async function POST(request: Request) {
     const result = await transferBetweenManagements({
       fromManagementId: body.fromManagementId,
       toManagementId: body.toManagementId,
-      nominal: body.nominal,
-      originalNominal: body.originalNominal,
-      originalCurrency: body.originalCurrency,
-      exchangeRateToIdr: body.exchangeRateToIdr,
-      exchangeRateAt: body.exchangeRateAt
-        ? new Date(body.exchangeRateAt)
-        : undefined,
+      nominal: amount.nominal,
+      originalNominal: amount.originalNominal,
+      originalCurrency: amount.originalCurrency,
+      exchangeRateToIdr: amount.exchangeRateToIdr,
+      exchangeRateAt: amount.exchangeRateAt,
       date: body.date,
       note: body.note,
     });
