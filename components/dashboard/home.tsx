@@ -39,6 +39,7 @@ function writeWalletCache(data: WalletMeta[]) {
 function getCachedManagements(managementId: string): UserManagements {
   const cached = readWalletCache();
   if (!cached || cached.length === 0) return [];
+  const now = new Date().toISOString();
 
   return cached.map((m) => ({
     id: m.id,
@@ -47,6 +48,8 @@ function getCachedManagements(managementId: string): UserManagements {
     imageTheme: null,
     role: "" as never,
     memberCount: 0,
+    createdAt: now,
+    updatedAt: now,
     isActive: m.id === managementId,
   })) as UserManagements;
 }

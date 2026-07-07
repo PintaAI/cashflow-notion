@@ -117,6 +117,8 @@ export async function getUserManagements(activeManagementId?: string) {
     imageTheme: parseThemeColors(m.management.imageTheme),
     role: m.role,
     memberCount: m.management._count.members,
+    createdAt: m.management.createdAt.toISOString(),
+    updatedAt: m.management.updatedAt.toISOString(),
     isActive: m.management.id === (activeManagementId ?? user?.activeManagementId),
   }));
 }
@@ -277,6 +279,47 @@ export async function createManagement(name: string) {
   });
 
   return { success: true, managementId: management.id, name: management.name };
+}
+
+export async function deleteManagement(managementId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const ownerMembership = await prisma.managementMember.findFirst({
+    where: { userId: session.user.id, managementId, role: "owner" },
+  });
+  if (!ownerMembership) throw new Error("Hanya pemilik yang bisa menghapus dompet");
+
+  const memberUserIds = await prisma.managementMember.findMany({
+    where: { managementId },
+    select: { userId: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.management.delete({ where: { id: managementId } });
+
+    for (const member of memberUserIds) {
+      const user = await tx.user.findUnique({
+        where: { id: member.userId },
+        select: { activeManagementId: true },
+      });
+      if (user?.activeManagementId !== managementId) continue;
+
+      const nextMembership = await tx.managementMember.findFirst({
+        where: { userId: member.userId },
+        orderBy: { joinedAt: "asc" },
+        select: { managementId: true },
+      });
+
+      await tx.user.update({
+        where: { id: member.userId },
+        data: { activeManagementId: nextMembership?.managementId ?? null },
+      });
+    }
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true };
 }
 
 export async function createInvite(managementId?: string) {

@@ -52,6 +52,8 @@ function readWalletCache(managementId: string): UserManagements {
       imageTheme: item.imageTheme ?? null,
       role: item.role ?? "member",
       memberCount: item.memberCount ?? 0,
+      createdAt: item.createdAt ?? new Date().toISOString(),
+      updatedAt: item.updatedAt ?? new Date().toISOString(),
       isActive: item.id === managementId,
     })) as UserManagements;
   } catch {
@@ -449,6 +451,8 @@ function ManagementSettings() {
           imageTheme: null,
           role: "owner",
           memberCount: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           isActive: true,
         },
       ] as UserManagements);
