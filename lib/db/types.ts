@@ -31,6 +31,8 @@ export interface CashflowEntry {
     email: string;
     image: string | null;
   } | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CategorySpend {

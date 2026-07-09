@@ -437,6 +437,7 @@ model Entry {
   createdBy         User?       @relation("EntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
   isReconciliation  Boolean     @default(false)
   createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   @@index([date, createdAt, id])
   @@index([io, date])

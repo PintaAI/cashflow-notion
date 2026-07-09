@@ -44,6 +44,8 @@ export function toEntry(entry: EntryForMapping): CashflowEntry {
     io: entry.io,
     createdById: entry.createdById,
     createdBy: entry.createdBy ?? null,
+    createdAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
   };
 }
 
