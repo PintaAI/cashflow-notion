@@ -30,7 +30,7 @@ interface AuditDrawerProps {
 }
 
 export function AuditDrawer({ open, onOpenChange }: AuditDrawerProps) {
-  const { format } = useCurrency();
+  const { format, toIdr } = useCurrency();
   const { data: expectedBalance, isLoading: balanceLoading } = useBalance();
   const { data: latestAudit } = useLatestAudit();
   const performAudit = usePerformAudit();
@@ -39,7 +39,8 @@ export function AuditDrawer({ open, onOpenChange }: AuditDrawerProps) {
   const [note, setNote] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const actualBalance = actualInput ? Number(actualInput) : null;
+  // Audit balances are stored in IDR, while this input is in the user's selected currency.
+  const actualBalance = actualInput ? Math.round(toIdr(Number(actualInput))) : null;
   const diff = actualBalance !== null && expectedBalance !== undefined
     ? actualBalance - expectedBalance
     : null;
@@ -116,6 +117,7 @@ export function AuditDrawer({ open, onOpenChange }: AuditDrawerProps) {
             <label className="text-xs font-medium">Saldo sebenarnya</label>
             <Input
               type="number"
+              step="any"
               placeholder="0"
               value={actualInput}
               onChange={(e) => setActualInput(e.target.value)}

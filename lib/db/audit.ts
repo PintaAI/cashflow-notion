@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db/client";
 import { formatDate } from "@/lib/db/dates";
 import type { AuditSnapshotData, IOType } from "@/lib/db/types";
+import { convertFromIdr } from "@/lib/currency";
+import { getIdrRate } from "@/lib/exchange-rates";
 
 export async function getBalanceAsOf(managementId: string): Promise<number> {
   const [incomeAgg, expensesAgg] = await Promise.all([
@@ -42,14 +44,20 @@ export async function createAuditSnapshot(params: {
   if (params.autoAdjust && Math.abs(difference) > 0.01) {
     const categoryId = await getAdjustmentCategoryId(params.managementId);
     const io: IOType = difference > 0 ? "Income" : "Expenses";
+    const user = await prisma.user.findUnique({
+      where: { id: params.userId },
+      select: { currency: true },
+    });
+    const originalCurrency = user?.currency ?? "IDR";
+    const exchangeRateToIdr = await getIdrRate(originalCurrency);
 
     const entry = await prisma.entry.create({
       data: {
         name: `Penyesuaian audit ${today}`,
         nominal: Math.abs(difference),
-        originalNominal: Math.abs(difference),
-        originalCurrency: "IDR",
-        exchangeRateToIdr: 1,
+        originalNominal: convertFromIdr(Math.abs(difference), originalCurrency, exchangeRateToIdr),
+        originalCurrency,
+        exchangeRateToIdr,
         exchangeRateAt: new Date(),
         categoryId,
         date: today,
