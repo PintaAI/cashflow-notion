@@ -65,6 +65,7 @@ model User {
   statieParticipations   StatieParticipant[]
   werewolfRoomsCreated   WerewolfRoom[]           @relation("WerewolfRoomLeader")
   werewolfParticipations WerewolfParticipant[]
+  expoPushTokens         ExpoPushToken[]
 
   @@map("User")
 }
@@ -285,6 +286,22 @@ model Management {
   overallBudgets   OverallBudget[]
   recurringEntries RecurringEntry[]
   auditSnapshots   AuditSnapshot[]
+  expoPushTokens   ExpoPushToken[]
+}
+
+model ExpoPushToken {
+  id           String      @id @default(uuid())
+  token        String      @unique
+  platform     String
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  managementId String?
+  management   Management? @relation(fields: [managementId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([managementId])
 }
 
 model ManagementMember {
