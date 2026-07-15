@@ -390,6 +390,7 @@ model RecurringEntry {
   category      Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   io            IOType
   frequency     String
+  reminderTime  String     @default("09:00")
   dayOfWeek     Int?
   dayOfMonth    Int?
   monthOfYear   Int?

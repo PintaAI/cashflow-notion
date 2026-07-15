@@ -25,6 +25,7 @@ export async function getRecurringEntries(managementId: string): Promise<Recurri
     categoryName: e.category?.name ?? null,
     io: e.io as IOType,
     frequency: e.frequency,
+    reminderTime: e.reminderTime,
     dayOfWeek: e.dayOfWeek,
     dayOfMonth: e.dayOfMonth,
     monthOfYear: e.monthOfYear,
@@ -42,6 +43,7 @@ export async function createRecurringEntry(data: {
   categoryId?: string | null;
   io: IOType;
   frequency: RecurringFrequency;
+  reminderTime: string;
   dayOfWeek?: number | null;
   dayOfMonth?: number | null;
   monthOfYear?: number | null;
@@ -58,6 +60,7 @@ export async function createRecurringEntry(data: {
       categoryId: data.categoryId ?? null,
       io: data.io,
       frequency: data.frequency,
+      reminderTime: data.reminderTime,
       dayOfWeek: data.dayOfWeek ?? null,
       dayOfMonth: data.dayOfMonth ?? null,
       monthOfYear: data.monthOfYear ?? null,
@@ -74,6 +77,7 @@ export async function createRecurringEntry(data: {
     categoryName: entry.category?.name ?? null,
     io: entry.io as IOType,
     frequency: entry.frequency,
+    reminderTime: entry.reminderTime,
     dayOfWeek: entry.dayOfWeek,
     dayOfMonth: entry.dayOfMonth,
     monthOfYear: entry.monthOfYear,
@@ -92,6 +96,7 @@ export async function updateRecurringEntry(
     categoryId: string | null;
     io: IOType;
     frequency: RecurringFrequency;
+    reminderTime: string;
     dayOfWeek: number | null;
     dayOfMonth: number | null;
     monthOfYear: number | null;
@@ -109,6 +114,7 @@ export async function updateRecurringEntry(
     ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
     ...(data.io !== undefined && { io: data.io }),
     ...(data.frequency !== undefined && { frequency: data.frequency }),
+    ...(data.reminderTime !== undefined && { reminderTime: data.reminderTime }),
     ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
     ...(data.dayOfMonth !== undefined && { dayOfMonth: data.dayOfMonth }),
     ...(data.monthOfYear !== undefined && { monthOfYear: data.monthOfYear }),
@@ -139,6 +145,7 @@ export async function updateRecurringEntry(
     categoryName: entry.category?.name ?? null,
     io: entry.io as IOType,
     frequency: entry.frequency,
+    reminderTime: entry.reminderTime,
     dayOfWeek: entry.dayOfWeek,
     dayOfMonth: entry.dayOfMonth,
     monthOfYear: entry.monthOfYear,

@@ -24,6 +24,7 @@ export async function addRecurringEntry(data: {
   categoryId?: string | null;
   io: IOType;
   frequency: RecurringFrequency;
+  reminderTime?: string;
   dayOfWeek?: number | null;
   dayOfMonth?: number | null;
   monthOfYear?: number | null;
@@ -31,7 +32,7 @@ export async function addRecurringEntry(data: {
   endDate?: string | null;
 }): Promise<RecurringEntryData> {
   const managementId = await resolveManagementId(data.managementId);
-  return createRecurringEntry({ ...data, managementId });
+  return createRecurringEntry({ ...data, reminderTime: data.reminderTime ?? "09:00", managementId });
 }
 
 export async function editRecurringEntry(
@@ -42,6 +43,7 @@ export async function editRecurringEntry(
     categoryId: string | null;
     io: IOType;
     frequency: RecurringFrequency;
+    reminderTime: string;
     dayOfWeek: number | null;
     dayOfMonth: number | null;
     monthOfYear: number | null;
@@ -58,6 +60,7 @@ export async function editRecurringEntry(
     categoryId: data.categoryId,
     io: data.io,
     frequency: data.frequency,
+    reminderTime: data.reminderTime,
     dayOfWeek: data.dayOfWeek,
     dayOfMonth: data.dayOfMonth,
     monthOfYear: data.monthOfYear,

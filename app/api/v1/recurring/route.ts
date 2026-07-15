@@ -42,6 +42,9 @@ export async function POST(request: Request) {
     if (!body?.startDate || typeof body.startDate !== "string") {
       return Response.json({ error: "startDate is required" }, { status: 400 });
     }
+    if (typeof body?.reminderTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.reminderTime)) {
+      return Response.json({ error: "reminderTime must use HH:mm format" }, { status: 400 });
+    }
 
     const data = await addRecurringEntry({
       managementId: body.managementId,
@@ -50,6 +53,7 @@ export async function POST(request: Request) {
       categoryId: body.categoryId ?? null,
       io: body.io as IOType,
       frequency: body.frequency as RecurringFrequency,
+      reminderTime: body.reminderTime,
       dayOfWeek: body.dayOfWeek ?? null,
       dayOfMonth: body.dayOfMonth ?? null,
       monthOfYear: body.monthOfYear ?? null,

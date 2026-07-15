@@ -123,6 +123,7 @@ export interface RecurringEntryData {
   categoryName: string | null;
   io: IOType;
   frequency: string;
+  reminderTime: string;
   dayOfWeek: number | null;
   dayOfMonth: number | null;
   monthOfYear: number | null;

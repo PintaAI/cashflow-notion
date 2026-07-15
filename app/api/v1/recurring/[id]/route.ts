@@ -9,6 +9,12 @@ export async function PATCH(
     await requireSession(request);
     const { id } = await params;
     const body = await request.json();
+    if (
+      body.reminderTime !== undefined &&
+      (typeof body.reminderTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.reminderTime))
+    ) {
+      return Response.json({ error: "reminderTime must use HH:mm format" }, { status: 400 });
+    }
     const data = await editRecurringEntry(id, {
       ...body,
       managementId: body.managementId,

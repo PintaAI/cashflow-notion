@@ -11,6 +11,12 @@ import {
   UserCircleIcon,
   Shield01Icon,
   ArrowRight01Icon,
+  Notification03Icon,
+  Notification01Icon,
+  MailSend01Icon,
+  SmartPhone01Icon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +49,12 @@ import {
   removeMember,
   transferOwnership,
 } from "@/app/actions/admin";
+import {
+  getNotificationStats,
+  listPushTokens,
+  sendTestNotification,
+} from "@/app/actions/notifications";
+import { Input } from "@/components/ui/input";
 
 type Dashboard = Awaited<ReturnType<typeof getAdminDashboard>>;
 type AllUsers = Awaited<ReturnType<typeof getAllUsers>>;
@@ -82,8 +94,8 @@ function OverviewTab() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
@@ -97,11 +109,12 @@ function OverviewTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatsCard label="Total Users" value={stats.userCount} icon={UserCircleIcon} />
         <StatsCard label="Managements" value={stats.managementCount} icon={File01Icon} />
         <StatsCard label="Total Tercatat" value={stats.totalEntries} icon={Analytics01Icon} />
-        <StatsCard label="Total Nominal" value={`Rp ${(stats.totalNominal).toLocaleString("id-ID")}`} icon={Shield01Icon} />
+        <StatsCard label="Total Income" value={`Rp ${stats.totalIncome.toLocaleString("id-ID")}`} icon={ArrowDown01Icon} />
+        <StatsCard label="Total Expenses" value={`Rp ${stats.totalExpenses.toLocaleString("id-ID")}`} icon={ArrowUp01Icon} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -609,6 +622,451 @@ function ManagementsTab() {
   );
 }
 
+function NotificationsTab() {
+  const [stats, setStats] = useState<Awaited<
+    ReturnType<typeof getNotificationStats>
+  > | null>(null);
+  const [tokens, setTokens] = useState<Awaited<
+    ReturnType<typeof listPushTokens>
+  > | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [targetType, setTargetType] = useState<string>("token");
+  const [targetId, setTargetId] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [url, setUrl] = useState("");
+  const [dataJson, setDataJson] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<Awaited<
+    ReturnType<typeof sendTestNotification>
+  > | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [s, t] = await Promise.all([
+        getNotificationStats(),
+        listPushTokens(),
+      ]);
+      setStats(s);
+      setTokens(t);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchData();
+    });
+  }, [fetchData]);
+
+  async function handleSend() {
+    if (
+      targetType === "all" &&
+      !window.confirm(
+        `Send this notification to ${stats?.totalTokens ?? "all"} registered devices? This will deliver real push notifications.`,
+      )
+    ) {
+      return;
+    }
+
+    setError(null);
+    setResult(null);
+    setSending(true);
+    try {
+      const res = await sendTestNotification({
+        targetType: targetType as "token" | "user" | "management" | "all",
+        targetId: targetType !== "all" ? targetId : null,
+        title,
+        body,
+        url: url || undefined,
+        dataJson: dataJson || undefined,
+      });
+      setResult(res);
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const selectedToken = tokens?.find((t) => t.id === targetId);
+
+  return (
+    <div className="space-y-6">
+      {loading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      ) : stats ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatsCard
+            label="Total Tokens"
+            value={stats.totalTokens}
+            icon={Notification01Icon}
+          />
+          <StatsCard
+            label="Distinct Users"
+            value={stats.distinctUsers}
+            icon={UserCircleIcon}
+          />
+          <StatsCard
+            label="iOS"
+            value={stats.platformBreakdown.ios ?? 0}
+            icon={SmartPhone01Icon}
+          />
+          <StatsCard
+            label="Android"
+            value={stats.platformBreakdown.android ?? 0}
+            icon={SmartPhone01Icon}
+          />
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div className="rounded-lg border p-4 space-y-3">
+            <p className="text-sm font-medium">Compose Push Notification</p>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Target
+              </label>
+              <Select
+                value={targetType}
+                onValueChange={(v) => {
+                  setTargetType(v);
+                  setTargetId("");
+                  setResult(null);
+                  setError(null);
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="token">Single Token/Device</SelectItem>
+                  <SelectItem value="user">All User Devices</SelectItem>
+                  <SelectItem value="management">
+                    Management Members
+                  </SelectItem>
+                  <SelectItem value="all">All Registered Devices</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {targetType !== "all" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  {targetType === "token"
+                    ? "Select Token"
+                    : targetType === "user"
+                      ? "Select User (by token owner)"
+                      : "Select Management (by token owner)"}
+                </label>
+                <Select value={targetId} onValueChange={setTargetId}>
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue
+                      placeholder={
+                        tokens?.length
+                          ? `Choose ${
+                              targetType === "token"
+                                ? "token"
+                                : targetType === "user"
+                                  ? "user"
+                                  : "management"
+                            }...`
+                          : "No tokens available"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      if (targetType === "token") {
+                        return tokens?.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.platform} &middot; {t.userName}
+                          </SelectItem>
+                        ));
+                      }
+                      if (targetType === "user") {
+                        const users = new Map<string, { name: string; id: string }>();
+                        tokens?.forEach((t) => {
+                          if (!users.has(t.userId)) {
+                            users.set(t.userId, {
+                              name: t.userName,
+                              id: t.userId,
+                            });
+                          }
+                        });
+                        return Array.from(users.values()).map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name}
+                          </SelectItem>
+                        ));
+                      }
+                      const managements = new Map<
+                        string,
+                        { name: string; id: string }
+                      >();
+                      tokens?.forEach((t) => {
+                        if (t.managementId && !managements.has(t.managementId)) {
+                          managements.set(t.managementId, {
+                            name: t.managementName ?? t.managementId,
+                            id: t.managementId,
+                          });
+                        }
+                      });
+                      return Array.from(managements.values()).map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name}
+                        </SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+                {selectedToken && targetType === "token" && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {selectedToken.platform}{" "}
+                    {selectedToken.managementName
+                      ? `\u00b7 ${selectedToken.managementName}`
+                      : ""}{" "}
+                    &middot; Updated{" "}
+                    {new Date(selectedToken.updatedAt).toLocaleDateString(
+                      "id-ID"
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Title
+              </label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Notification title"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Body
+              </label>
+              <Input
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Notification body"
+                maxLength={500}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Link URL{" "}
+                <span className="text-[10px] text-muted-foreground/60">
+                  (optional &mdash; internal route)
+                </span>
+              </label>
+              <Input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="/forms/automatic-entry"
+                maxLength={2000}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Custom Data{" "}
+                <span className="text-[10px] text-muted-foreground/60">
+                  (optional &mdash; valid JSON)
+                </span>
+              </label>
+              <textarea
+                value={dataJson}
+                onChange={(e) => setDataJson(e.target.value)}
+                placeholder='{"key": "value"}'
+                rows={3}
+                className="h-auto w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 dark:disabled:bg-input/80"
+              />
+            </div>
+
+            <Button
+              onClick={handleSend}
+              disabled={sending || !title.trim() || !body.trim()}
+              className="w-full"
+            >
+              <HugeiconsIcon
+                icon={MailSend01Icon}
+                strokeWidth={2}
+                className="size-4 mr-1"
+              />
+              {sending ? "Sending..." : "Send Test Notification"}
+            </Button>
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-xs text-destructive font-medium">Error</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
+            </div>
+          )}
+
+          {result && (
+            <div className="rounded-lg border p-4 space-y-2">
+              <p className="text-sm font-medium">Delivery Result</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md border p-2 text-center">
+                  <p className="text-lg font-bold">{result.result.okCount}</p>
+                  <p className="text-[10px] text-muted-foreground">OK</p>
+                </div>
+                <div className="rounded-md border p-2 text-center">
+                  <p className="text-lg font-bold">
+                    {result.result.errorCount}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Errors</p>
+                </div>
+                <div className="rounded-md border p-2 text-center">
+                  <p className="text-lg font-bold">
+                    {result.result.deviceNotRegisteredCount}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Not Registered
+                  </p>
+                </div>
+                <div className="rounded-md border p-2 text-center">
+                  <p className="text-lg font-bold">{result.removed}</p>
+                  <p className="text-[10px] text-muted-foreground">Removed</p>
+                </div>
+              </div>
+              {result.result.tickets.length > 0 && (
+                <div className="text-[10px] space-y-0.5 max-h-32 overflow-auto">
+                  {result.result.tickets.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex gap-2 font-mono"
+                    >
+                      <span
+                        className={
+                          t.status === "ok"
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }
+                      >
+                        [{t.status}]
+                      </span>
+                      <span className="text-muted-foreground truncate">
+                        {t.id}
+                      </span>
+                      {t.message && (
+                        <span className="text-muted-foreground/60 truncate">
+                          {t.message}
+                        </span>
+                      )}
+                      {t.details?.error && (
+                        <span className="text-destructive truncate">
+                          {t.details.error}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.ticketIds.length > 0 && (
+                <p className="text-[10px] text-muted-foreground">
+                  Ticket IDs: {result.ticketIds.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">
+              Registered Tokens
+              {tokens && (
+                <span className="ml-1 text-xs text-muted-foreground">
+                  ({tokens.length} shown)
+                </span>
+              )}
+            </p>
+            <Button variant="ghost" size="xs" onClick={fetchData}>
+              Refresh
+            </Button>
+          </div>
+
+          {!tokens || tokens.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">
+              {tokens ? "No tokens registered" : ""}
+            </p>
+          ) : (
+            <div className="rounded-lg border overflow-hidden max-h-[32rem] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead>Management</TableHead>
+                    <TableHead>Registered</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tokens.map((t) => (
+                    <TableRow
+                      key={t.id}
+                      className={
+                        t.id === targetId
+                          ? "bg-primary/5 cursor-pointer"
+                          : "cursor-pointer"
+                      }
+                      onClick={() => {
+                        setTargetType("token");
+                        setTargetId(t.id);
+                      }}
+                    >
+                      <TableCell className="text-xs font-medium truncate max-w-[140px]">
+                        {t.userName}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] capitalize"
+                        >
+                          {t.platform}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground truncate max-w-[120px]">
+                        {t.managementName ?? "\u2014"}
+                      </TableCell>
+                      <TableCell className="text-[10px] text-muted-foreground">
+                        {new Date(t.createdAt).toLocaleDateString("id-ID")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:py-8">
@@ -650,6 +1108,10 @@ export default function AdminPage() {
             <HugeiconsIcon icon={File01Icon} strokeWidth={2} className="size-4" />
             Managements
           </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <HugeiconsIcon icon={Notification03Icon} strokeWidth={2} className="size-4" />
+            Notifications
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -662,6 +1124,10 @@ export default function AdminPage() {
 
         <TabsContent value="managements">
           <ManagementsTab />
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <NotificationsTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -293,6 +293,7 @@ export function useCreateRecurringEntry() {
       categoryId?: string | null;
       io: IOType;
       frequency: RecurringFrequency;
+      reminderTime?: string;
       dayOfWeek?: number | null;
       dayOfMonth?: number | null;
       monthOfYear?: number | null;
@@ -317,6 +318,7 @@ export function useUpdateRecurringEntry() {
       categoryId?: string | null;
       io?: IOType;
       frequency?: RecurringFrequency;
+      reminderTime?: string;
       dayOfWeek?: number | null;
       dayOfMonth?: number | null;
       monthOfYear?: number | null;
