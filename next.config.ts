@@ -15,6 +15,11 @@ const nextConfig = {
   // PWA requires webpack, so builds will use webpack
   turbopack: {},
   allowedDevOrigins: ["jennie-linux.tail2268a1.ts.net"],
+  serverExternalPackages: [
+    "@blocknote/core",
+    "@blocknote/react",
+    "@blocknote/server-util",
+  ],
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",

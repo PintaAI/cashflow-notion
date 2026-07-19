@@ -57,9 +57,9 @@ export function AuthCard() {
     }
   }
 
-  async function handleGoogleSignIn() {
+  async function handleSocialSignIn(provider: "google" | "apple") {
     await authClient.signIn.social({
-      provider: "google",
+      provider,
       callbackURL: redirect,
     });
   }
@@ -126,13 +126,22 @@ export function AuthCard() {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={handleGoogleSignIn}
-        >
-          Lanjutkan dengan Google
-        </Button>
+        <div className="space-y-3">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => handleSocialSignIn("google")}
+          >
+            Lanjutkan dengan Google
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => handleSocialSignIn("apple")}
+          >
+            Lanjutkan dengan Apple
+          </Button>
+        </div>
 
         <p className="text-center text-sm text-muted-foreground">
           {mode === "signIn" ? (

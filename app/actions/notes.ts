@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/management";
+import { ApiError } from "@/lib/api/helpers";
 
 const NOTE_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -134,25 +135,65 @@ export async function updateNoteTitle(noteId: string, title: string) {
 
 export async function updateNoteContent(
   noteId: string,
-  content: { contentJson: string; html: string; markdown: string }
+  content: {
+    contentJson: string;
+    html?: string;
+    markdown?: string;
+    expectedUpdatedAt?: string;
+  },
 ) {
   const session = await getSession();
-  if (!session) throw new Error("Not authenticated");
+  if (!session) throw new ApiError("Not authenticated", 401);
 
   const membership = await getNoteMembership(noteId, session.user.id);
-  if (!membership) throw new Error("Anda bukan anggota catatan ini");
+  if (!membership) throw new ApiError("Anda bukan anggota catatan ini", 403);
 
-  await prisma.note.update({
-    where: { id: noteId },
-    data: {
-      contentJson: content.contentJson,
-      contentHtml: content.html,
-      contentMarkdown: content.markdown,
-    },
-  });
+  const data = {
+    contentJson: content.contentJson,
+    contentHtml: content.html ?? null,
+    contentMarkdown: content.markdown ?? null,
+  };
+  const select = {
+    contentJson: true,
+    contentHtml: true,
+    contentMarkdown: true,
+    updatedAt: true,
+  } as const;
+
+  let note;
+  if (content.expectedUpdatedAt) {
+    const expectedUpdatedAt = new Date(content.expectedUpdatedAt);
+    if (Number.isNaN(expectedUpdatedAt.getTime())) {
+      throw new ApiError("expectedUpdatedAt must be a valid ISO date", 400);
+    }
+    const updated = await prisma.note.updateMany({
+      where: { id: noteId, updatedAt: expectedUpdatedAt },
+      data,
+    });
+    if (updated.count === 0) {
+      throw new ApiError(
+        "Content has been modified since your last read. Please refresh and try again.",
+        409,
+      );
+    }
+    note = await prisma.note.findUnique({ where: { id: noteId }, select });
+    if (!note) throw new ApiError("Catatan tidak ditemukan", 404);
+  } else {
+    note = await prisma.note.update({
+      where: { id: noteId },
+      data,
+      select,
+    });
+  }
 
   revalidatePath("/notes");
-  return { success: true };
+  return {
+    success: true,
+    contentJson: note.contentJson,
+    html: note.contentHtml,
+    markdown: note.contentMarkdown,
+    updatedAt: note.updatedAt.toISOString(),
+  };
 }
 
 export async function deleteNote(noteId: string) {
