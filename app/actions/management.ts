@@ -9,6 +9,8 @@ import { getBlobOptions } from "@/lib/blob";
 import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
 import { getSession, resolveManagementId } from "@/lib/management";
 import { parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
+import { checkManagementCloudAccess, isBillingEnforcementEnabled } from "@/lib/cloud-access";
+import { CloudAccessError, requirePersonalCloudAccess } from "@/lib/api/helpers";
 
 const MAX_MANAGEMENT_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_MANAGEMENT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -79,6 +81,8 @@ export async function getCurrentManagement(managementId?: string): Promise<Manag
   }
 
   if (!membership) return null;
+  const cloudAccess = await checkManagementCloudAccess(session.user.id, membership.managementId);
+  if (!cloudAccess.allowed) throw new CloudAccessError(cloudAccess.reason);
 
   return {
     ...membership,
@@ -104,13 +108,31 @@ export async function getUserManagements(activeManagementId?: string) {
       management: {
         include: {
           _count: { select: { members: true } },
+          cloudSponsor: {
+            select: {
+              entitlements: {
+                where: { entitlementKey: "premium", environment: "production", active: true },
+                select: { id: true },
+                take: 1,
+              },
+            },
+          },
+          members: { where: { role: "owner" }, select: { userId: true } },
         },
       },
     },
     orderBy: { joinedAt: "asc" },
   });
 
-  return memberships.map((m) => ({
+  return memberships.filter((membership) => {
+    if (!isBillingEnforcementEnabled()) return true;
+    const sponsorId = membership.management.cloudSponsorUserId;
+    return Boolean(
+      sponsorId &&
+      membership.management.members.some((member) => member.userId === sponsorId) &&
+      membership.management.cloudSponsor?.entitlements.length,
+    );
+  }).map((m) => ({
     id: m.management.id,
     name: m.management.name,
     image: m.management.image,
@@ -131,6 +153,8 @@ export async function switchManagement(managementId: string) {
     where: { userId: session.user.id, managementId },
   });
   if (!membership) throw new Error("Anda bukan anggota management ini");
+  const cloudAccess = await checkManagementCloudAccess(session.user.id, managementId);
+  if (!cloudAccess.allowed) throw new CloudAccessError(cloudAccess.reason);
 
   await prisma.user.update({
     where: { id: session.user.id },
@@ -260,10 +284,12 @@ export async function createManagement(name: string) {
 
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Nama tidak boleh kosong");
+  await requirePersonalCloudAccess(session.user.id);
 
   const management = await prisma.management.create({
     data: {
       name: trimmed,
+      cloudSponsorUserId: session.user.id,
       members: {
         create: { userId: session.user.id, role: "owner" },
       },
@@ -289,6 +315,8 @@ export async function deleteManagement(managementId: string) {
     where: { userId: session.user.id, managementId, role: "owner" },
   });
   if (!ownerMembership) throw new Error("Hanya pemilik yang bisa menghapus dompet");
+  const cloudAccess = await checkManagementCloudAccess(session.user.id, managementId);
+  if (!cloudAccess.allowed) throw new CloudAccessError(cloudAccess.reason);
 
   const memberUserIds = await prisma.managementMember.findMany({
     where: { managementId },
@@ -461,6 +489,7 @@ export async function acceptInvite(code: string): Promise<AcceptInviteResult> {
 
   const invitation = await prisma.invitation.findUnique({
     where: { code: normalizedCode },
+    include: { management: { select: { id: true, cloudSponsorUserId: true } } },
   });
   if (!invitation) return { success: false, message: "Undangan tidak ditemukan" };
   if (invitation.status !== "pending") return { success: false, message: "Undangan sudah digunakan" };
@@ -470,6 +499,40 @@ export async function acceptInvite(code: string): Promise<AcceptInviteResult> {
     where: { managementId: invitation.managementId, userId: session.user.id },
   });
   if (existingMember) return { success: false, message: "Anda sudah menjadi anggota management ini" };
+
+  const sponsorUserId = invitation.management.cloudSponsorUserId;
+  if (isBillingEnforcementEnabled() && !sponsorUserId) {
+    return { success: false, message: "Pemilik dompet bersama sudah tidak valid" };
+  }
+  if (isBillingEnforcementEnabled() && sponsorUserId) {
+    const sponsorOwner = await prisma.managementMember.findFirst({
+      where: {
+        managementId: invitation.management.id,
+        userId: sponsorUserId,
+        role: "owner",
+      },
+    });
+    if (!sponsorOwner) {
+      return { success: false, message: "Pemilik dompet bersama sudah tidak valid" };
+    }
+
+    const sponsorPremium = await prisma.userEntitlement.findUnique({
+      where: {
+        userId_entitlementKey_environment: {
+          userId: sponsorUserId,
+          entitlementKey: "premium",
+          environment: "production",
+        },
+      },
+      select: { active: true, reconciledAt: true },
+    });
+    if (
+      !sponsorPremium?.active ||
+      sponsorPremium.reconciledAt < new Date(Date.now() - 24 * 60 * 60 * 1000)
+    ) {
+      return { success: false, message: "Langganan premium pemilik dompet sudah tidak aktif" };
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.managementMember.create({

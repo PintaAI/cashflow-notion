@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import { cache } from "react";
+import { checkManagementCloudAccess } from "@/lib/cloud-access";
+import { CloudAccessError } from "@/lib/api/helpers";
 
 export const getSession = cache(async () => {
   const hdrs = await headers();
@@ -48,13 +50,16 @@ export async function assertManagementAccess(managementId: string) {
   });
   if (!membership) throw new Error("Anda bukan anggota management ini");
 
+  const cloudAccess = await checkManagementCloudAccess(session.user.id, managementId);
+  if (!cloudAccess.allowed) throw new CloudAccessError(cloudAccess.reason);
+
   return { session, managementId };
 }
 
 export async function resolveManagementId(managementId?: string) {
-  if (!managementId) return getCurrentManagementId();
-  await assertManagementAccess(managementId);
-  return managementId;
+  const resolvedManagementId = managementId ?? await getCurrentManagementId();
+  await assertManagementAccess(resolvedManagementId);
+  return resolvedManagementId;
 }
 
 export async function activateManagement(managementId: string) {

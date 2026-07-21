@@ -33,6 +33,33 @@ Error:    { "error": "<message>" }          // 400 | 401 | 403 | 404 | 500
 
 Most endpoints accept an optional `management_id` query param (or `managementId` in the request body) to target a specific wallet. When omitted, the user's `activeManagementId` is used. The user must be a member of the target wallet.
 
+## Billing
+
+The billing endpoints require a Better Auth session. RevenueCat is authoritative for purchases; the database stores the last reconciled entitlement projection used by cloud authorization.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/billing/status` | Return the stored premium entitlement and management cloud capabilities |
+| POST | `/billing/reconcile` | Fetch canonical RevenueCat state, update production/sandbox projections, and return billing status |
+
+`GET /billing/status` does not call RevenueCat and remains available when RevenueCat is temporarily unavailable. `POST /billing/reconcile` requires these server-only variables:
+
+```text
+REVENUECAT_PROJECT_ID
+REVENUECAT_V2_SECRET_KEY
+```
+
+The V2 key needs read access to customer subscriptions and purchases. Never expose it to an Expo or browser bundle. Sandbox purchases are persisted separately and never enable production cloud capabilities.
+
+Before deploying these endpoints against an existing database:
+
+```sh
+npm run migrate:billing-foundation
+npm run migrate:billing-foundation -- --apply
+```
+
+The first command is a read-only count check. The second creates the additive billing tables, assigns a unique RevenueCat UUID to every existing user, and maps each existing management sponsor to its oldest owner without deleting user or wallet data.
+
 ---
 
 ## Managements (Wallets)

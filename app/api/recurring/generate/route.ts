@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { generateRecurringEntries } from "@/lib/db";
-import { getCurrentManagementId } from "@/lib/management";
+import { resolveManagementId } from "@/lib/management";
 
 export async function POST() {
   try {
-    const managementId = await getCurrentManagementId();
+    const managementId = await resolveManagementId();
     const count = await generateRecurringEntries(managementId);
     return NextResponse.json({ generated: count });
   } catch (error) {

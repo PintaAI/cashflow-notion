@@ -1,4 +1,8 @@
 import { auth } from "@/lib/auth";
+import {
+  checkPersonalCloudAccess,
+  checkManagementCloudAccess,
+} from "@/lib/cloud-access";
 
 export class ApiError extends Error {
   constructor(
@@ -7,6 +11,35 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = "ApiError";
+  }
+}
+
+function cloudAccessErrorMeta(reason: string): { code: string; status: number; message: string } {
+  switch (reason) {
+    case "CLOUD_SYNC_REQUIRED":
+      return { code: reason, status: 402, message: "Cloud sync requires premium subscription" };
+    case "SHARED_WALLET_PREMIUM_INACTIVE":
+      return { code: reason, status: 402, message: "Shared wallet sponsor subscription is inactive" };
+    case "SHARED_WALLET_SPONSOR_INVALID":
+      return { code: reason, status: 403, message: "Shared wallet sponsor is not a valid owner" };
+    default:
+      return { code: "BILLING_RECONCILIATION_FAILED", status: 503, message: reason };
+  }
+}
+
+export class CloudAccessError extends Error {
+  public readonly code: string;
+  private readonly _reason: string;
+  constructor(reason: string) {
+    const meta = cloudAccessErrorMeta(reason);
+    super(meta.message);
+    this.name = "CloudAccessError";
+    this.code = meta.code;
+    this._reason = reason;
+  }
+
+  get status(): number {
+    return cloudAccessErrorMeta(this._reason).status;
   }
 }
 
@@ -43,6 +76,13 @@ export async function handleError(
   defaultStatus = 500,
   defaultMessage = "Internal server error",
 ): Promise<Response> {
+  if (error instanceof CloudAccessError) {
+    return Response.json(
+      { error: error.code, message: error.message },
+      { status: error.status },
+    );
+  }
+
   if (error instanceof ApiError) {
     return errorResponse(error.message, error.status);
   }
@@ -53,6 +93,35 @@ export async function handleError(
   }
 
   return errorResponse(defaultMessage, defaultStatus);
+}
+
+export async function requirePersonalCloudAccess(userId: string): Promise<void> {
+  const result = await checkPersonalCloudAccess(userId);
+  if (!result.allowed) {
+    throw new CloudAccessError(result.reason);
+  }
+}
+
+export async function requireManagementCloudAccess(
+  userId: string,
+  managementId: string,
+): Promise<void> {
+  const result = await checkManagementCloudAccess(userId, managementId);
+  if (!result.allowed) {
+    throw new CloudAccessError(result.reason);
+  }
+}
+
+export async function resolveManagementIdAndCheckCloudAccess(
+  request: Request,
+  searchParams: URLSearchParams,
+  resolveManagementId: (managementId?: string) => Promise<string>,
+): Promise<string> {
+  const session = await requireSession(request);
+  const managementId = searchParams.get("management_id") ?? undefined;
+  const resolvedId = await resolveManagementId(managementId);
+  await requireManagementCloudAccess(session.user.id, resolvedId);
+  return resolvedId;
 }
 
 function isClientError(message: string): boolean {

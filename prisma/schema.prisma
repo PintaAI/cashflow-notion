@@ -40,17 +40,18 @@ enum WerewolfRoomStatus {
 }
 
 model User {
-  id                 String   @id
-  name               String
-  email              String   @unique
-  emailVerified      Boolean  @default(false)
-  image              String?
-  profileTheme       Json?
-  mcpApiKey          String?  @unique
-  currency           String   @default("IDR")
-  activeManagementId String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id
+  name                String
+  email               String   @unique
+  emailVerified       Boolean  @default(false)
+  image               String?
+  profileTheme        Json?
+  mcpApiKey           String?  @unique
+  revenueCatAppUserId String?  @unique @default(uuid())
+  currency            String   @default("IDR")
+  activeManagementId  String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   sessions               Session[]
   accounts               Account[]
@@ -66,6 +67,9 @@ model User {
   werewolfRoomsCreated   WerewolfRoom[]           @relation("WerewolfRoomLeader")
   werewolfParticipations WerewolfParticipant[]
   expoPushTokens         ExpoPushToken[]
+  entitlements           UserEntitlement[]
+  sponsoredManagements   Management[]             @relation("ManagementCloudSponsor")
+  betaRedemptions        BetaRedemptionCode[]
 
   @@map("User")
 }
@@ -271,12 +275,14 @@ model Verification {
 }
 
 model Management {
-  id         String   @id @default(uuid())
-  name       String
-  image      String?
-  imageTheme Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String
+  image              String?
+  imageTheme         Json?
+  cloudSponsorUserId String?
+  cloudSponsor       User?    @relation("ManagementCloudSponsor", fields: [cloudSponsorUserId], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   members          ManagementMember[]
   categories       Category[]
@@ -287,6 +293,77 @@ model Management {
   recurringEntries RecurringEntry[]
   auditSnapshots   AuditSnapshot[]
   expoPushTokens   ExpoPushToken[]
+
+  @@index([cloudSponsorUserId])
+}
+
+model UserEntitlement {
+  id                       String    @id @default(uuid())
+  userId                   String
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entitlementKey           String
+  active                   Boolean   @default(false)
+  environment              String
+  store                    String?
+  productId                String?
+  periodType               String?
+  ownership                String?
+  expiresAt                DateTime?
+  revenueCatCustomerId     String?
+  revenueCatOriginalUserId String?
+  reconciledAt             DateTime
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@unique([userId, entitlementKey, environment])
+  @@index([entitlementKey, active])
+}
+
+model RevenueCatWebhookEvent {
+  eventId            String    @id
+  apiVersion         String?
+  eventType          String
+  appId              String?
+  environment        String?
+  appUserId          String?
+  originalAppUserId  String?
+  aliases            Json?
+  rawPayload         Json
+  signatureTimestamp BigInt?
+  status             String    @default("pending")
+  attempts           Int       @default(0)
+  receivedAt         DateTime  @default(now())
+  processedAt        DateTime?
+  lastError          String?
+
+  @@index([status, receivedAt])
+}
+
+model BetaRedemptionCode {
+  id               String    @id @default(uuid())
+  codeHash         String    @unique
+  label            String?
+  expiresAt        DateTime
+  redeemedByUserId String?
+  redeemedByUser   User?     @relation(fields: [redeemedByUserId], references: [id], onDelete: SetNull)
+  redeemedAt       DateTime?
+  grantReference   String?
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+
+  @@index([redeemedByUserId])
+  @@index([expiresAt])
+}
+
+model RevenueCatDeletionJob {
+  id                  String    @id @default(uuid())
+  revenueCatAppUserId String
+  requestedAt         DateTime  @default(now())
+  revenueCatDeletedAt DateTime?
+  lastError           String?
+  attempts            Int       @default(0)
+
+  @@index([revenueCatDeletedAt, requestedAt])
 }
 
 model ExpoPushToken {

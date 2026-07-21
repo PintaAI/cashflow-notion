@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { importPKCS8, SignJWT } from "jose";
 import { prisma } from "@/lib/db";
 import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
+import { isBillingEnforcementEnabled } from "@/lib/cloud-access";
 
 function generateApiKey(): string {
   return "mcp_" + crypto.randomBytes(32).toString("hex");
@@ -83,6 +84,11 @@ export const auth = betterAuth({
           input: false,
           returned: true,
         },
+        revenueCatAppUserId: {
+          type: "string",
+          input: false,
+          returned: true,
+        },
       },
     },
   },
@@ -90,37 +96,31 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
-          const name = user.name || user.email?.split("@")[0] || "User";
-          const management = await prisma.management.create({
-            data: {
-              name: `${name}'s Household`,
-              members: {
-                create: { userId: user.id, role: "owner" },
+          if (!isBillingEnforcementEnabled()) {
+            const name = user.name || user.email?.split("@")[0] || "User";
+            const management = await prisma.management.create({
+              data: {
+                name: `${name}'s Household`,
+                cloudSponsorUserId: user.id,
+                members: { create: { userId: user.id, role: "owner" } },
               },
-            },
-          });
+            });
+            const mcpApiKey = generateApiKey();
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { mcpApiKey, activeManagementId: management.id },
+            });
+            await prisma.category.createMany({
+              data: DEFAULT_CATEGORIES.map((category) => ({ ...category, managementId: management.id })),
+            });
+            return;
+          }
 
           const mcpApiKey = generateApiKey();
           await prisma.user.update({
             where: { id: user.id },
-            data: { mcpApiKey, activeManagementId: management.id },
+            data: { mcpApiKey },
           });
-
-          await prisma.category.createMany({
-            data: DEFAULT_CATEGORIES.map((category) => ({
-              ...category,
-              managementId: management.id,
-            })),
-          });
-
-          const orphanedCount = await prisma.entry.count({ where: { managementId: null } });
-          if (orphanedCount > 0) {
-            await Promise.all([
-              prisma.category.updateMany({ where: { managementId: null }, data: { managementId: management.id } }),
-              prisma.entry.updateMany({ where: { managementId: null }, data: { managementId: management.id } }),
-              prisma.quickFill.updateMany({ where: { managementId: null }, data: { managementId: management.id } }),
-            ]);
-          }
         },
       },
     },
