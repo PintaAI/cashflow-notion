@@ -31,36 +31,7 @@ Error:    { "error": "<message>" }          // 400 | 401 | 403 | 404 | 500
 
 ### Wallet scoping
 
-Most endpoints accept an optional `management_id` query param (or `managementId` in the request body) to target a specific wallet. When omitted, the user's `activeManagementId` is used. The user must be a member of the target wallet.
-
-## Billing
-
-The billing endpoints require a Better Auth session. RevenueCat is authoritative for purchases; the database stores the last reconciled entitlement projection used by cloud authorization.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/billing/status` | Return the stored premium entitlement and management cloud capabilities |
-| POST | `/billing/reconcile` | Fetch canonical RevenueCat state, update production/sandbox projections, and return billing status |
-
-`GET /billing/status` does not call RevenueCat and remains available when RevenueCat is temporarily unavailable. `POST /billing/reconcile` requires these server-only variables:
-
-```text
-REVENUECAT_PROJECT_ID
-REVENUECAT_V2_SECRET_KEY
-```
-
-The V2 key needs read access to customer subscriptions and purchases. Never expose it to an Expo or browser bundle. Sandbox purchases are persisted separately and never enable production cloud capabilities.
-
-Before deploying these endpoints against an existing database:
-
-```sh
-npm run migrate:billing-foundation
-npm run migrate:billing-foundation -- --apply
-```
-
-The first command is a read-only count check. The second creates the additive billing tables, assigns a unique RevenueCat UUID to every existing user, and maps each existing management sponsor to its oldest owner without deleting user or wallet data.
-
----
+Most endpoints accept an optional `management_id` query param (or `managementId` in the request body) to target a specific wallet. When omitted, the user's `activeManagementId` is used. The user must be a member of the target wallet. Cloud sync and shared wallets are available to every authenticated user; there is no paid entitlement check.
 
 ## Managements (Wallets)
 
@@ -93,6 +64,21 @@ The first command is a read-only count check. The second creates the additive bi
 | POST | `/entries/transfer` | Transfer between wallets | `{ toManagementId, nominal?, fromManagementId?, originalNominal?, originalCurrency?, exchangeRateToIdr?, exchangeRateAt?, date?, note? }` |
 | PATCH | `/entries/{id}` | Edit entry | partial entry fields |
 | DELETE | `/entries/{id}` | Delete entry | `?management_id=` |
+
+### Inbound share extraction
+
+`POST /inbound-share/extract` accepts an image, shared text, or both as `multipart/form-data` and returns a reviewable entry draft. It never creates an entry.
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `file` | file | one of `file` or `text` | JPEG, PNG, WebP, HEIC, or HEIF image; maximum 4 MB |
+| `text` | string | one of `file` or `text` | Shared text; maximum 50,000 characters |
+| `management_id` | string | no | Defaults to the active wallet; controls category mapping |
+| `locale` | string | no | User locale, such as `id-ID` |
+| `currency` | string | no | Preferred ISO 4217 currency; defaults to `IDR` |
+| `current_date` | string | no | Client-local date in `YYYY-MM-DD`; defaults to the server date |
+
+The response contains `draft.name`, `amount`, `currency`, `date`, `categoryId`, `category`, and `io`. Extracted fields are nullable, and `categoryId` is only set when the model's category exactly matches a category in the selected wallet. The response also includes `managementId` and source metadata. The client must present the draft for review before calling `POST /entries`.
 
 ### Entry body fields
 

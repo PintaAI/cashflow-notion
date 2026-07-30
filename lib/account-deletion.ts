@@ -6,15 +6,9 @@ export type AccountDeletionResult = {
   deletedManagements: number;
   deletedNotes: number;
   removedPushSubscriptions: number;
-  suspendedSponsorships: number;
 };
 
 export async function deleteAccount(userId: string): Promise<AccountDeletionResult> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { revenueCatAppUserId: true },
-  });
-
   const result = await prisma.$transaction(async (tx) => {
     const existingUser = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!existingUser) {
@@ -26,7 +20,6 @@ export async function deleteAccount(userId: string): Promise<AccountDeletionResu
       select: { managementId: true, role: true },
     });
     const deletedManagementIds: string[] = [];
-    let suspendedSponsorships = 0;
 
     for (const membership of memberships) {
       const remainingMembers = await tx.managementMember.findMany({
@@ -41,52 +34,12 @@ export async function deleteAccount(userId: string): Promise<AccountDeletionResu
         continue;
       }
 
-      const management = await tx.management.findUnique({
-        where: { id: membership.managementId },
-        select: { cloudSponsorUserId: true },
-      });
-
-      if (management?.cloudSponsorUserId === userId) {
-        await tx.management.update({
-          where: { id: membership.managementId },
-          data: { cloudSponsorUserId: null },
-        });
-        suspendedSponsorships += 1;
-      }
-
       if (membership.role === "owner" && !remainingMembers.some((member) => member.role === "owner")) {
-        const premiumMembers: typeof remainingMembers = [];
-        for (const member of remainingMembers) {
-          const entitlement = await tx.userEntitlement.findUnique({
-            where: {
-              userId_entitlementKey_environment: {
-                userId: member.userId,
-                entitlementKey: "premium",
-                environment: "production",
-              },
-            },
-            select: { active: true },
-          });
-          if (entitlement?.active) {
-            premiumMembers.push(member);
-          }
-        }
-
-        const nextOwner = premiumMembers[0];
-        if (nextOwner) {
-          await tx.managementMember.update({
-            where: { id: nextOwner.id },
-            data: { role: "owner" },
-          });
-        }
-
-        if (nextOwner && management?.cloudSponsorUserId === userId) {
-          await tx.management.update({
-            where: { id: membership.managementId },
-            data: { cloudSponsorUserId: nextOwner.userId },
-          });
-          suspendedSponsorships -= 1;
-        }
+        const nextOwner = remainingMembers[0];
+        await tx.managementMember.update({
+          where: { id: nextOwner.id },
+          data: { role: "owner" },
+        });
       }
     }
 
@@ -117,12 +70,6 @@ export async function deleteAccount(userId: string): Promise<AccountDeletionResu
       }
     }
 
-    if (user?.revenueCatAppUserId) {
-      await tx.revenueCatDeletionJob.create({
-        data: { revenueCatAppUserId: user.revenueCatAppUserId },
-      });
-    }
-
     await tx.oAuthAuthorizationCode.deleteMany({ where: { userId } });
     await tx.oAuthToken.deleteMany({ where: { userId } });
     await tx.oAuthConsent.deleteMany({ where: { userId } });
@@ -131,7 +78,6 @@ export async function deleteAccount(userId: string): Promise<AccountDeletionResu
     return {
       deletedManagementIds,
       deletedNotes: deletedNoteIds.length,
-      suspendedSponsorships,
     };
   });
 
@@ -142,7 +88,6 @@ export async function deleteAccount(userId: string): Promise<AccountDeletionResu
     deletedManagements: result.deletedManagementIds.length,
     deletedNotes: result.deletedNotes,
     removedPushSubscriptions,
-    suspendedSponsorships: result.suspendedSponsorships,
   };
 }
 

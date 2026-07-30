@@ -9,10 +9,6 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "migrate:entry-updated-at": "tsx scripts/safe-add-entry-updated-at.ts",
-    "migrate:billing-foundation": "tsx scripts/safe-add-billing-foundation.ts",
-    "test:billing": "tsx --test tests/revenuecat.test.ts",
-    "billing:generate-beta-codes": "tsx scripts/generate-beta-redemption-codes.ts",
-    "billing:cleanup-beta-users": "tsx scripts/cleanup-unredeemed-beta-users.ts",
     "generate-icons": "bun run scripts/generate-icons.ts"
   },
   "dependencies": {

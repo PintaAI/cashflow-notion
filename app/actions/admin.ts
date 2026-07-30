@@ -278,17 +278,6 @@ export async function transferOwnership(managementId: string, newOwnerUserId: st
     where: { managementId, userId: newOwnerUserId },
   });
   if (!membership) throw new Error("User is not a member of this management");
-  const entitlement = await prisma.userEntitlement.findUnique({
-    where: {
-      userId_entitlementKey_environment: {
-        userId: newOwnerUserId,
-        entitlementKey: "premium",
-        environment: "production",
-      },
-    },
-    select: { active: true },
-  });
-  if (!entitlement?.active) throw new Error("New owner must have active premium access");
 
   const currentOwner = await prisma.managementMember.findFirst({
     where: { managementId, role: "owner" },
@@ -304,10 +293,6 @@ export async function transferOwnership(managementId: string, newOwnerUserId: st
     await tx.managementMember.update({
       where: { id: membership.id },
       data: { role: "owner" },
-    });
-    await tx.management.update({
-      where: { id: managementId },
-      data: { cloudSponsorUserId: newOwnerUserId },
     });
   });
 
