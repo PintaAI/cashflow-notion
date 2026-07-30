@@ -12,8 +12,8 @@ export default function SupportPage() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Support</h1>
         <p className="mt-5 text-base leading-7 text-muted-foreground">
           Need help? Reach out to us at{" "}
-          <a href="mailto:pintaidev@gmail.com" className="text-primary hover:underline">
-            pintaidev@gmail.com
+          <a href="mailto:rorezxez@gmail.com" className="text-primary hover:underline">
+            rorezxez@gmail.com
           </a>
         </p>
       </article>

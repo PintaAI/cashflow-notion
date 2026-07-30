@@ -12,8 +12,8 @@ export default function SupportPageId() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Dukungan</h1>
         <p className="mt-5 text-base leading-7 text-muted-foreground">
           Butuh bantuan? Hubungi kami di{" "}
-          <a href="mailto:pintaidev@gmail.com" className="text-primary hover:underline">
-            pintaidev@gmail.com
+          <a href="mailto:rorezxez@gmail.com" className="text-primary hover:underline">
+            rorezxez@gmail.com
           </a>
         </p>
       </article>
