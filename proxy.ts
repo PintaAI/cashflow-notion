@@ -51,6 +51,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/oauth") ||
     pathname.startsWith("/statie") ||
     pathname.startsWith("/privacy") ||
+    pathname.startsWith("/support") ||
     pathname.startsWith("/werewolf-multiplayer") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
