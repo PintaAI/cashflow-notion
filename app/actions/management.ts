@@ -9,6 +9,7 @@ import { getBlobOptions } from "@/lib/blob";
 import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
 import { getSession, resolveManagementId } from "@/lib/management";
 import { parseThemeColors, type GeneratedThemeColors } from "@/lib/theme-palettes";
+import { isUniqueConstraintError } from "@/lib/api/client-id";
 
 const MAX_MANAGEMENT_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_MANAGEMENT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -254,24 +255,42 @@ export async function updateManagementImage(
   }
 }
 
-export async function createManagement(name: string) {
+export async function createManagement(name: string, clientId?: string) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Nama tidak boleh kosong");
 
-  const management = await prisma.management.create({
-    data: {
-      name: trimmed,
-      members: {
-        create: { userId: session.user.id, role: "owner" },
+  if (clientId) {
+    const existing = await prisma.management.findFirst({
+      where: { id: clientId, members: { some: { userId: session.user.id } } },
+    });
+    if (existing) return { success: true, managementId: existing.id, name: existing.name };
+  }
+
+  let management;
+  try {
+    management = await prisma.management.create({
+      data: {
+        ...(clientId ? { id: clientId } : {}),
+        name: trimmed,
+        members: {
+          create: { userId: session.user.id, role: "owner" },
+        },
+        categories: {
+          create: DEFAULT_CATEGORIES.map((c) => ({ name: c.name, color: c.color, icon: c.icon })),
+        },
       },
-      categories: {
-        create: DEFAULT_CATEGORIES.map((c) => ({ name: c.name, color: c.color, icon: c.icon })),
-      },
-    },
-  });
+    });
+  } catch (error) {
+    if (!clientId || !isUniqueConstraintError(error)) throw error;
+    const existing = await prisma.management.findFirst({
+      where: { id: clientId, members: { some: { userId: session.user.id } } },
+    });
+    if (!existing) throw error;
+    management = existing;
+  }
 
   await prisma.user.update({
     where: { id: session.user.id },

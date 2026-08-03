@@ -2,6 +2,7 @@ import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { fetchEntriesFiltered, addEntry } from "@/app/actions/cashflow";
 import type { IOType } from "@/lib/db";
 import { normalizeEntryAmount } from "@/lib/api/entry-amount";
+import { optionalClientId } from "@/lib/api/client-id";
 
 export async function GET(request: Request) {
   try {
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
     }
 
     const entry = await addEntry({
+      clientId: optionalClientId(body.clientId),
       managementId: body.managementId,
       name: body.name,
       nominal: amount.nominal,

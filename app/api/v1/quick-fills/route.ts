@@ -3,6 +3,7 @@ import {
   fetchQuickFills,
   addQuickFill,
 } from "@/app/actions/quick-fill";
+import { optionalClientId } from "@/lib/api/client-id";
 
 export async function GET(request: Request) {
   try {
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       );
     }
     const data = await addQuickFill({
+      clientId: optionalClientId(body.clientId),
       managementId: body.managementId,
       name: body.name,
       nominal: body.nominal,

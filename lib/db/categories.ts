@@ -66,11 +66,12 @@ export async function getCategoryOptionsWithUsage(managementId: string): Promise
   }));
 }
 
-export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string, budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null }): Promise<CategoryOptionWithColor[]> {
+export async function addCategoryOption(name: string, color?: string, icon?: string, managementId?: string, budgets?: { budgetDaily?: number | null; budgetWeekly?: number | null; budgetMonthly?: number | null; budgetYearly?: number | null }, clientId?: string): Promise<CategoryOptionWithColor[]> {
   if (!managementId) throw new Error("managementId required");
   try {
     await prisma.category.create({
       data: {
+        ...(clientId ? { id: clientId } : {}),
         name,
         color: color || "default",
         icon: icon ?? null,
@@ -83,6 +84,10 @@ export async function addCategoryOption(name: string, color?: string, icon?: str
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (clientId) {
+        const existing = await getCategoryOptions(managementId);
+        if (existing.some((category) => category.id === clientId)) return existing;
+      }
       throw new Error(`Category "${name}" already exists`);
     }
     throw error;

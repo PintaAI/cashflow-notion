@@ -11,6 +11,7 @@ import {
   type IOType,
 } from "@/lib/db";
 import { resolveManagementId } from "@/lib/management";
+import { isUniqueConstraintError } from "@/lib/api/client-id";
 
 export async function fetchRecurringEntries(managementId?: string): Promise<RecurringEntryData[]> {
   managementId = await resolveManagementId(managementId);
@@ -18,6 +19,7 @@ export async function fetchRecurringEntries(managementId?: string): Promise<Recu
 }
 
 export async function addRecurringEntry(data: {
+  clientId?: string;
   managementId?: string;
   name: string;
   nominal: number;
@@ -32,7 +34,18 @@ export async function addRecurringEntry(data: {
   endDate?: string | null;
 }): Promise<RecurringEntryData> {
   const managementId = await resolveManagementId(data.managementId);
-  return createRecurringEntry({ ...data, reminderTime: data.reminderTime ?? "09:00", managementId });
+  if (data.clientId) {
+    const existing = (await getRecurringEntries(managementId)).find((item) => item.id === data.clientId);
+    if (existing) return existing;
+  }
+  try {
+    return await createRecurringEntry({ ...data, id: data.clientId, reminderTime: data.reminderTime ?? "09:00", managementId });
+  } catch (error) {
+    if (!data.clientId || !isUniqueConstraintError(error)) throw error;
+    const existing = (await getRecurringEntries(managementId)).find((item) => item.id === data.clientId);
+    if (!existing) throw error;
+    return existing;
+  }
 }
 
 export async function editRecurringEntry(

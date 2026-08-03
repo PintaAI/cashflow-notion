@@ -1,6 +1,7 @@
 import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { getUserManagements, createManagement } from "@/app/actions/management";
 import { prisma } from "@/lib/db";
+import { optionalClientId } from "@/lib/api/client-id";
 
 async function getManagementForApi(managementId: string) {
   const management = await prisma.management.findUnique({
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     if (!body?.name || typeof body.name !== "string") {
       return Response.json({ error: "name is required" }, { status: 400 });
     }
-    const result = await createManagement(body.name);
+    const result = await createManagement(body.name, optionalClientId(body.clientId));
     return ok(await getManagementForApi(result.managementId), 201);
   } catch (error) {
     return handleError(error);

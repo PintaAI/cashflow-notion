@@ -4,6 +4,7 @@ import {
   fetchCategoriesWithDetails,
   createCategory,
 } from "@/app/actions/categories";
+import { optionalClientId } from "@/lib/api/client-id";
 
 export async function GET(request: Request) {
   try {
@@ -27,14 +28,20 @@ export async function POST(request: Request) {
     if (!body?.name || typeof body.name !== "string") {
       return Response.json({ error: "name is required" }, { status: 400 });
     }
+    const clientId = optionalClientId(body.clientId);
     const data = await createCategory(
       body.name,
       body.color,
       body.icon,
       body.budgets,
       body.managementId,
+      clientId,
     );
-    return ok(data, 201);
+    const created = clientId
+      ? data.find((category) => category.id === clientId)
+      : data.find((category) => category.name === body.name.trim());
+    if (!created) throw new Error("Created category not found");
+    return ok(created, 201);
   } catch (error) {
     return handleError(error);
   }

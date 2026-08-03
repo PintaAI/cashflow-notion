@@ -26,6 +26,7 @@ export async function getQuickFills(managementId: string): Promise<QuickFillPres
 }
 
 export async function createQuickFill(data: {
+  id?: string;
   name: string;
   nominal: number;
   categoryId?: string | null;
@@ -41,6 +42,7 @@ export async function createQuickFill(data: {
 
   const preset = await prisma.quickFill.create({
     data: {
+      ...(data.id ? { id: data.id } : {}),
       name: data.name,
       nominal: data.nominal,
       categoryId: data.categoryId ?? null,

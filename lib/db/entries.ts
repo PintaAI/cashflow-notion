@@ -152,6 +152,7 @@ async function findCategory(name: CategoryType | undefined, managementId: string
 }
 
 export async function createEntry(data: {
+  id?: string;
   name: string;
   nominal: number;
   originalNominal?: number;
@@ -172,6 +173,7 @@ export async function createEntry(data: {
 
   const entry = await prisma.entry.create({
     data: {
+      ...(data.id ? { id: data.id } : {}),
       name: data.name,
       nominal: data.nominal,
       originalNominal: data.originalNominal ?? data.nominal,

@@ -4,6 +4,7 @@ import {
   addRecurringEntry,
 } from "@/app/actions/recurring";
 import type { IOType, RecurringFrequency } from "@/lib/db";
+import { optionalClientId } from "@/lib/api/client-id";
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
     }
 
     const data = await addRecurringEntry({
+      clientId: optionalClientId(body.clientId),
       managementId: body.managementId,
       name: body.name,
       nominal: body.nominal,

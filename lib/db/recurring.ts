@@ -37,6 +37,7 @@ export async function getRecurringEntries(managementId: string): Promise<Recurri
 }
 
 export async function createRecurringEntry(data: {
+  id?: string;
   managementId: string;
   name: string;
   nominal: number;
@@ -54,6 +55,7 @@ export async function createRecurringEntry(data: {
 
   const entry = await prisma.recurringEntry.create({
     data: {
+      ...(data.id ? { id: data.id } : {}),
       managementId: data.managementId,
       name: data.name,
       nominal: data.nominal,

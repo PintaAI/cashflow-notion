@@ -18,6 +18,7 @@ import { checkBudgetAlerts } from "@/lib/budget-alerts";
 import { prisma } from "@/lib/db";
 import { entryCreatorSelect, toEntry as mapDbEntry } from "@/lib/db/entries";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { isUniqueConstraintError } from "@/lib/api/client-id";
 
 const VALID_CURRENCIES = new Set(SUPPORTED_CURRENCIES.map((currency) => currency.code));
 
@@ -137,6 +138,7 @@ export async function fetchTotalCount(managementId?: string): Promise<number> {
 }
 
 export async function addEntry(data: {
+  clientId?: string;
   managementId?: string;
   name: string;
   nominal: number;
@@ -150,7 +152,25 @@ export async function addEntry(data: {
 }): Promise<CashflowEntry> {
   const managementId = await resolveManagementId(data.managementId);
   const session = await getSession();
-  const entry = await createEntry({ ...data, managementId, userId: session?.user.id });
+  if (data.clientId) {
+    const existing = await prisma.entry.findFirst({
+      where: { id: data.clientId, managementId },
+      include: { category: true, createdBy: { select: entryCreatorSelect } },
+    });
+    if (existing) return mapDbEntry(existing);
+  }
+  let entry: CashflowEntry;
+  try {
+    entry = await createEntry({ ...data, id: data.clientId, managementId, userId: session?.user.id });
+  } catch (error) {
+    if (!data.clientId || !isUniqueConstraintError(error)) throw error;
+    const existing = await prisma.entry.findFirst({
+      where: { id: data.clientId, managementId },
+      include: { category: true, createdBy: { select: entryCreatorSelect } },
+    });
+    if (!existing) throw error;
+    entry = mapDbEntry(existing);
+  }
 
   if (data.io === "Expenses" && data.category) {
     const cat = await prisma.category.findFirst({ where: { name: data.category, managementId } });
