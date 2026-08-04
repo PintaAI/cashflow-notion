@@ -38,7 +38,8 @@ export async function POST(request: Request) {
       clientId,
     );
     const created = clientId
-      ? data.find((category) => category.id === clientId)
+      ? data.find((category) => category.id === clientId) ??
+        data.find((category) => category.name === body.name.trim())
       : data.find((category) => category.name === body.name.trim());
     if (!created) throw new Error("Created category not found");
     return ok(created, 201);

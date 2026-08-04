@@ -85,8 +85,23 @@ export async function addCategoryOption(name: string, color?: string, icon?: str
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       if (clientId) {
-        const existing = await getCategoryOptions(managementId);
-        if (existing.some((category) => category.id === clientId)) return existing;
+        const existing = await prisma.category.findFirst({
+          where: { managementId, OR: [{ id: clientId }, { name }] },
+        });
+        if (existing) {
+          await prisma.category.update({
+            where: { id: existing.id },
+            data: {
+              color: color || "default",
+              icon: icon ?? null,
+              budgetDaily: budgets?.budgetDaily ?? null,
+              budgetWeekly: budgets?.budgetWeekly ?? null,
+              budgetMonthly: budgets?.budgetMonthly ?? null,
+              budgetYearly: budgets?.budgetYearly ?? null,
+            },
+          });
+          return getCategoryOptions(managementId);
+        }
       }
       throw new Error(`Category "${name}" already exists`);
     }
