@@ -40,17 +40,17 @@ enum WerewolfRoomStatus {
 }
 
 model User {
-  id                  String   @id
-  name                String
-  email               String   @unique
-  emailVerified       Boolean  @default(false)
-  image               String?
-  profileTheme        Json?
-  mcpApiKey           String?  @unique
-  currency            String   @default("IDR")
-  activeManagementId  String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String   @id
+  name               String
+  email              String   @unique
+  emailVerified      Boolean  @default(false)
+  image              String?
+  profileTheme       Json?
+  mcpApiKey          String?  @unique
+  currency           String   @default("IDR")
+  activeManagementId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   sessions               Session[]
   accounts               Account[]
@@ -66,6 +66,8 @@ model User {
   werewolfRoomsCreated   WerewolfRoom[]           @relation("WerewolfRoomLeader")
   werewolfParticipations WerewolfParticipant[]
   expoPushTokens         ExpoPushToken[]
+  cloudSponsoredWallets  Management[]
+  betaRedemptionCodes    BetaRedemptionCode[]
 
   @@map("User")
 }
@@ -108,7 +110,7 @@ model StatieParticipant {
   joinedAt   DateTime   @default(now())
   lastSeenAt DateTime   @default(now())
 
-  votes StatieVote[]
+  votes       StatieVote[]
   transcripts StatieTranscript[]
 
   @@unique([roomId, token])
@@ -134,21 +136,21 @@ model StatieStatement {
 }
 
 model StatieRound {
-  id              String            @id @default(uuid())
-  roomId          String
-  room            StatieRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  statementId     String
-  statement       StatieStatement   @relation(fields: [statementId], references: [id], onDelete: Restrict)
-  status          StatieRoundStatus @default(Voting)
-  votingStartedAt DateTime          @default(now())
-  debateStartedAt DateTime?
-  debateEndsAt    DateTime?
+  id                   String            @id @default(uuid())
+  roomId               String
+  room                 StatieRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  statementId          String
+  statement            StatieStatement   @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  status               StatieRoundStatus @default(Voting)
+  votingStartedAt      DateTime          @default(now())
+  debateStartedAt      DateTime?
+  debateEndsAt         DateTime?
   transcriptDeadlineAt DateTime?
-  finishedAt      DateTime?
-  aiScore         Json?
-  aiScoreError    String?
-  aiScoredAt      DateTime?
-  createdAt       DateTime          @default(now())
+  finishedAt           DateTime?
+  aiScore              Json?
+  aiScoreError         String?
+  aiScoredAt           DateTime?
+  createdAt            DateTime          @default(now())
 
   votes       StatieVote[]
   transcripts StatieTranscript[]
@@ -209,17 +211,17 @@ model WerewolfRoom {
 }
 
 model WerewolfParticipant {
-  id           String        @id @default(uuid())
-  roomId       String
-  room         WerewolfRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  userId       String?
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  guestName    String?
-  token        String
-  isLeader     Boolean       @default(false)
-  isModerator  Boolean       @default(false)
-  joinedAt     DateTime      @default(now())
-  lastSeenAt   DateTime      @default(now())
+  id          String       @id @default(uuid())
+  roomId      String
+  room        WerewolfRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName   String?
+  token       String
+  isLeader    Boolean      @default(false)
+  isModerator Boolean      @default(false)
+  joinedAt    DateTime     @default(now())
+  lastSeenAt  DateTime     @default(now())
 
   @@unique([roomId, token])
   @@index([roomId])
@@ -271,12 +273,13 @@ model Verification {
 }
 
 model Management {
-  id         String   @id @default(uuid())
-  name       String
-  image      String?
-  imageTheme Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String
+  image              String?
+  imageTheme         Json?
+  cloudSponsorUserId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   members          ManagementMember[]
   categories       Category[]
@@ -288,7 +291,25 @@ model Management {
   auditSnapshots   AuditSnapshot[]
   expoPushTokens   ExpoPushToken[]
   lifeFlowEntities LifeFlowEntity[]
+  cloudSponsorUser User?              @relation(fields: [cloudSponsorUserId], references: [id])
 
+  @@index([cloudSponsorUserId])
+}
+
+model BetaRedemptionCode {
+  id               String    @id
+  codeHash         String    @unique
+  label            String?
+  expiresAt        DateTime
+  redeemedByUserId String?
+  redeemedAt       DateTime?
+  grantReference   String?
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+  redeemedBy       User?     @relation(fields: [redeemedByUserId], references: [id], onUpdate: NoAction)
+
+  @@index([expiresAt])
+  @@index([redeemedByUserId])
 }
 
 model LifeFlowEntity {
