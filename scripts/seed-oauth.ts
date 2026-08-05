@@ -23,7 +23,7 @@ async function main() {
       ],
       grantTypes: ["authorization_code", "refresh_token"],
       responseTypes: ["code"],
-      scope: "cashflow:read cashflow:write",
+      scope: "cashflow:read cashflow:write lifeflow:read lifeflow:write",
       isPublic: true,
     },
   });

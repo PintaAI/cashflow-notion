@@ -3,9 +3,11 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 export const SCOPES = {
   READ: "cashflow:read",
   WRITE: "cashflow:write",
+  LIFEFLOW_READ: "lifeflow:read",
+  LIFEFLOW_WRITE: "lifeflow:write",
 } as const;
 
-export const SCOPES_SUPPORTED = [SCOPES.READ, SCOPES.WRITE];
+export const SCOPES_SUPPORTED = [SCOPES.READ, SCOPES.WRITE, SCOPES.LIFEFLOW_READ, SCOPES.LIFEFLOW_WRITE];
 
 export const TOKEN_EXPIRY_SECONDS = 3600;
 export const REFRESH_TOKEN_EXPIRY_SECONDS = 30 * 24 * 3600;

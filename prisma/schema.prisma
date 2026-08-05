@@ -287,7 +287,24 @@ model Management {
   recurringEntries RecurringEntry[]
   auditSnapshots   AuditSnapshot[]
   expoPushTokens   ExpoPushToken[]
+  lifeFlowEntities LifeFlowEntity[]
 
+}
+
+model LifeFlowEntity {
+  id           String     @id @default(uuid())
+  managementId String
+  management   Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  kind         String
+  entityId     String
+  payload      Json?
+  deletedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([managementId, kind, entityId])
+  @@index([managementId, updatedAt])
+  @@index([managementId, kind, deletedAt])
 }
 
 model ExpoPushToken {

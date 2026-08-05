@@ -45,7 +45,7 @@ const handler = async (req: Request) => {
 
   if (managementId && userId) {
     console.log(`MCP: context set managementId=${managementId} userId=${userId}`);
-    return managementContext.run({ managementId, userId }, () => rawMcpHandler(req));
+    return managementContext.run({ managementId, userId, scopes: authInfo?.scopes ?? [] }, () => rawMcpHandler(req));
   }
   console.warn("MCP: no management context available from auth");
   return rawMcpHandler(req);
@@ -90,7 +90,7 @@ async function verifyToken(
       });
       if (user) {
         userId = user.id;
-        scopes = ["cashflow:read", "cashflow:write"];
+        scopes = ["cashflow:read", "cashflow:write", "lifeflow:read", "lifeflow:write"];
       }
     }
   }
@@ -104,7 +104,7 @@ async function verifyToken(
       });
       if (user) {
         userId = user.id;
-        scopes = ["cashflow:read", "cashflow:write"];
+        scopes = ["cashflow:read", "cashflow:write", "lifeflow:read", "lifeflow:write"];
       }
     }
   }

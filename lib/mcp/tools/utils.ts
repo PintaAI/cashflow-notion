@@ -7,6 +7,7 @@ import { convertFromIdr, convertToIdr } from "@/lib/currency";
 interface MCPContext {
   managementId: string;
   userId: string;
+  scopes: string[];
 }
 
 export interface UserCurrencyContext {
@@ -53,6 +54,11 @@ export function getUserId(): string {
   const ctx = managementContext.getStore();
   if (!ctx) throw new Error("No management context");
   return ctx.userId;
+}
+
+export function requireMcpScope(scope: string): void {
+  const ctx = managementContext.getStore();
+  if (!ctx?.scopes.includes(scope)) throw new Error(`Missing required OAuth scope: ${scope}`);
 }
 
 export async function getUserCurrencyContext(): Promise<UserCurrencyContext> {
