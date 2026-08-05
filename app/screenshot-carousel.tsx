@@ -18,10 +18,7 @@ const screenshots = [
   { file: "sidebar.jpg", title: "Spaces" },
 ] as const;
 
-type Locale = "id" | "en";
-
-export function ScreenshotCarousel() {
-  const [locale, setLocale] = useState<Locale>("id");
+export function ScreenshotCarousel({ locale }: { locale: "id" | "en" }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -34,11 +31,6 @@ export function ScreenshotCarousel() {
       track.scrollTo({ left: item.offsetLeft, behavior: "smooth" });
     }
     setActiveIndex(nextIndex);
-  }
-
-  function changeLocale(nextLocale: Locale) {
-    setLocale(nextLocale);
-    goTo(0);
   }
 
   function updateActiveSlide() {
@@ -58,19 +50,7 @@ export function ScreenshotCarousel() {
   return (
     <div className={styles.carousel}>
       <div className={styles.carouselToolbar}>
-        <div className={styles.localeSwitch} aria-label="Screenshot language">
-          {(["id", "en"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={locale === item ? styles.localeActive : undefined}
-              onClick={() => changeLocale(item)}
-              aria-pressed={locale === item}
-            >
-              {item.toUpperCase()}
-            </button>
-          ))}
-        </div>
+        <p className={styles.carouselLabel}>{locale === "id" ? "Tampilan aplikasi · Indonesia" : "App interface · English"}</p>
 
         <div className={styles.carouselArrows}>
           <span aria-live="polite">{String(activeIndex + 1).padStart(2, "0")} / {screenshots.length}</span>

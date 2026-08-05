@@ -53,12 +53,16 @@
 .navLinks a:hover, .webLink:hover { opacity: 0.55; }
 
 .webLink {
-  justify-self: end;
   padding-bottom: 4px;
   border-bottom: 1px solid currentColor;
   font-size: 12px;
   font-weight: 600;
 }
+
+.navActions { display: flex; align-items: center; justify-self: end; gap: 24px; }
+.languageLinks { display: flex; align-items: center; gap: 6px; color: rgb(16 21 19 / 36%); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
+.languageLinks a { color: rgb(16 21 19 / 38%); }
+.languageLinks .languageActive { color: var(--ink); }
 
 .hero {
   display: grid;
@@ -137,8 +141,8 @@
   position: absolute;
   z-index: 2;
   top: 0;
-  right: 7%;
-  width: min(430px, 75%);
+  right: 15%;
+  width: min(300px, 58%);
   overflow: hidden;
   border: 8px solid #111512;
   border-radius: 46px;
@@ -194,12 +198,17 @@
 .manifesto h2 { max-width: 980px; font-size: clamp(48px, 6.5vw, 88px); }
 .manifesto h2 em { color: #a5e6d3; }
 
-.featureGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 100px; border-top: 1px solid rgb(255 255 255 / 20%); }
-.featureGrid article { padding: 30px 50px 0 0; }
-.featureGrid article + article { padding-left: 50px; border-left: 1px solid rgb(255 255 255 / 20%); }
-.featureGrid span { color: var(--mint); font-size: 11px; }
-.featureGrid h3 { margin: 35px 0 15px; font-family: var(--font-lora), Georgia, serif; font-size: 26px; font-weight: 500; letter-spacing: -0.045em; }
-.featureGrid p { max-width: 320px; margin: 0; color: #aeb7b2; font-size: 13px; line-height: 1.8; letter-spacing: -0.01em; }
+.pillarGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; margin-top: 100px; border-top: 1px solid rgb(255 255 255 / 20%); }
+.pillarGrid article { padding: 34px 70px 0 0; }
+.pillarGrid article + article { padding-left: 70px; border-left: 1px solid rgb(255 255 255 / 20%); }
+.pillarGrid header { display: flex; align-items: center; justify-content: space-between; }
+.pillarGrid header span { color: var(--mint); font-size: 11px; }
+.pillarGrid header small { color: #7f8b85; font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.pillarGrid h3 { margin: 48px 0 20px; font-family: var(--font-lora), Georgia, serif; font-size: clamp(42px, 4vw, 58px); font-weight: 500; letter-spacing: -0.055em; }
+.pillarGrid p { max-width: 480px; margin: 0; color: #d6dcd9; font-size: 14px; line-height: 1.8; letter-spacing: -0.01em; }
+.pillarGrid .pillarDetail { margin-top: 20px; color: #8f9a95; font-size: 12px; }
+.pillarTags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 30px; }
+.pillarTags span { padding: 7px 12px; border: 1px solid rgb(85 214 178 / 32%); border-radius: 999px; color: var(--mint); font-size: 9px; font-weight: 600; letter-spacing: 0.04em; }
 
 .preview {
   width: min(100% - 48px, 1240px);
@@ -217,7 +226,7 @@
 }
 .previewCopy h2 { font-size: clamp(54px, 5.5vw, 82px); }
 .previewCopy .eyebrow { grid-column: 1 / -1; }
-.previewCopy > p:not(.eyebrow) { max-width: 430px; margin: 0 0 38px; color: var(--quiet); font-size: 14px; line-height: 1.85; }
+.previewCopy > div > p { max-width: 430px; margin: 0 0 38px; color: var(--quiet); font-size: 14px; line-height: 1.85; }
 .textLink { display: inline-flex; gap: 30px; padding-bottom: 5px; border-bottom: 1px solid currentColor; color: inherit; font-size: 12px; font-weight: 600; text-decoration: none; }
 .textLink span { transition: transform 180ms ease; }
 .textLink:hover span { transform: translateX(5px); }
@@ -231,28 +240,7 @@
   margin-bottom: 24px;
 }
 
-.localeSwitch {
-  display: flex;
-  padding: 4px;
-  border: 1px solid rgb(16 21 19 / 14%);
-  border-radius: 999px;
-}
-
-.localeSwitch button {
-  min-width: 48px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--quiet);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-}
-
-.localeSwitch .localeActive { background: var(--ink); color: white; }
+.carouselLabel { margin: 0; color: var(--quiet); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
 
 .carouselArrows { display: flex; align-items: center; gap: 8px; }
 .carouselArrows span { margin-right: 12px; color: var(--quiet); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }
@@ -341,11 +329,11 @@
   .hero { grid-template-columns: 1fr; padding-top: 70px; }
   .heroCopy { max-width: 720px; }
   .heroVisual { width: min(100%, 620px); margin: 70px auto 0; }
-  .featureGrid { grid-template-columns: 1fr; }
-  .featureGrid article, .featureGrid article + article { padding: 30px 0; border-left: 0; border-bottom: 1px solid rgb(255 255 255 / 20%); }
-  .featureGrid h3 { margin-top: 20px; }
+  .pillarGrid { grid-template-columns: 1fr; }
+  .pillarGrid article, .pillarGrid article + article { padding: 34px 0 50px; border-left: 0; border-bottom: 1px solid rgb(255 255 255 / 20%); }
+  .pillarGrid h3 { margin-top: 30px; }
   .previewCopy { grid-template-columns: 1fr; }
-  .previewCopy > p:not(.eyebrow) { margin-top: 28px; }
+  .previewCopy > div { margin-top: 28px; }
 }
 
 @media (max-width: 600px) {
@@ -353,19 +341,21 @@
   .nav { padding: 16px 0; }
   .brand { font-size: 17px; }
   .brand img { width: 38px; height: 38px; }
+  .navActions { gap: 12px; }
+  .languageLinks { gap: 4px; }
   .webLink { font-size: 10px; }
   .hero { min-height: auto; padding: 70px 0 60px; }
   .hero h1 { font-size: clamp(54px, 17vw, 74px); }
   .intro { font-size: 14px; }
   .heroVisual { height: 530px; margin-top: 55px; }
-  .phoneFrame { right: 4%; width: 79%; border-width: 6px; border-radius: 36px; }
+  .phoneFrame { right: 10%; width: 66%; border-width: 6px; border-radius: 36px; }
   .mintOrb { inset: 8% -30% 5% 0; }
   .sideNote { top: 12%; left: 0; font-size: 11px; }
   .balanceCard { right: 0; bottom: 2%; width: 178px; padding: 16px; }
   .balanceCard strong { font-size: 23px; }
   .manifesto { padding-block: 90px; }
   .manifesto h2 { font-size: 47px; }
-  .featureGrid { margin-top: 65px; }
+  .pillarGrid { margin-top: 65px; }
   .preview { padding: 90px 0; }
   .previewCopy h2 { font-size: 50px; }
   .previewCopy { margin-bottom: 50px; }

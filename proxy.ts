@@ -46,6 +46,7 @@ export async function proxy(request: NextRequest) {
 
   const isSkippedPath =
     pathname === "/" ||
+    pathname === "/en" ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/.well-known") ||
