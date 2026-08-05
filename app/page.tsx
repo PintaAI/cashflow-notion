@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import styles from "./landing.module.css";
+import { ScreenshotCarousel } from "./screenshot-carousel";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/ethos-life-os/id6787773622";
 
@@ -61,7 +62,7 @@ export default function LandingPage() {
     <main className={styles.page}>
       <nav className={styles.nav} aria-label="Main navigation">
         <Link className={styles.brand} href="/" aria-label="Ethos home">
-          <Image src="/landing/ethos-icon.jpg" alt="" width={44} height={44} priority />
+          <Image src="/landing/ethos-icon.png" alt="" width={44} height={44} priority />
           <span>ethos</span>
         </Link>
 
@@ -135,18 +136,11 @@ export default function LandingPage() {
           </a>
         </div>
 
-        <div className={styles.screenGallery}>
-          <figure className={styles.screenBack}>
-            <Image src="/landing/analytics.jpg" alt="Ethos calendar view" width={640} height={960} sizes="(max-width: 760px) 60vw, 320px" />
-          </figure>
-          <figure className={styles.screenFront}>
-            <Image src="/landing/shared-wallet.jpg" alt="Ethos spending analytics" width={640} height={960} sizes="(max-width: 760px) 68vw, 360px" />
-          </figure>
-        </div>
+        <ScreenshotCarousel />
       </section>
 
       <section className={styles.finalCta}>
-        <Image src="/landing/ethos-icon.jpg" alt="Ethos app icon" width={88} height={88} />
+        <Image src="/landing/ethos-icon.png" alt="Ethos app icon" width={88} height={88} />
         <p>Spend with intention.<br />Plan life together.</p>
         <h2>Your money has a rhythm.<br /><em>Find it with Ethos.</em></h2>
         <AppStoreButton compact />
@@ -154,7 +148,7 @@ export default function LandingPage() {
 
       <footer className={styles.footer}>
         <div className={styles.brand}>
-          <Image src="/landing/ethos-icon.jpg" alt="" width={36} height={36} />
+          <Image src="/landing/ethos-icon.png" alt="" width={36} height={36} />
           <span>ethos</span>
         </div>
         <p>© 2026 Rores Sagella</p>

@@ -202,27 +202,106 @@
 .featureGrid p { max-width: 320px; margin: 0; color: #aeb7b2; font-size: 13px; line-height: 1.8; letter-spacing: -0.01em; }
 
 .preview {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  align-items: center;
   width: min(100% - 48px, 1240px);
-  min-height: 900px;
   margin: 0 auto;
   padding: 120px 0;
 }
 
-.previewCopy { position: relative; z-index: 4; }
+.previewCopy {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  align-items: end;
+  margin-bottom: 72px;
+}
 .previewCopy h2 { font-size: clamp(54px, 5.5vw, 82px); }
-.previewCopy > p:not(.eyebrow) { max-width: 430px; margin: 28px 0; color: var(--quiet); font-size: 14px; line-height: 1.85; }
+.previewCopy .eyebrow { grid-column: 1 / -1; }
+.previewCopy > p:not(.eyebrow) { max-width: 430px; margin: 0 0 38px; color: var(--quiet); font-size: 14px; line-height: 1.85; }
 .textLink { display: inline-flex; gap: 30px; padding-bottom: 5px; border-bottom: 1px solid currentColor; color: inherit; font-size: 12px; font-weight: 600; text-decoration: none; }
 .textLink span { transition: transform 180ms ease; }
 .textLink:hover span { transform: translateX(5px); }
 
-.screenGallery { position: relative; height: 700px; }
-.screenGallery figure { position: absolute; width: 360px; margin: 0; overflow: hidden; border: 7px solid #121714; border-radius: 40px; background: #111; box-shadow: 0 35px 70px rgb(16 21 19 / 20%); }
-.screenGallery img { display: block; width: 100%; height: auto; }
-.screenBack { top: 40px; left: 8%; transform: rotate(-5deg); }
-.screenFront { z-index: 2; right: 0; bottom: 0; transform: rotate(4deg); }
+.carousel { width: 100%; }
+
+.carouselToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.localeSwitch {
+  display: flex;
+  padding: 4px;
+  border: 1px solid rgb(16 21 19 / 14%);
+  border-radius: 999px;
+}
+
+.localeSwitch button {
+  min-width: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--quiet);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.localeSwitch .localeActive { background: var(--ink); color: white; }
+
+.carouselArrows { display: flex; align-items: center; gap: 8px; }
+.carouselArrows span { margin-right: 12px; color: var(--quiet); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }
+.carouselArrows button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgb(16 21 19 / 18%);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  font-size: 17px;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+.carouselArrows button:hover:not(:disabled) { background: var(--ink); color: white; }
+.carouselArrows button:disabled { cursor: default; opacity: 0.3; }
+
+.carouselTrack {
+  display: grid;
+  grid-auto-columns: minmax(240px, 290px);
+  grid-auto-flow: column;
+  gap: 22px;
+  overflow-x: auto;
+  padding: 8px 2px 28px;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.carouselTrack::-webkit-scrollbar { display: none; }
+
+.carouselSlide { margin: 0; scroll-snap-align: start; }
+.carouselImage {
+  position: relative;
+  aspect-ratio: 590 / 1280;
+  overflow: hidden;
+  border: 6px solid #121714;
+  border-radius: 34px;
+  background: #07100b;
+  box-shadow: 0 22px 45px rgb(16 21 19 / 16%);
+}
+.carouselImage img { object-fit: cover; }
+.carouselSlide figcaption { display: flex; justify-content: space-between; margin-top: 15px; font-size: 11px; font-weight: 600; }
+.carouselSlide figcaption span { color: #16896e; font-size: 9px; letter-spacing: 0.08em; }
+
+.carouselDots { display: flex; justify-content: center; gap: 7px; margin-top: 6px; }
+.carouselDots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 50%; background: rgb(16 21 19 / 22%); cursor: pointer; transition: width 180ms ease, background 180ms ease; }
+.carouselDots .dotActive { width: 28px; border-radius: 999px; background: #16896e; }
 
 .finalCta {
   display: flex;
@@ -265,9 +344,8 @@
   .featureGrid { grid-template-columns: 1fr; }
   .featureGrid article, .featureGrid article + article { padding: 30px 0; border-left: 0; border-bottom: 1px solid rgb(255 255 255 / 20%); }
   .featureGrid h3 { margin-top: 20px; }
-  .preview { grid-template-columns: 1fr; }
-  .previewCopy { margin-bottom: 70px; }
-  .screenGallery { width: min(100%, 720px); margin: auto; }
+  .previewCopy { grid-template-columns: 1fr; }
+  .previewCopy > p:not(.eyebrow) { margin-top: 28px; }
 }
 
 @media (max-width: 600px) {
@@ -288,11 +366,13 @@
   .manifesto { padding-block: 90px; }
   .manifesto h2 { font-size: 47px; }
   .featureGrid { margin-top: 65px; }
-  .preview { min-height: auto; padding: 90px 0; }
+  .preview { padding: 90px 0; }
   .previewCopy h2 { font-size: 50px; }
-  .screenGallery { height: 520px; }
-  .screenGallery figure { width: 68%; border-width: 5px; border-radius: 30px; }
-  .screenBack { left: 0; }
+  .previewCopy { margin-bottom: 50px; }
+  .carouselTrack { grid-auto-columns: 72vw; gap: 16px; margin-right: -16px; }
+  .carouselImage { border-width: 5px; border-radius: 30px; }
+  .carouselArrows span { display: none; }
+  .carouselArrows button { width: 38px; height: 38px; }
   .finalCta { padding: 90px 20px; }
   .finalCta h2 { font-size: 48px; }
   .footer { grid-template-columns: 1fr auto; row-gap: 24px; }
