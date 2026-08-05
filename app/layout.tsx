@@ -10,6 +10,7 @@ import { CurrencyProvider } from "@/components/providers/currency-provider";
 import { LocalThemeStyle, FontStyle } from "@/components/layout";
 import { CSS_VARIABLE_NAMES } from "@/lib/theme-palettes";
 import { fetchExchangeRates, fetchUserCurrency } from "@/app/actions/preferences";
+import { APP_STORE_ID, APP_STORE_URL, SITE_URL } from "@/lib/site";
 
 const FONT_FAMILY_MAP: Record<string, string> = {
   "jetbrains-mono": "var(--font-mono)",
@@ -123,13 +124,71 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cashflow Tracker",
-  description: "Track your income and expenses",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Ethos: Cashflow and LifeFlow in Your Hands",
+    template: "%s | Ethos",
+  },
+  description: "Manage shared money with Cashflow and organize habits, journals, and schedules with LifeFlow.",
+  applicationName: "ethos: Life OS",
+  authors: [{ name: "Rores Sagella", url: SITE_URL }],
+  creator: "Rores Sagella",
+  publisher: "Rores Sagella",
+  category: "Productivity",
+  keywords: [
+    "Ethos Life OS",
+    "Cashflow app",
+    "LifeFlow app",
+    "shared wallet",
+    "personal finance",
+    "budget tracker",
+    "habit tracker",
+    "journal app",
+    "schedule planner",
+  ],
   manifest: "/manifest.json",
+  icons: {
+    icon: "/landing/ethos-icon.png",
+    apple: "/landing/ethos-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "ethos: Life OS",
+    title: "Ethos: Cashflow and LifeFlow in Your Hands",
+    description: "Manage shared money and organize your personal life in one easy-to-use app.",
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ethos: Life OS",
+    description: "Cashflow and LifeFlow, organized within your hands.",
+  },
+  appLinks: {
+    ios: {
+      url: APP_STORE_URL,
+      app_store_id: APP_STORE_ID,
+      app_name: "ethos: Life OS",
+    },
+    web: { url: SITE_URL, should_fallback: true },
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  other: {
+    "apple-itunes-app": `app-id=${APP_STORE_ID}, app-argument=${APP_STORE_URL}`,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Cashflow Tracker",
+    title: "Ethos",
   },
   formatDetection: {
     telephone: false,

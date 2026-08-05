@@ -1,78 +1,36 @@
 {
-  "name": "Cashflow Tracker",
-  "short_name": "Cashflow",
-  "description": "Track your income and expenses with Notion",
+  "name": "ethos: Life OS",
+  "short_name": "ethos",
+  "description": "Cashflow and LifeFlow, organized within your hands.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#f3f2ec",
+  "theme_color": "#101513",
   "orientation": "portrait-primary",
+  "lang": "en",
+  "categories": ["finance", "productivity", "lifestyle"],
   "icons": [
     {
-      "src": "/icons/icon-72x72.png",
-      "sizes": "72x72",
+      "src": "/landing/ethos-icon.png",
+      "sizes": "1024x1024",
       "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-128x128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-152x152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-384x384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any"
     }
   ],
-  "categories": ["finance", "productivity"],
-  "screenshots": [],
-  "shortcuts": [
+  "screenshots": [
     {
-      "name": "Add Expense",
-      "short_name": "Add",
-      "description": "Add a new expense entry",
-      "url": "/?action=add",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+      "src": "/landing/en/home_cashflow.jpg",
+      "sizes": "590x1280",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Cashflow overview"
     },
     {
-      "name": "Analytics",
-      "short_name": "Analytics",
-      "description": "View your financial analytics",
-      "url": "/?tab=summary",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+      "src": "/landing/en/home_lifeflow.jpg",
+      "sizes": "590x1280",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "LifeFlow overview"
     }
   ]
 }

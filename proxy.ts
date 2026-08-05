@@ -55,8 +55,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/privacy") ||
     pathname.startsWith("/support") ||
     pathname.startsWith("/werewolf-multiplayer") ||
+    pathname.endsWith("/opengraph-image") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
     pathname === "/sw.js" ||
     pathname.startsWith("/workbox-") ||
     pathname.startsWith("/worker-");

@@ -3,8 +3,7 @@ import Link from "next/link";
 
 import styles from "./landing.module.css";
 import { ScreenshotCarousel } from "./screenshot-carousel";
-
-const APP_STORE_URL = "https://apps.apple.com/us/app/ethos-life-os/id6787773622";
+import { APP_STORE_URL, SITE_URL } from "@/lib/site";
 
 const content = {
   id: {
@@ -125,9 +124,33 @@ function AppStoreButton({ label, compact = false }: { label: string; compact?: b
 export function EthosLanding({ locale }: { locale: "id" | "en" }) {
   const copy = content[locale];
   const homePath = locale === "id" ? "/" : "/en";
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "MobileApplication",
+    name: "ethos: Life OS",
+    alternateName: "Ethos",
+    description: locale === "id"
+      ? "Cashflow dengan shared wallet dan LifeFlow untuk habits, journal, serta scheduling."
+      : "Cashflow with shared wallets and LifeFlow for habits, journaling, and scheduling.",
+    url: `${SITE_URL}${homePath === "/" ? "" : homePath}`,
+    downloadUrl: APP_STORE_URL,
+    applicationCategory: "ProductivityApplication",
+    operatingSystem: "iOS 16.4 or later",
+    inLanguage: locale === "id" ? "id-ID" : "en-US",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    author: { "@type": "Person", name: "Rores Sagella" },
+    featureList: locale === "id"
+      ? ["Shared wallet", "Cashflow tracking", "Budget dan analytics", "Habits", "Journal", "Scheduling"]
+      : ["Shared wallets", "Cashflow tracking", "Budgets and analytics", "Habits", "Journaling", "Scheduling"],
+    screenshot: `${SITE_URL}/landing/${locale}/home_cashflow.jpg`,
+  };
 
   return (
     <main className={styles.page} lang={locale}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+      />
       <nav className={styles.nav} aria-label="Main navigation">
         <Link className={styles.brand} href={homePath} aria-label="Ethos home">
           <Image src="/landing/ethos-icon.png" alt="" width={44} height={44} priority />
