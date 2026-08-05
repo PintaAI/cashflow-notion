@@ -45,6 +45,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isSkippedPath =
+    pathname === "/" ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/.well-known") ||
@@ -84,13 +85,6 @@ export async function proxy(request: NextRequest) {
     const authUrl = new URL("/auth", request.url);
     authUrl.searchParams.set("redirect", `${request.nextUrl.pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(authUrl);
-  }
-
-  if (pathname === "/") {
-    const managementId = await getRedirectManagementId(session);
-    if (managementId) {
-      return NextResponse.redirect(new URL(`/dompet/${managementId}`, request.url));
-    }
   }
 
   if (pathname.startsWith("/m/")) {
