@@ -41,6 +41,7 @@ const socialProviders = {
     ? {
         apple: async () => ({
           clientId: process.env.APPLE_CLIENT_ID!,
+          appBundleIdentifier: "com.rorez.ethos",
           clientSecret: await generateAppleClientSecret(
             process.env.APPLE_CLIENT_ID!,
             process.env.APPLE_TEAM_ID!,
