@@ -1,6 +1,7 @@
 import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { deleteManagement, renameManagement } from "@/app/actions/management";
 import { prisma } from "@/lib/db";
+import { isManagementCategory } from "@/lib/management-category";
 
 async function getManagementForApi(managementId: string) {
   const management = await prisma.management.findUnique({
@@ -12,6 +13,7 @@ async function getManagementForApi(managementId: string) {
   return {
     id: management.id,
     name: management.name,
+    category: management.category,
     image: management.image,
     memberCount: management._count.members,
     createdAt: management.createdAt.toISOString(),
@@ -30,7 +32,10 @@ export async function PATCH(
     if (!body?.name || typeof body.name !== "string") {
       return Response.json({ error: "name is required" }, { status: 400 });
     }
-    await renameManagement(body.name, id);
+    if (body.category !== undefined && body.category !== null && !isManagementCategory(body.category)) {
+      return Response.json({ error: "invalid management category" }, { status: 400 });
+    }
+    await renameManagement(body.name, id, body.category);
     return ok(await getManagementForApi(id));
   } catch (error) {
     return handleError(error);

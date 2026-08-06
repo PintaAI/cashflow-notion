@@ -2,6 +2,7 @@ import { requireSession, ok, handleError } from "@/lib/api/helpers";
 import { getUserManagements, createManagement } from "@/app/actions/management";
 import { prisma } from "@/lib/db";
 import { optionalClientId } from "@/lib/api/client-id";
+import { isManagementCategory } from "@/lib/management-category";
 
 async function getManagementForApi(managementId: string) {
   const management = await prisma.management.findUnique({
@@ -13,6 +14,7 @@ async function getManagementForApi(managementId: string) {
   return {
     id: management.id,
     name: management.name,
+    category: management.category,
     image: management.image,
     memberCount: management._count.members,
     createdAt: management.createdAt.toISOString(),
@@ -37,7 +39,10 @@ export async function POST(request: Request) {
     if (!body?.name || typeof body.name !== "string") {
       return Response.json({ error: "name is required" }, { status: 400 });
     }
-    const result = await createManagement(body.name, optionalClientId(body.clientId));
+    if (body.category !== undefined && body.category !== null && !isManagementCategory(body.category)) {
+      return Response.json({ error: "invalid management category" }, { status: 400 });
+    }
+    const result = await createManagement(body.name, optionalClientId(body.clientId), body.category ?? null);
     return ok(await getManagementForApi(result.managementId), 201);
   } catch (error) {
     return handleError(error);

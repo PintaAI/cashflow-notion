@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type ManagementCategory } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { putObject } from "@/lib/r2";
@@ -18,6 +18,7 @@ export type ManagementWithMembers = {
   management: {
     id: string;
     name: string;
+    category: ManagementCategory | null;
     image: string | null;
     imageTheme: GeneratedThemeColors | null;
     members: {
@@ -114,6 +115,7 @@ export async function getUserManagements(activeManagementId?: string) {
   return memberships.map((m) => ({
     id: m.management.id,
     name: m.management.name,
+    category: m.management.category,
     image: m.management.image,
     imageTheme: parseThemeColors(m.management.imageTheme),
     role: m.role,
@@ -142,7 +144,7 @@ export async function switchManagement(managementId: string) {
   return { success: true, managementId };
 }
 
-export async function renameManagement(name: string, managementId?: string) {
+export async function renameManagement(name: string, managementId?: string, category?: ManagementCategory | null) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
@@ -158,7 +160,7 @@ export async function renameManagement(name: string, managementId?: string) {
 
   await prisma.management.update({
     where: { id: targetManagementId },
-    data: { name: trimmed },
+    data: { name: trimmed, ...(category !== undefined ? { category } : {}) },
   });
   revalidatePath("/", "layout");
 
@@ -255,7 +257,7 @@ export async function updateManagementImage(
   }
 }
 
-export async function createManagement(name: string, clientId?: string) {
+export async function createManagement(name: string, clientId?: string, category?: ManagementCategory | null) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
 
@@ -275,6 +277,7 @@ export async function createManagement(name: string, clientId?: string) {
       data: {
         ...(clientId ? { id: clientId } : {}),
         name: trimmed,
+        category: category ?? null,
         members: {
           create: { userId: session.user.id, role: "owner" },
         },

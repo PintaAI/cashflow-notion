@@ -273,13 +273,14 @@ model Verification {
 }
 
 model Management {
-  id                 String   @id @default(uuid())
+  id                 String              @id @default(uuid())
   name               String
+  category           ManagementCategory?
   image              String?
   imageTheme         Json?
   cloudSponsorUserId String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   members          ManagementMember[]
   categories       Category[]
@@ -294,6 +295,15 @@ model Management {
   cloudSponsorUser User?              @relation(fields: [cloudSponsorUserId], references: [id])
 
   @@index([cloudSponsorUserId])
+}
+
+enum ManagementCategory {
+  CASH
+  INVESTMENT
+  CREDIT_CARD
+  DEBIT_CARD
+  LOAN
+  SAVINGS
 }
 
 model BetaRedemptionCode {

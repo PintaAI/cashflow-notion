@@ -44,6 +44,7 @@ function getCachedManagements(managementId: string): UserManagements {
   return cached.map((m) => ({
     id: m.id,
     name: m.name,
+    category: null,
     image: null,
     imageTheme: null,
     role: "" as never,
