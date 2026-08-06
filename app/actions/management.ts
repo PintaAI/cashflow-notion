@@ -310,7 +310,14 @@ export async function deleteManagement(managementId: string) {
   const ownerMembership = await prisma.managementMember.findFirst({
     where: { userId: session.user.id, managementId, role: "owner" },
   });
-  if (!ownerMembership) throw new Error("Hanya pemilik yang bisa menghapus dompet");
+  if (!ownerMembership) {
+    const managementExists = await prisma.management.findUnique({
+      where: { id: managementId },
+      select: { id: true },
+    });
+    if (!managementExists) return { success: true };
+    throw new Error("Hanya pemilik yang bisa menghapus dompet");
+  }
 
   const memberUserIds = await prisma.managementMember.findMany({
     where: { managementId },
@@ -318,7 +325,7 @@ export async function deleteManagement(managementId: string) {
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.management.delete({ where: { id: managementId } });
+    await tx.management.deleteMany({ where: { id: managementId } });
 
     for (const member of memberUserIds) {
       const user = await tx.user.findUnique({
