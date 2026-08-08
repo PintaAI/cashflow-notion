@@ -1,43 +1,60 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { blocksConflict, internalBlockConflict, occurrenceConflict, recurringManualConflict, recurringSeriesConflict, weekdaysForRepeat } from "./lifeflow-schedule";
+import { assertCanonicalSystemItem, assertItemDefinitionMutation, assertSystemSyncMutation, canonicalSystemItem, itemPayloadSchema, itemExceptionPayloadSchema } from "@/lib/lifeflow/contract";
+import { recurrenceApplies } from "@/lib/lifeflow/resolve-day";
 
-test("maps public repeat values to deterministic weekday rules", () => {
-  assert.deepEqual(weekdaysForRepeat("daily"), [0, 1, 2, 3, 4, 5, 6]);
-  assert.deepEqual(weekdaysForRepeat("weekly", [5, 1, 5]), [1, 5]);
-  assert.deepEqual(weekdaysForRepeat("none", [2]), []);
-  assert.throws(() => weekdaysForRepeat("weekly"), /weekdays is required/);
+test("MCP payload validation shares item timing and recurrence rules", () => {
+  const base = { id: "x", kind: "habit", name: "Read", color: "#5B8CFF", starts_on: "2026-08-08", start_time: null, end_time: null, break_durations_json: "[]", recurrence_frequency: "daily", recurrence_interval: 1, recurrence_weekdays_json: "[]", recurrence_ends_on: null, system_type: null, created_at: "2026-08-08T00:00:00.000Z" };
+  assert.equal(itemPayloadSchema.safeParse(base).success, true);
+  assert.equal(itemPayloadSchema.safeParse({ ...base, color: "blue" }).success, false);
+  assert.equal(itemPayloadSchema.safeParse({ ...base, recurrence_frequency: null }).success, false);
+  assert.equal(itemPayloadSchema.safeParse({ ...base, start_time: "09:00" }).success, false);
+  assert.equal(itemPayloadSchema.safeParse({ ...base, start_time: "22:00", end_time: "02:00", break_durations_json: "[10]" }).success, true);
 });
 
-const block = (start_time: string, end_time: string, color: string | null = null) => ({ start_time, end_time, color });
-
-test("detects overlap, overnight overlap, and color-only collision", () => {
-  assert.equal(blocksConflict(block("09:00", "10:00"), block("09:30", "11:00")), true);
-  assert.equal(blocksConflict(block("22:00", "02:00"), block("01:00", "03:00")), true);
-  assert.equal(blocksConflict(block("22:00", "02:00"), block("03:00", "04:00")), false);
-  assert.equal(blocksConflict(block("09:00", "10:00", "#abc"), block("11:00", "12:00", "#abc")), true);
+test("event exception requires cancellation xor a complete replacement", () => {
+  const base = { item_id: "x", original_date: "2026-08-08", created_at: "2026-08-01T00:00:00.000Z", updated_at: "2026-08-01T00:00:00.000Z" };
+  assert.equal(itemExceptionPayloadSchema.safeParse({ ...base, cancelled: true, replacement_date: null, replacement: null }).success, true);
+  assert.equal(itemExceptionPayloadSchema.safeParse({ ...base, cancelled: false, replacement_date: "2026-08-09", replacement: null }).success, false);
 });
 
-test("occurrence validation excludes only the current occurrence", () => {
-  const effective = [{ id: "self", date: "2026-08-05", ...block("09:00", "10:00") }, { id: "other", date: "2026-08-05", ...block("11:00", "12:00", "red") }];
-  assert.equal(occurrenceConflict({ id: "self", date: "2026-08-05", ...block("09:30", "10:30") }, effective, "self"), undefined);
-  assert.equal(occurrenceConflict({ id: "self", date: "2026-08-05", ...block("10:30", "11:30") }, effective, "self")?.id, "other");
+test("inclusive ends are enforced for MCP eligibility without generating rows", () => {
+  const item = itemPayloadSchema.parse({ id: "x", kind: "event", name: "Read", color: "#5B8CFF", starts_on: "2026-08-08", start_time: null, end_time: null, break_durations_json: "[]", recurrence_frequency: "daily", recurrence_interval: 1, recurrence_weekdays_json: "[]", recurrence_ends_on: "2026-08-09", system_type: null, created_at: "2026-08-08T00:00:00.000Z" });
+  assert.equal(recurrenceApplies(item, "2026-08-09"), true);
+  assert.equal(recurrenceApplies(item, "2026-08-10"), false);
 });
 
-test("recurring validation respects weekday intersection and current-series exclusion", () => {
-  const candidate = { id: "candidate", weekdays: [3], blocks: [block("19:00", "21:00")] };
-  const active = [{ id: "monday", weekdays: [1], blocks: [block("19:00", "21:00")] }, { id: "current", weekdays: [3], blocks: [block("19:30", "20:00")] }];
-  assert.equal(recurringSeriesConflict(candidate, active), active[1]);
-  assert.equal(recurringSeriesConflict(candidate, active, "current"), undefined);
+test("sync accepts only canonical first creation of deterministic system Items", () => {
+  const checkIn = canonicalSystemItem("wallet", "app_check_in");
+  const journal = canonicalSystemItem("wallet", "journal");
+  assert.equal(itemPayloadSchema.safeParse(checkIn).success, true);
+  assert.equal(itemPayloadSchema.safeParse(journal).success, true);
+  assert.equal(checkIn.starts_on, journal.starts_on);
+  assert.equal(checkIn.created_at, journal.created_at);
+  assert.doesNotThrow(() => assertCanonicalSystemItem("wallet", itemPayloadSchema.parse(checkIn)));
+  assert.throws(() => assertCanonicalSystemItem("wallet", { ...checkIn, starts_on: "2026-08-08" }), /canonical id and payload/);
 });
 
-test("detects conflicts between blocks inside the same series", () => {
-  assert.equal(internalBlockConflict([block("09:00", "10:00"), block("09:30", "11:00")]), true);
-  assert.equal(internalBlockConflict([block("09:00", "10:00"), block("10:00", "11:00")]), false);
+test("sync permits optional journal deletion but protects app check-in and all system edits", () => {
+  const updatedAt = "2026-08-08T00:00:00.000Z";
+  const journal = canonicalSystemItem("wallet", "journal");
+  const checkIn = canonicalSystemItem("wallet", "app_check_in");
+  assert.doesNotThrow(() => assertSystemSyncMutation(journal, {
+    kind: "item", id: journal.id, updatedAt, deleted: true,
+  }));
+  assert.throws(() => assertSystemSyncMutation(checkIn, {
+    kind: "item", id: checkIn.id, updatedAt, deleted: true,
+  }), /cannot be edited or deleted/);
+  assert.throws(() => assertSystemSyncMutation(journal, {
+    kind: "item", id: journal.id, updatedAt, data: { ...journal, name: "Edited" },
+  }), /cannot be edited or deleted/);
 });
 
-test("recurring validation checks only applicable manual dates", () => {
-  const stored = [{ id: "tuesday", date: "2026-08-04", ...block("19:00", "20:00") }, { id: "wednesday", date: "2026-08-05", ...block("19:00", "20:00") }];
-  assert.equal(recurringManualConflict("weekly", [3], "2026-08-01", [block("19:30", "21:00")], stored)?.id, "wednesday");
-  assert.equal(recurringManualConflict("weekly", [1], "2026-08-10", [block("19:30", "21:00")], stored), undefined);
+test("sync requires recurrence history deletion and keeps Item kind immutable", () => {
+  const current = itemPayloadSchema.parse({ id: "x", kind: "habit", name: "Read", color: "#5B8CFF", starts_on: "2026-08-08", start_time: null, end_time: null, break_durations_json: "[]", recurrence_frequency: "daily", recurrence_interval: 1, recurrence_weekdays_json: "[]", recurrence_ends_on: null, system_type: null, created_at: "2026-08-08T00:00:00.000Z" });
+  const changedRecurrence = itemPayloadSchema.parse({ ...current, recurrence_frequency: "weekly", recurrence_weekdays_json: '["SA"]' });
+  const changedKind = itemPayloadSchema.parse({ ...current, kind: "event" });
+  assert.throws(() => assertItemDefinitionMutation(current, changedRecurrence, true), /deleting all logs and exceptions/);
+  assert.doesNotThrow(() => assertItemDefinitionMutation(current, changedRecurrence, false));
+  assert.throws(() => assertItemDefinitionMutation(current, changedKind, false), /kind cannot be changed/);
 });

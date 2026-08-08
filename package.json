@@ -9,6 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "migrate:entry-updated-at": "tsx scripts/safe-add-entry-updated-at.ts",
+    "reset:old-lifeflow": "tsx scripts/reset-old-lifeflow-kinds.ts",
     "generate-icons": "bun run scripts/generate-icons.ts"
   },
   "dependencies": {

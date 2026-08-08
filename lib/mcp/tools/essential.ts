@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createEntry, deleteEntry, getSummary, prisma, updateEntry } from "@/lib/db";
-import { dayPresetBlockPayloadSchema, dayPresetSchedulePayloadSchema, habitLogPayloadSchema, habitPayloadSchema, timeBoxPayloadSchema } from "@/lib/lifeflow/contract";
+import { habitLogPayloadSchema, itemExceptionPayloadSchema, itemPayloadSchema } from "@/lib/lifeflow/contract";
 import { resolveLifeFlowDay } from "@/lib/lifeflow/resolve-day";
 import { registerLifeFlowTools } from "./lifeflow";
 import { fromIdrAmount, getManagementId, getUserCurrencyContext, getUserId, isValidDate, ok, requireMcpScope, toIdrAmount, toolError } from "./utils";
@@ -85,7 +85,7 @@ export function registerEssentialTools(server: McpServer) {
 
   server.registerTool("lifeflow_today", {
     title: "LifeFlow Day",
-    description: "Read habits and the effective schedule for one local date. Returns occurrence id, series_id, and block_id needed by lifeflow_habit and lifeflow_schedule; recurring storage details are hidden.",
+    description: "Return unified habit and event occurrences for one floating local date. Recurrence is virtual, inclusive end dates and exceptions are applied, and habit completion is attached.",
     annotations: readAnnotations,
     inputSchema: { date: z.string().describe("Local calendar date in YYYY-MM-DD format.") },
   }, async ({ date }) => {
@@ -98,26 +98,12 @@ export function registerEssentialTools(server: McpServer) {
       const parseKind = <T>(kind: string, schema: z.ZodType<T>) => entities
         .filter((item) => item.kind === kind)
         .map((item) => schema.parse(item.payload));
-      const habits = parseKind("habit", habitPayloadSchema);
-      const logs = parseKind("habit_log", habitLogPayloadSchema).filter((log) => log.date === date);
-      const schedule = resolveLifeFlowDay(
-        date,
-        parseKind("time_box", timeBoxPayloadSchema),
-        parseKind("day_preset_block", dayPresetBlockPayloadSchema),
-        parseKind("day_preset_schedule", dayPresetSchedulePayloadSchema),
-      );
-      const seriesBySchedule = new Map(parseKind("day_preset_schedule", dayPresetSchedulePayloadSchema).map((item) => [item.id, item.preset_id]));
-      return ok("LifeFlow day ready.", {
-        date,
-        habits: habits.map((habit) => ({ ...habit, weekdays: JSON.parse(habit.weekdays_json), weekdays_json: undefined })),
-        logs,
-        schedule: schedule.map((box) => ({
-          id: box.id, date: box.date, title: box.title, start_time: box.start_time, end_time: box.end_time,
-          color: box.color, break_durations: JSON.parse(box.break_durations_json), habit_id: box.habit_id,
-          completed: box.completed === 1, virtual: box.virtual === true,
-          series_id: box.preset_schedule_id ? seriesBySchedule.get(box.preset_schedule_id) ?? null : null,
-          block_id: box.preset_block_id,
-        })),
+       const items = parseKind("item", itemPayloadSchema);
+       const logs = parseKind("habit_log", habitLogPayloadSchema).filter((log) => log.date === date);
+       const occurrences = resolveLifeFlowDay(date, items, parseKind("item_exception", itemExceptionPayloadSchema), logs);
+       return ok("LifeFlow day ready.", {
+         date,
+         occurrences,
       });
     } catch (error) { return toolError(error); }
   });

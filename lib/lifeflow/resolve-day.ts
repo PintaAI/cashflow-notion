@@ -1,54 +1,61 @@
-import type { z } from "zod";
-import type { dayPresetBlockPayloadSchema, dayPresetSchedulePayloadSchema, timeBoxPayloadSchema } from "./contract";
+import type { HabitLogPayload, ItemExceptionPayload, ItemPayload } from "./contract";
 
-type TimeBox = z.infer<typeof timeBoxPayloadSchema> & { virtual?: boolean };
-type Block = z.infer<typeof dayPresetBlockPayloadSchema>;
-type Schedule = z.infer<typeof dayPresetSchedulePayloadSchema>;
+export type ItemOccurrence = {
+  id: string; itemId: string; originalDate: string; date: string; kind: "habit" | "event";
+  name: string; color: string; startTime: string | null; endTime: string | null;
+  breakDurations: number[]; completed: boolean; overridden: boolean;
+};
 
-function minutes(value: string) {
-  const [hours, mins] = value.split(":").map(Number);
-  return hours * 60 + mins;
+const DAY = 86_400_000;
+const weekdays = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+function parts(value: string) { const [year, month, day] = value.split("-").map(Number); return { year, month, day, utc: Date.UTC(year, month - 1, day) }; }
+function addDays(value: string, amount: number) { const date = new Date(parts(value).utc + amount * DAY); return date.toISOString().slice(0, 10); }
+function monday(value: string) { const day = new Date(parts(value).utc).getUTCDay(); return addDays(value, -(day === 0 ? 6 : day - 1)); }
+
+export function recurrenceApplies(item: ItemPayload, date: string) {
+  if (date < item.starts_on || (item.recurrence_ends_on && date > item.recurrence_ends_on)) return false;
+  if (!item.recurrence_frequency) return date === item.starts_on;
+  const anchor = parts(item.starts_on), candidate = parts(date), interval = item.recurrence_interval;
+  if (item.recurrence_frequency === "daily") return (candidate.utc - anchor.utc) / DAY % interval === 0;
+  if (item.recurrence_frequency === "weekly") {
+    const weeks = (parts(monday(date)).utc - parts(monday(item.starts_on)).utc) / DAY / 7;
+    return weeks % interval === 0 && (JSON.parse(item.recurrence_weekdays_json) as string[]).includes(weekdays[new Date(candidate.utc).getUTCDay()]);
+  }
+  if (item.recurrence_frequency === "monthly") return candidate.day === anchor.day && ((candidate.year - anchor.year) * 12 + candidate.month - anchor.month) % interval === 0;
+  return candidate.month === anchor.month && candidate.day === anchor.day && (candidate.year - anchor.year) % interval === 0;
 }
 
-function ranges(box: { start_time: string; end_time: string }) {
-  const start = minutes(box.start_time);
-  const end = minutes(box.end_time);
-  return end > start ? [[start, end]] : [[start, 1440], [0, end]];
-}
-
-function overlaps(left: { start_time: string; end_time: string }, right: { start_time: string; end_time: string }) {
-  return ranges(left).some(([start, end]) => ranges(right).some(([otherStart, otherEnd]) => start < otherEnd && otherStart < end));
-}
-
-export function scheduleApplies(schedule: Schedule, date: string) {
-  if (!schedule.active || date < schedule.start_date) return false;
-  if (schedule.frequency === "once") return date === schedule.start_date;
-  if (schedule.frequency === "daily") return true;
-  const weekdays = JSON.parse(schedule.weekdays_json) as number[];
-  return weekdays.includes(new Date(`${date}T00:00:00.000Z`).getUTCDay());
-}
-
-export function resolveLifeFlowDay(date: string, stored: TimeBox[], blocks: Block[], schedules: Schedule[]) {
-  const storedForDate = stored.filter((box) => box.date === date);
-  const snapshots = new Set(storedForDate.map((box) => box.id));
-  const effective = storedForDate.filter((box) => box.dismissed === 0);
-  const blocksByPreset = new Map<string, Block[]>();
-  for (const block of blocks) blocksByPreset.set(block.preset_id, [...(blocksByPreset.get(block.preset_id) ?? []), block]);
-
-  for (const schedule of schedules) {
-    if (!scheduleApplies(schedule, date)) continue;
-    for (const block of (blocksByPreset.get(schedule.preset_id) ?? []).sort((a, b) => a.sort_order - b.sort_order)) {
-      const id = `time-box-${schedule.id}-${block.id}-${date}`;
-      if (snapshots.has(id)) continue;
-      const candidate: TimeBox = {
-        id, date, title: block.title, start_time: block.start_time, end_time: block.end_time,
-        break_durations_json: block.break_durations_json, color: block.color, completed: 0,
-        created_at: `${date}T00:00:00.000Z`, dismissed: 0, habit_id: null,
-        preset_schedule_id: schedule.id, preset_block_id: block.id, virtual: true,
-      };
-      const conflict = effective.some((box) => overlaps(box, candidate) || (candidate.color !== null && box.color === candidate.color));
-      if (!conflict) effective.push(candidate);
+export function resolveItemOccurrences(startDate: string, days: number, items: ItemPayload[], exceptions: ItemExceptionPayload[], logs: HabitLogPayload[]) {
+  if (!Number.isInteger(days) || days < 0 || days > 3660) throw new Error("days must be an integer between 0 and 3660");
+  const endDate = days ? addDays(startDate, days - 1) : startDate;
+  const exceptionByOriginal = new Map(exceptions.map((value) => [`${value.item_id}|${value.original_date}`, value]));
+  const logsByDate = new Set(logs.map((value) => `${value.item_id}|${value.date}`));
+  const result: ItemOccurrence[] = [];
+  const emit = (item: ItemPayload, originalDate: string, date: string, exception?: ItemExceptionPayload) => {
+    const snapshot = exception?.replacement;
+    result.push({ id: `${item.id}|${originalDate}`, itemId: item.id, originalDate, date, kind: item.kind,
+      name: snapshot?.name ?? item.name, color: snapshot?.color ?? item.color,
+      startTime: snapshot?.start_time ?? item.start_time, endTime: snapshot?.end_time ?? item.end_time,
+      breakDurations: JSON.parse(snapshot?.break_durations_json ?? item.break_durations_json),
+      completed: item.kind === "habit" && logsByDate.has(`${item.id}|${originalDate}`), overridden: Boolean(exception) });
+  };
+  for (let offset = 0; offset < days; offset++) {
+    const date = addDays(startDate, offset);
+    for (const item of items) {
+      if (!recurrenceApplies(item, date)) continue;
+      const exception = item.kind === "event" && item.recurrence_frequency ? exceptionByOriginal.get(`${item.id}|${date}`) : undefined;
+      if (!exception?.cancelled && !exception?.replacement) emit(item, date, date);
+      else if (exception && !exception.cancelled && exception.replacement_date === date) emit(item, date, date, exception);
     }
   }
-  return effective.sort((left, right) => left.start_time.localeCompare(right.start_time) || left.id.localeCompare(right.id));
+  for (const exception of exceptions) {
+    if (exception.cancelled || !exception.replacement_date || exception.replacement_date < startDate || exception.replacement_date > endDate || exception.replacement_date === exception.original_date) continue;
+    const item = items.find((candidate) => candidate.id === exception.item_id);
+    if (item) emit(item, exception.original_date, exception.replacement_date, exception);
+  }
+  return result.sort((a, b) => a.date.localeCompare(b.date) || Number(a.startTime !== null) - Number(b.startTime !== null) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || a.itemId.localeCompare(b.itemId));
+}
+
+export function resolveLifeFlowDay(date: string, items: ItemPayload[], exceptions: ItemExceptionPayload[], logs: HabitLogPayload[]) {
+  return resolveItemOccurrences(date, 1, items, exceptions, logs);
 }
