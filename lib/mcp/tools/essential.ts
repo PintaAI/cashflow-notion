@@ -93,7 +93,7 @@ export function registerEssentialTools(server: McpServer) {
       requireMcpScope("lifeflow:read");
       if (!isValidDate(date)) throw new Error("date must be YYYY-MM-DD");
       const entities = await prisma.lifeFlowEntity.findMany({
-        where: { managementId: getManagementId(), deletedAt: null },
+        where: { userId: getUserId(), deletedAt: null },
       });
       const parseKind = <T>(kind: string, schema: z.ZodType<T>) => entities
         .filter((item) => item.kind === kind)

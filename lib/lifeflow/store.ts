@@ -4,17 +4,9 @@ import { assertCanonicalSystemItem, assertItemDefinitionMutation, assertSystemSy
 import { recurrenceApplies } from "@/lib/lifeflow/resolve-day";
 import { selectEffectiveLifeFlowMutations } from "@/lib/lifeflow/sync-plan";
 
-export async function assertLifeFlowMembership(userId: string, managementId: string) {
-  const membership = await prisma.managementMember.findUnique({
-    where: { managementId_userId: { managementId, userId } },
-    select: { id: true },
-  });
-  if (!membership) throw new Error("Management not found");
-}
-
-export async function syncLifeFlow(managementId: string, entities: LifeFlowSyncEntity[]) {
+export async function syncLifeFlow(userId: string, entities: LifeFlowSyncEntity[]) {
   const stored = await prisma.lifeFlowEntity.findMany({
-    where: { managementId, kind: { in: [...lifeFlowKinds] } },
+    where: { userId, kind: { in: [...lifeFlowKinds] } },
     select: { kind: true, entityId: true, payload: true, deletedAt: true, updatedAt: true },
   });
   const keyOf = (entity: { kind: string; entityId: string }) => `${entity.kind}\0${entity.entityId}`;
@@ -37,7 +29,7 @@ export async function syncLifeFlow(managementId: string, entities: LifeFlowSyncE
   const systemTypes = new Set<string>();
   for (const entity of finalLive.values()) if (entity.kind === "item") {
     const item = itemPayloadSchema.parse(entity.data);
-    assertCanonicalSystemItem(managementId, item);
+    assertCanonicalSystemItem(item);
     if (item.system_type && systemTypes.has(item.system_type)) throw new Error(`duplicate system item ${item.system_type}`);
     if (item.system_type) systemTypes.add(item.system_type);
     items.set(entity.id, item);
@@ -73,9 +65,9 @@ export async function syncLifeFlow(managementId: string, entities: LifeFlowSyncE
       const clientUpdatedAt = new Date(entity.updatedAt);
       const payload = (entity.data ?? {}) as Prisma.InputJsonValue;
       await tx.lifeFlowEntity.upsert({
-        where: { managementId_kind_entityId: { managementId, kind: entity.kind, entityId: entity.id } },
+        where: { userId_kind_entityId: { userId, kind: entity.kind, entityId: entity.id } },
         create: {
-          managementId,
+          userId,
           kind: entity.kind,
           entityId: entity.id,
           payload: entity.deleted ? undefined : payload,
@@ -92,7 +84,7 @@ export async function syncLifeFlow(managementId: string, entities: LifeFlowSyncE
   });
 
   const snapshot = await prisma.lifeFlowEntity.findMany({
-    where: { managementId, kind: { in: [...lifeFlowKinds] } },
+    where: { userId, kind: { in: [...lifeFlowKinds] } },
     orderBy: [{ kind: "asc" }, { entityId: "asc" }],
   });
   return snapshot.map((entity) => ({

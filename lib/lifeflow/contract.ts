@@ -17,15 +17,15 @@ export const recurrenceFrequencySchema = z.enum(["daily", "weekly", "monthly", "
 export const SYSTEM_ITEM_ANCHOR_DATE = "2020-01-01";
 export const SYSTEM_ITEM_ANCHOR_TIMESTAMP = "2020-01-01T00:00:00.000Z";
 
-export const systemItemId = (managementId: string, type: "app_check_in" | "journal") =>
-  `lifeflow-${type.replaceAll("_", "-")}-${managementId}`;
+export const systemItemId = (type: "app_check_in" | "journal") =>
+  `lifeflow-${type.replaceAll("_", "-")}`;
 
-export function canonicalSystemItem(managementId: string, type: "app_check_in" | "journal") {
+export function canonicalSystemItem(type: "app_check_in" | "journal") {
   const appearance = type === "app_check_in"
     ? { name: "App check-in", color: "#5B8CFF" }
     : { name: "Daily Journal", color: "#A855F7" };
   return {
-    id: systemItemId(managementId, type),
+    id: systemItemId(type),
     kind: "habit" as const,
     ...appearance,
     starts_on: SYSTEM_ITEM_ANCHOR_DATE,
@@ -41,8 +41,8 @@ export function canonicalSystemItem(managementId: string, type: "app_check_in" |
   };
 }
 
-export function assertCanonicalSystemItem(managementId: string, item: ItemPayload) {
-  if (item.system_type && !isDeepStrictEqual(item, canonicalSystemItem(managementId, item.system_type))) {
+export function assertCanonicalSystemItem(item: ItemPayload) {
+  if (item.system_type && !isDeepStrictEqual(item, canonicalSystemItem(item.system_type))) {
     throw new Error(`system item ${item.id} must use its canonical id and payload`);
   }
 }
@@ -109,7 +109,7 @@ export const lifeFlowEntitySchema = z.union([liveEntity, deletedEntity]).superRe
   const expected = entity.kind === "item" ? entity.data.id : entity.kind === "habit_log" ? `${entity.data.item_id}|${entity.data.date}` : `${entity.data.item_id}|${entity.data.original_date}`;
   if (entity.id !== expected) ctx.addIssue({ code: "custom", path: ["id"], message: `must match payload identity ${expected}` });
 });
-export const lifeFlowSyncSchema = z.object({ managementId: id, entities: z.array(lifeFlowEntitySchema).max(10000) }).strict();
+export const lifeFlowSyncSchema = z.object({ entities: z.array(lifeFlowEntitySchema).max(10000) }).strict();
 
 export type ItemPayload = z.infer<typeof itemPayloadSchema>;
 export type HabitLogPayload = z.infer<typeof habitLogPayloadSchema>;

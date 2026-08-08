@@ -25,20 +25,20 @@ test("inclusive ends are enforced for MCP eligibility without generating rows", 
 });
 
 test("sync accepts only canonical first creation of deterministic system Items", () => {
-  const checkIn = canonicalSystemItem("wallet", "app_check_in");
-  const journal = canonicalSystemItem("wallet", "journal");
+  const checkIn = canonicalSystemItem("app_check_in");
+  const journal = canonicalSystemItem("journal");
   assert.equal(itemPayloadSchema.safeParse(checkIn).success, true);
   assert.equal(itemPayloadSchema.safeParse(journal).success, true);
   assert.equal(checkIn.starts_on, journal.starts_on);
   assert.equal(checkIn.created_at, journal.created_at);
-  assert.doesNotThrow(() => assertCanonicalSystemItem("wallet", itemPayloadSchema.parse(checkIn)));
-  assert.throws(() => assertCanonicalSystemItem("wallet", { ...checkIn, starts_on: "2026-08-08" }), /canonical id and payload/);
+  assert.doesNotThrow(() => assertCanonicalSystemItem(itemPayloadSchema.parse(checkIn)));
+  assert.throws(() => assertCanonicalSystemItem({ ...checkIn, starts_on: "2026-08-08" }), /canonical id and payload/);
 });
 
 test("sync permits optional journal deletion but protects app check-in and all system edits", () => {
   const updatedAt = "2026-08-08T00:00:00.000Z";
-  const journal = canonicalSystemItem("wallet", "journal");
-  const checkIn = canonicalSystemItem("wallet", "app_check_in");
+  const journal = canonicalSystemItem("journal");
+  const checkIn = canonicalSystemItem("app_check_in");
   assert.doesNotThrow(() => assertSystemSyncMutation(journal, {
     kind: "item", id: journal.id, updatedAt, deleted: true,
   }));

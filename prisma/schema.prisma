@@ -68,6 +68,7 @@ model User {
   expoPushTokens         ExpoPushToken[]
   cloudSponsoredWallets  Management[]
   betaRedemptionCodes    BetaRedemptionCode[]
+  lifeFlowEntities       LifeFlowEntity[]
 
   @@map("User")
 }
@@ -291,7 +292,6 @@ model Management {
   recurringEntries RecurringEntry[]
   auditSnapshots   AuditSnapshot[]
   expoPushTokens   ExpoPushToken[]
-  lifeFlowEntities LifeFlowEntity[]
   cloudSponsorUser User?              @relation(fields: [cloudSponsorUserId], references: [id])
 
   @@index([cloudSponsorUserId])
@@ -324,8 +324,8 @@ model BetaRedemptionCode {
 
 model LifeFlowEntity {
   id           String     @id @default(uuid())
-  managementId String
-  management   Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind         String
   entityId     String
   payload      Json?
@@ -333,9 +333,9 @@ model LifeFlowEntity {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  @@unique([managementId, kind, entityId])
-  @@index([managementId, updatedAt])
-  @@index([managementId, kind, deletedAt])
+  @@unique([userId, kind, entityId])
+  @@index([userId, updatedAt])
+  @@index([userId, kind, deletedAt])
 }
 
 model ExpoPushToken {
