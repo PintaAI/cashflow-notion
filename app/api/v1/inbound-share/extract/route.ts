@@ -8,11 +8,21 @@ import {
 import { z } from "zod";
 
 import { getCategoryOptions } from "@/lib/db";
-import { ApiError, handleError, ok, requireSession } from "@/lib/api/helpers";
+import {
+  ApiError,
+  errorResponse,
+  handleError,
+  ok,
+  requireSession,
+} from "@/lib/api/helpers";
 import { resolveManagementId } from "@/lib/management";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_SHARED_TEXT_LENGTH = 50_000;
+const EXTRACTION_TIMEOUT = 30_000;
 const ALLOWED_FILE_TYPES = new Set([
   "image/heic",
   "image/heif",
@@ -144,6 +154,7 @@ export async function POST(request: Request) {
     const result = await generateText({
       model: google("gemini-2.5-flash-lite"),
       temperature: 0,
+      timeout: EXTRACTION_TIMEOUT,
       output: Output.object({
         name: "InboundShareEntryDraft",
         description: "A transaction draft extracted from user-shared content",
@@ -178,6 +189,12 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || /timed?\s*out|timeout/i.test(error.message))
+    ) {
+      return errorResponse("Shared content processing timed out", 504);
+    }
     if (NoObjectGeneratedError.isInstance(error)) {
       return Response.json(
         { error: "Could not extract a transaction from the shared content" },
