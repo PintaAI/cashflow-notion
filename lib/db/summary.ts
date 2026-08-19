@@ -31,9 +31,9 @@ export async function getSummary(managementId: string): Promise<CashflowSummary>
   const dayWindow = formatDate(dayWindowDate);
 
   const [entryCount, incomeAgg, expensesAgg, categoryRows, dayRows] = await Promise.all([
-    prisma.entry.count({ where: { managementId } }),
-    prisma.entry.aggregate({ where: { managementId, io: "Income" }, _sum: { nominal: true } }),
-    prisma.entry.aggregate({ where: { managementId, io: "Expenses" }, _sum: { nominal: true } }),
+    prisma.entry.count({ where: { managementId, deletedAt: null } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Income", deletedAt: null }, _sum: { nominal: true } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Expenses", deletedAt: null }, _sum: { nominal: true } }),
     prisma.$queryRaw<SummaryCategoryRow[]>`
       SELECT
         c."name" AS "category",
@@ -42,13 +42,13 @@ export async function getSummary(managementId: string): Promise<CashflowSummary>
         COUNT(*) FILTER (WHERE e."io"::text = 'Expenses') AS "expenseCount"
       FROM "Entry" e
       INNER JOIN "Category" c ON c."id" = e."categoryId"
-      WHERE e."managementId" = ${managementId} AND e."date" >= ${categoryWindow}
+      WHERE e."managementId" = ${managementId} AND e."deletedAt" IS NULL AND e."date" >= ${categoryWindow}
       GROUP BY c."name"
     `,
     prisma.$queryRaw<SummaryDayRow[]>`
       SELECT "date", "io"::text AS "io", COALESCE(SUM("nominal"), 0) AS "total"
       FROM "Entry"
-      WHERE "date" IS NOT NULL AND "managementId" = ${managementId} AND "date" >= ${dayWindow}
+      WHERE "deletedAt" IS NULL AND "date" IS NOT NULL AND "managementId" = ${managementId} AND "date" >= ${dayWindow}
       GROUP BY "date", "io"
     `,
   ]);

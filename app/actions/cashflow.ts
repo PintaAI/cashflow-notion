@@ -154,7 +154,7 @@ export async function addEntry(data: {
   const session = await getSession();
   if (data.clientId) {
     const existing = await prisma.entry.findFirst({
-      where: { id: data.clientId, managementId },
+      where: { id: data.clientId, managementId, deletedAt: null },
       include: { category: true, createdBy: { select: entryCreatorSelect } },
     });
     if (existing) return mapDbEntry(existing);
@@ -165,7 +165,7 @@ export async function addEntry(data: {
   } catch (error) {
     if (!data.clientId || !isUniqueConstraintError(error)) throw error;
     const existing = await prisma.entry.findFirst({
-      where: { id: data.clientId, managementId },
+      where: { id: data.clientId, managementId, deletedAt: null },
       include: { category: true, createdBy: { select: entryCreatorSelect } },
     });
     if (!existing) throw error;
@@ -214,7 +214,7 @@ export async function editEntry(
 export async function removeEntry(pageId: string, managementId?: string): Promise<void> {
   managementId = await resolveManagementId(managementId);
   const entry = await prisma.entry.findFirst({
-    where: { id: pageId, managementId },
+    where: { id: pageId, managementId, deletedAt: null },
     select: { id: true },
   });
   if (!entry) throw new Error("Entry not found");

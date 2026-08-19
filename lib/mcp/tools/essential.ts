@@ -27,7 +27,7 @@ export function registerEssentialTools(server: McpServer) {
       const [summary, entries, currency] = await Promise.all([
         getSummary(managementId),
         prisma.entry.findMany({
-          where: { managementId, date, io }, include: { category: true },
+          where: { managementId, date, io, deletedAt: null }, include: { category: true },
           orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: limit,
         }),
         getUserCurrencyContext(),

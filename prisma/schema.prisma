@@ -505,13 +505,27 @@ model Entry {
   isReconciliation  Boolean     @default(false)
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
 
   @@index([date, createdAt, id])
   @@index([io, date])
   @@index([categoryId])
   @@index([createdAt])
   @@index([managementId])
+  @@index([managementId, updatedAt, id])
+  @@index([managementId, date, createdAt, id])
   @@index([createdById])
+}
+
+model EntrySyncMutation {
+  id           String   @id @default(uuid())
+  managementId String
+  mutationId   String
+  result       Json
+  createdAt    DateTime @default(now())
+
+  @@unique([managementId, mutationId])
+  @@index([createdAt])
 }
 
 model AuditSnapshot {

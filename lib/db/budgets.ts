@@ -48,6 +48,7 @@ export async function getBudgetStatus(managementId: string): Promise<BudgetStatu
         const overallSpent = await prisma.entry.aggregate({
           where: {
             managementId,
+            deletedAt: null,
             io: "Expenses",
             date: { gte: start, lte: end },
           },
@@ -78,6 +79,7 @@ export async function getBudgetStatus(managementId: string): Promise<BudgetStatu
           by: ["categoryId"],
           where: {
             managementId,
+            deletedAt: null,
             io: "Expenses",
             categoryId: { in: categoryIds },
             date: { gte: start, lte: end },

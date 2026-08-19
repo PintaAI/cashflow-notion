@@ -6,8 +6,8 @@ import { getIdrRate } from "@/lib/exchange-rates";
 
 export async function getBalanceAsOf(managementId: string): Promise<number> {
   const [incomeAgg, expensesAgg] = await Promise.all([
-    prisma.entry.aggregate({ where: { managementId, io: "Income" }, _sum: { nominal: true } }),
-    prisma.entry.aggregate({ where: { managementId, io: "Expenses" }, _sum: { nominal: true } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Income", deletedAt: null }, _sum: { nominal: true } }),
+    prisma.entry.aggregate({ where: { managementId, io: "Expenses", deletedAt: null }, _sum: { nominal: true } }),
   ]);
 
   const totalIncome = incomeAgg._sum.nominal ?? 0;

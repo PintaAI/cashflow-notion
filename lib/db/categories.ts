@@ -45,7 +45,7 @@ export async function getCategoryOptionsWithUsage(managementId: string): Promise
     }),
     prisma.entry.groupBy({
       by: ["categoryId"],
-      where: { categoryId: { not: null }, managementId },
+      where: { categoryId: { not: null }, managementId, deletedAt: null },
       _count: { _all: true },
     }),
   ]);
@@ -164,5 +164,5 @@ export async function removeCategoryOption(categoryId: string, managementId?: st
 }
 
 export async function getCategoryUsageCount(categoryName: string, managementId: string): Promise<number> {
-  return prisma.entry.count({ where: { category: { is: { name: categoryName } }, managementId } });
+  return prisma.entry.count({ where: { category: { is: { name: categoryName } }, managementId, deletedAt: null } });
 }

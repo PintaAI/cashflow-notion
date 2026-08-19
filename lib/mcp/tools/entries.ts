@@ -97,7 +97,7 @@ export function registerEntryTools(server: McpServer) {
     async ({ id }) => {
       try {
         const entry = await prisma.entry.findFirst({
-          where: { id, managementId: getManagementId() },
+          where: { id, managementId: getManagementId(), deletedAt: null },
           include: { category: true },
         });
         if (!entry) throw new Error(`Entry with ID "${id}" not found`);

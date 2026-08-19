@@ -58,6 +58,7 @@ export function buildEntryWhere(filter: {
   createdById?: string | null;
 } = {}): EntryWhereInput {
   return {
+    deletedAt: null,
     ...(filter.io ? { io: filter.io } : {}),
     ...(filter.category ? { category: { is: { name: filter.category } } } : {}),
     ...(filter.createdById !== undefined ? { createdById: filter.createdById } : {}),
@@ -76,7 +77,7 @@ export function buildEntryWhere(filter: {
 
 export async function getAllEntries(managementId: string): Promise<CashflowEntry[]> {
   const entries = await prisma.entry.findMany({
-    where: { managementId },
+    where: { managementId, deletedAt: null },
     include: { category: true, createdBy: { select: entryCreatorSelect } },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
@@ -93,11 +94,11 @@ export async function getEntries(options?: {
 }
 
 export async function countEntries(managementId: string): Promise<number> {
-  return prisma.entry.count({ where: { managementId } });
+  return prisma.entry.count({ where: { managementId, deletedAt: null } });
 }
 
 export async function countEntriesForDate(date: string, managementId: string): Promise<number> {
-  return prisma.entry.count({ where: { date, managementId } });
+  return prisma.entry.count({ where: { date, managementId, deletedAt: null } });
 }
 
 export async function getEntriesFiltered(options?: {
@@ -241,7 +242,7 @@ export async function updateEntry(
   };
 
   const result = await prisma.entry.updateMany({
-    where: { id: entryId, managementId: data.managementId },
+    where: { id: entryId, managementId: data.managementId, deletedAt: null },
     data: updateData,
   });
 
@@ -250,7 +251,7 @@ export async function updateEntry(
   }
 
   const entry = await prisma.entry.findFirst({
-    where: { id: entryId, managementId: data.managementId },
+    where: { id: entryId, managementId: data.managementId, deletedAt: null },
     include: { category: true, createdBy: { select: entryCreatorSelect } },
   });
 
@@ -260,7 +261,7 @@ export async function updateEntry(
 }
 
 export async function deleteEntry(entryId: string, managementId: string): Promise<void> {
-  const result = await prisma.entry.deleteMany({ where: { id: entryId, managementId } });
+  const result = await prisma.entry.updateMany({ where: { id: entryId, managementId, deletedAt: null }, data: { deletedAt: new Date() } });
   if (result.count === 0) throw new Error("Entry not found");
 }
 

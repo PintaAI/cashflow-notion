@@ -102,7 +102,7 @@ function urlFilterToAnalyticsFilter(urlFilter: URLAnalyticsFilter): AnalyticsFil
 }
 
 function buildAnalyticsWhereSql(filter: AnalyticsFilter, managementId: string) {
-  const conditions = [Prisma.sql`e."managementId" = ${managementId}`];
+  const conditions = [Prisma.sql`e."managementId" = ${managementId}`, Prisma.sql`e."deletedAt" IS NULL`];
 
   if (filter.io) {
     conditions.push(Prisma.sql`e."io"::text = ${filter.io}`);
@@ -298,14 +298,14 @@ export async function fetchActivityOverview(daysBack = 182, managementId: string
     prisma.$queryRaw<ActivityRow[]>`
       SELECT e."date" AS "date", COUNT(*) AS "count"
       FROM "Entry" e
-      WHERE e."date" >= ${alignedStartDateKey} AND e."managementId" = ${managementId}
+      WHERE e."deletedAt" IS NULL AND e."date" >= ${alignedStartDateKey} AND e."managementId" = ${managementId}
       GROUP BY e."date"
       ORDER BY "date" ASC
     `,
     prisma.$queryRaw<ActivityRow[]>`
       SELECT DATE(e."createdAt") AS "date", COUNT(*) AS "count"
       FROM "Entry" e
-      WHERE e."createdAt" >= ${alignedStartDate} AND e."managementId" = ${managementId}
+      WHERE e."deletedAt" IS NULL AND e."createdAt" >= ${alignedStartDate} AND e."managementId" = ${managementId}
       GROUP BY DATE(e."createdAt")
       ORDER BY "date" ASC
     `,

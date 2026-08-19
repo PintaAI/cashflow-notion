@@ -21,9 +21,10 @@ export async function getAdminDashboard() {
     prisma.user.count(),
     prisma.management.count(),
     prisma.entry.aggregate({
+      where: { deletedAt: null },
       _sum: { nominal: true },
     }),
-    prisma.entry.count(),
+    prisma.entry.count({ where: { deletedAt: null } }),
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -33,7 +34,7 @@ export async function getAdminDashboard() {
       orderBy: { createdAt: "desc" },
       take: 5,
       include: {
-        _count: { select: { members: true, entries: true } },
+        _count: { select: { members: true, entries: { where: { deletedAt: null } } } },
         members: {
           where: { role: "owner" },
           include: { user: { select: { name: true, email: true } } },
@@ -45,11 +46,11 @@ export async function getAdminDashboard() {
 
   const totalIncome = await prisma.entry.aggregate({
     _sum: { nominal: true },
-    where: { io: "Income" },
+    where: { io: "Income", deletedAt: null },
   });
   const totalExpenses = await prisma.entry.aggregate({
     _sum: { nominal: true },
-    where: { io: "Expenses" },
+    where: { io: "Expenses", deletedAt: null },
   });
 
   return {
@@ -90,6 +91,7 @@ export async function getAllUsers() {
 
   const entryCounts = await prisma.entry.groupBy({
     by: ["managementId"],
+    where: { deletedAt: null },
     _count: { _all: true },
   });
   const countByManagement = new Map(
@@ -120,7 +122,7 @@ export async function getAllManagements() {
   const managements = await prisma.management.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      _count: { select: { members: true, entries: true, categories: true, quickFills: true } },
+      _count: { select: { members: true, entries: { where: { deletedAt: null } }, categories: true, quickFills: true } },
       members: {
         where: { role: "owner" },
         include: { user: { select: { id: true, name: true, email: true, image: true } } },
@@ -131,6 +133,7 @@ export async function getAllManagements() {
 
   const lastEntryDates = await prisma.entry.groupBy({
     by: ["managementId"],
+    where: { deletedAt: null },
     _max: { date: true },
   });
   const lastActivity = new Map(
@@ -160,7 +163,7 @@ export async function getManagementDetails(managementId: string) {
         include: { user: { select: { id: true, name: true, email: true, image: true, createdAt: true } } },
         orderBy: { joinedAt: "asc" },
       },
-      _count: { select: { entries: true, categories: true, quickFills: true, invitations: true } },
+      _count: { select: { entries: { where: { deletedAt: null } }, categories: true, quickFills: true, invitations: true } },
     },
   });
   if (!management) throw new Error("Management not found");
@@ -168,15 +171,15 @@ export async function getManagementDetails(managementId: string) {
   const [entryAgg, incomeAgg, expensesAgg] = await Promise.all([
     prisma.entry.aggregate({
       _sum: { nominal: true },
-      where: { managementId },
+      where: { managementId, deletedAt: null },
     }),
     prisma.entry.aggregate({
       _sum: { nominal: true },
-      where: { managementId, io: "Income" },
+      where: { managementId, io: "Income", deletedAt: null },
     }),
     prisma.entry.aggregate({
       _sum: { nominal: true },
-      where: { managementId, io: "Expenses" },
+      where: { managementId, io: "Expenses", deletedAt: null },
     }),
   ]);
 

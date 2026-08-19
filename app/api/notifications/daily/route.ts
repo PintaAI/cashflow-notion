@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const invalidEndpoints = new Set<string>();
 
     for (const [managementId, subs] of byManagement) {
-      const hasEntries = await prisma.entry.findFirst({ where: { date: today, managementId } });
+      const hasEntries = await prisma.entry.findFirst({ where: { date: today, managementId, deletedAt: null } });
       if (hasEntries) continue;
 
       for (const subscription of subs) {

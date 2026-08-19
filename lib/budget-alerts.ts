@@ -109,6 +109,7 @@ export async function checkBudgetAlerts(
             prisma.entry.aggregate({
               where: {
                 managementId,
+                deletedAt: null,
                 io: "Expenses",
                 categoryId: category.id,
                 date: { gte: start, lte: end },
@@ -150,6 +151,7 @@ export async function checkBudgetAlerts(
           prisma.entry.aggregate({
             where: {
               managementId,
+              deletedAt: null,
               io: "Expenses",
               date: { gte: start, lte: end },
             },
