@@ -22,6 +22,7 @@ export type EntrySyncRecord = {
   categoryId: string | null;
   date: string | null;
   io: IOType | null;
+  isInvestmentTransfer: boolean;
   createdById: string | null;
   createdAt: string;
   updatedAt: string;
@@ -49,7 +50,7 @@ export function decodeEntrySyncCursor(cursor: string, managementId: string): { u
 function toSyncRecord(entry: {
   id: string; name: string; nominal: number; originalNominal: number | null; originalCurrency: string | null;
   exchangeRateToIdr: number | null; exchangeRateAt: Date | null; categoryId: string | null; date: string | null;
-  io: IOType | null; createdById: string | null; createdAt: Date; updatedAt: Date; deletedAt: Date | null;
+  io: IOType | null; isInvestmentTransfer: boolean; createdById: string | null; createdAt: Date; updatedAt: Date; deletedAt: Date | null;
 }): EntrySyncRecord {
   return { ...entry, exchangeRateAt: entry.exchangeRateAt?.toISOString() ?? null, createdAt: entry.createdAt.toISOString(), updatedAt: entry.updatedAt.toISOString(), deletedAt: entry.deletedAt?.toISOString() ?? null };
 }
@@ -65,7 +66,8 @@ export async function getEntrySyncPage(managementId: string, cursor?: string, li
     take: Math.min(Math.max(limit, 1), ENTRY_SYNC_PAGE_SIZE) + 1,
     select: {
       id: true, name: true, nominal: true, originalNominal: true, originalCurrency: true, exchangeRateToIdr: true,
-      exchangeRateAt: true, categoryId: true, date: true, io: true, createdById: true, createdAt: true, updatedAt: true, deletedAt: true,
+      exchangeRateAt: true, categoryId: true, date: true, io: true, isInvestmentTransfer: true, createdById: true,
+      createdAt: true, updatedAt: true, deletedAt: true,
     },
   });
   const pageSize = Math.min(Math.max(limit, 1), ENTRY_SYNC_PAGE_SIZE);
@@ -120,6 +122,25 @@ async function maybeCleanupExpiredEntrySyncMutations(now = Date.now()): Promise<
   });
 }
 
+async function detectInvestmentTransferFlag(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  managementId: string,
+  name: string,
+): Promise<boolean> {
+  if (!name.startsWith("Transfer ")) return false;
+  const host = await tx.management.findUnique({ where: { id: managementId }, select: { category: true } });
+  if (name.startsWith("Transfer from ")) return host?.category === "INVESTMENT";
+  if (!name.startsWith("Transfer to ")) return false;
+  const targetName = name.slice("Transfer to ".length).split(" · ")[0].trim();
+  if (!targetName) return false;
+  const destination = await tx.management.findFirst({
+    where: { name: targetName, category: "INVESTMENT", members: { some: { userId } } },
+    select: { id: true },
+  });
+  return Boolean(destination);
+}
+
 async function applyMutation(managementId: string, userId: string, mutation: EntrySyncMutation): Promise<EntrySyncMutationResult> {
   if (!mutation.mutationId || !["create", "update", "delete"].includes(mutation.operation)) {
     return { mutationId: mutation.mutationId || "invalid", ok: false, error: "Invalid mutation" };
@@ -138,11 +159,15 @@ async function applyMutation(managementId: string, userId: string, mutation: Ent
         const category = await tx.category.findFirst({ where: { id: data.categoryId, managementId }, select: { id: true } });
         if (!category) throw new Error("Category not found");
       }
+      const isInvestmentTransfer = data.name !== undefined && mutation.operation !== "delete"
+        ? await detectInvestmentTransferFlag(tx, userId, managementId, data.name)
+        : false;
       const common = {
         ...(data.name !== undefined ? { name: data.name } : {}), ...(data.nominal !== undefined ? { nominal: data.nominal } : {}),
         ...(data.originalNominal !== undefined ? { originalNominal: data.originalNominal } : {}), ...(data.originalCurrency !== undefined ? { originalCurrency: data.originalCurrency } : {}),
         ...(data.exchangeRateToIdr !== undefined ? { exchangeRateToIdr: data.exchangeRateToIdr } : {}), ...(data.exchangeRateAt !== undefined ? { exchangeRateAt: new Date(data.exchangeRateAt) } : {}),
         ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}), ...(data.date !== undefined ? { date: data.date } : {}), ...(data.io !== undefined ? { io: data.io } : {}),
+        ...(isInvestmentTransfer ? { isInvestmentTransfer: true } : {}),
       };
       let entry;
       if (mutation.operation === "create") {
@@ -150,7 +175,7 @@ async function applyMutation(managementId: string, userId: string, mutation: Ent
         const existing = await tx.entry.findUnique({ where: { id: mutation.clientId }, select: { managementId: true } });
         const decision = decideCreateRetry(existing?.managementId ?? null, managementId);
         if (decision === "forbidden") throw new Error("Entry not found");
-        const createData = { id: mutation.clientId, name: data.name, nominal: data.nominal, originalNominal: data.originalNominal ?? data.nominal, originalCurrency: data.originalCurrency ?? "IDR", exchangeRateToIdr: data.exchangeRateToIdr ?? 1, exchangeRateAt: data.exchangeRateAt ? new Date(data.exchangeRateAt) : new Date(), categoryId: data.categoryId, date: data.date, io: data.io, managementId, createdById: userId };
+        const createData = { id: mutation.clientId, name: data.name, nominal: data.nominal, originalNominal: data.originalNominal ?? data.nominal, originalCurrency: data.originalCurrency ?? "IDR", exchangeRateToIdr: data.exchangeRateToIdr ?? 1, exchangeRateAt: data.exchangeRateAt ? new Date(data.exchangeRateAt) : new Date(), categoryId: data.categoryId, date: data.date, io: data.io, isInvestmentTransfer, managementId, createdById: userId };
         entry = decision === "create"
           ? await tx.entry.create({ data: createData })
           : await tx.entry.update({ where: { id: mutation.clientId }, data: { ...common, deletedAt: null } });

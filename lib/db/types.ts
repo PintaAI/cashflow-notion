@@ -24,6 +24,7 @@ export interface CashflowEntry {
   category: CategoryType | null;
   date: string | null;
   io: IOType | null;
+  isInvestmentTransfer: boolean;
   createdById: string | null;
   createdBy: {
     id: string;

@@ -102,7 +102,11 @@ function urlFilterToAnalyticsFilter(urlFilter: URLAnalyticsFilter): AnalyticsFil
 }
 
 function buildAnalyticsWhereSql(filter: AnalyticsFilter, managementId: string) {
-  const conditions = [Prisma.sql`e."managementId" = ${managementId}`, Prisma.sql`e."deletedAt" IS NULL`];
+  const conditions = [
+    Prisma.sql`e."managementId" = ${managementId}`,
+    Prisma.sql`e."deletedAt" IS NULL`,
+    Prisma.sql`e."isInvestmentTransfer" = false`,
+  ];
 
   if (filter.io) {
     conditions.push(Prisma.sql`e."io"::text = ${filter.io}`);

@@ -267,10 +267,11 @@ export async function transferBetweenManagements(data: {
   }
 
   const [fromManagement, toManagement] = await Promise.all([
-    prisma.management.findUnique({ where: { id: fromManagementId }, select: { name: true } }),
-    prisma.management.findUnique({ where: { id: data.toManagementId }, select: { name: true } }),
+    prisma.management.findUnique({ where: { id: fromManagementId }, select: { name: true, category: true } }),
+    prisma.management.findUnique({ where: { id: data.toManagementId }, select: { name: true, category: true } }),
   ]);
   if (!fromManagement || !toManagement) throw new Error("Wallet not found");
+  const isInvestmentTransfer = toManagement.category === "INVESTMENT";
 
   const date = data.date ?? todayDateKey();
   const note = data.note?.trim();
@@ -309,6 +310,7 @@ export async function transferBetweenManagements(data: {
         categoryId: fromCategoryId,
         date,
         io: "Expenses",
+        isInvestmentTransfer,
         createdById: session.user.id,
       },
       include: { category: true, createdBy: { select: entryCreatorSelect } },
@@ -325,6 +327,7 @@ export async function transferBetweenManagements(data: {
         categoryId: toCategoryId,
         date,
         io: "Income",
+        isInvestmentTransfer,
         createdById: session.user.id,
       },
       include: { category: true, createdBy: { select: entryCreatorSelect } },

@@ -55,10 +55,11 @@ export function registerTransferTools(server: McpServer) {
         const idrAmount = await toIdrAmount(amount);
 
         const [fromManagement, toManagement] = await Promise.all([
-          prisma.management.findUnique({ where: { id: fromManagementId }, select: { name: true } }),
-          prisma.management.findUnique({ where: { id: toManagementId }, select: { name: true } }),
+          prisma.management.findUnique({ where: { id: fromManagementId }, select: { name: true, category: true } }),
+          prisma.management.findUnique({ where: { id: toManagementId }, select: { name: true, category: true } }),
         ]);
         if (!fromManagement || !toManagement) throw new Error("Wallet not found");
+        const isInvestmentTransfer = toManagement.category === "INVESTMENT";
 
         const today = date ?? (() => {
           const now = new Date();
@@ -87,6 +88,7 @@ export function registerTransferTools(server: McpServer) {
               categoryId: fromCategoryId,
               date: today,
               io: "Expenses",
+              isInvestmentTransfer,
               createdById: userId,
             },
             include: { category: true },
@@ -103,6 +105,7 @@ export function registerTransferTools(server: McpServer) {
               categoryId: toCategoryId,
               date: today,
               io: "Income",
+              isInvestmentTransfer,
               createdById: userId,
             },
             include: { category: true },

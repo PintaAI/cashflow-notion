@@ -42,6 +42,7 @@ export function toEntry(entry: EntryForMapping): CashflowEntry {
     category: entry.category?.name ?? null,
     date: entry.date,
     io: entry.io,
+    isInvestmentTransfer: entry.isInvestmentTransfer,
     createdById: entry.createdById,
     createdBy: entry.createdBy ?? null,
     createdAt: entry.createdAt.toISOString(),
