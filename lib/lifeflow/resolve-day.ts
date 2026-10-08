@@ -3,7 +3,7 @@ import type { HabitLogPayload, ItemExceptionPayload, ItemPayload } from "./contr
 export type ItemOccurrence = {
   id: string; itemId: string; originalDate: string; date: string; kind: "habit" | "event";
   name: string; color: string; startTime: string | null; endTime: string | null;
-  breakDurations: number[]; completed: boolean; overridden: boolean;
+  notifyStart: boolean; notifyEnd: boolean; breakDurations: number[]; completed: boolean; overridden: boolean;
 };
 
 const DAY = 86_400_000;
@@ -36,6 +36,8 @@ export function resolveItemOccurrences(startDate: string, days: number, items: I
     result.push({ id: `${item.id}|${originalDate}`, itemId: item.id, originalDate, date, kind: item.kind,
       name: snapshot?.name ?? item.name, color: snapshot?.color ?? item.color,
       startTime: snapshot?.start_time ?? item.start_time, endTime: snapshot?.end_time ?? item.end_time,
+      notifyStart: snapshot?.notify_start ?? item.notify_start,
+      notifyEnd: snapshot?.notify_end ?? item.notify_end,
       breakDurations: JSON.parse(snapshot?.break_durations_json ?? item.break_durations_json),
       completed: item.kind === "habit" && logsByDate.has(`${item.id}|${originalDate}`), overridden: Boolean(exception) });
   };

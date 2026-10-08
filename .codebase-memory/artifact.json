@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "1bec99de5c462e9b3ab71bca502efa22ba04e029",
-    "indexed_at": "2026-08-19T09:17:35Z",
+    "commit": "7a64df45f48ae90c9c806937d8f56721b6eff8aa",
+    "indexed_at": "2026-08-22T13:39:20Z",
     "project": "root-projects-cashflow-notion",
-    "nodes": 2817,
-    "edges": 11257,
-    "original_size": 12058624,
-    "compressed_size": 2274851,
+    "nodes": 3364,
+    "edges": 13532,
+    "original_size": 13697024,
+    "compressed_size": 2612181,
     "compression_level": 3
 }

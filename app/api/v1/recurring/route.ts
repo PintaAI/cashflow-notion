@@ -43,7 +43,10 @@ export async function POST(request: Request) {
     if (!body?.startDate || typeof body.startDate !== "string") {
       return Response.json({ error: "startDate is required" }, { status: 400 });
     }
-    if (typeof body?.reminderTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.reminderTime)) {
+    if (
+      body.reminderTime !== undefined &&
+      (typeof body.reminderTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.reminderTime))
+    ) {
       return Response.json({ error: "reminderTime must use HH:mm format" }, { status: 400 });
     }
 

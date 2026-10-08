@@ -1,17 +1,34 @@
-import { prisma } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db/client";
+import { Prisma } from "@prisma/client";
 import { assertCanonicalSystemItem, assertItemDefinitionMutation, assertSystemSyncMutation, habitLogPayloadSchema, itemExceptionPayloadSchema, itemPayloadSchema, lifeFlowKinds, type ItemPayload, type LifeFlowSyncEntity } from "@/lib/lifeflow/contract";
 import { recurrenceApplies } from "@/lib/lifeflow/resolve-day";
 import { selectEffectiveLifeFlowMutations } from "@/lib/lifeflow/sync-plan";
 
-export async function syncLifeFlow(userId: string, entities: LifeFlowSyncEntity[]) {
-  const stored = await prisma.lifeFlowEntity.findMany({
-    where: { userId, kind: { in: [...lifeFlowKinds] } },
-    select: { kind: true, entityId: true, payload: true, deletedAt: true, updatedAt: true },
-  });
+export async function withLifeFlowTransaction<T>(userId: string, work: (tx: Prisma.TransactionClient) => Promise<T>) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 78115))::text`;
+    return work(tx);
+  }, { timeout: 30000 });
+}
+
+export async function applyLifeFlowMutations(tx: Prisma.TransactionClient, userId: string, entities: LifeFlowSyncEntity[], overwrite = new Set<string>(), snapshot = true) {
+  if (!entities.length && !snapshot) return [];
+  const parents = [...new Set(entities.map((entity) => entity.kind === "item" ? entity.id : entity.id.slice(0, entity.id.lastIndexOf("|"))))];
+  const changedItems = entities.filter((entity) => entity.kind === "item").map((entity) => entity.id);
+  const identities = entities.map((entity) => Prisma.sql`(kind = ${entity.kind} AND "entityId" = ${entity.id})`);
+  const stored = await tx.$queryRaw<{ kind: string; entityId: string; payload: Prisma.JsonValue | null; deletedAt: Date | null; updatedAt: Date }[]>(Prisma.sql`
+    SELECT kind, "entityId", payload, "deletedAt", "updatedAt" FROM "LifeFlowEntity"
+    WHERE "userId" = ${userId} AND (
+      (kind = 'item' AND "entityId" = ANY(${[...parents, "lifeflow-app-check-in", "lifeflow-journal"]}::text[]))
+      OR (kind IN ('habit_log', 'item_exception') AND payload->>'item_id' = ANY(${changedItems}::text[]))
+      ${identities.length ? Prisma.sql`OR (${Prisma.join(identities, " OR ")})` : Prisma.empty}
+    )`);
   const keyOf = (entity: { kind: string; entityId: string }) => `${entity.kind}\0${entity.entityId}`;
-  const effective = selectEffectiveLifeFlowMutations(stored, entities);
-  const protectedItems = new Map(stored.filter((entity) => !entity.deletedAt && entity.kind === "item" && (entity.payload as { system_type?: string | null })?.system_type).map((entity) => [entity.entityId, entity.payload as ItemPayload]));
+  const chosen = selectEffectiveLifeFlowMutations(stored, entities);
+  const effective = [...chosen, ...entities.filter((entity) => overwrite.has(`${entity.kind}\0${entity.id}`) && !chosen.some((value) => value.kind === entity.kind && value.id === entity.id))];
+  const protectedItems = new Map(stored
+    .filter((entity) => !entity.deletedAt && entity.kind === "item" && (entity.payload as { system_type?: string | null })?.system_type)
+    .map((entity) => [entity.entityId, itemPayloadSchema.parse(entity.payload)]));
   for (const entity of effective) if (entity.kind === "item" && protectedItems.has(entity.id)) {
     assertSystemSyncMutation(protectedItems.get(entity.id)!, entity);
   }
@@ -59,7 +76,7 @@ export async function syncLifeFlow(userId: string, entities: LifeFlowSyncEntity[
     }
   }
 
-  await prisma.$transaction(async (tx) => {
+  {
     const rank = (entity: LifeFlowSyncEntity) => entity.kind === "item" ? (entity.deleted ? 3 : 0) : (entity.deleted ? 2 : 1);
     for (const entity of [...effective].sort((a, b) => rank(a) - rank(b))) {
       const clientUpdatedAt = new Date(entity.updatedAt);
@@ -81,17 +98,22 @@ export async function syncLifeFlow(userId: string, entities: LifeFlowSyncEntity[
         },
       });
     }
-  });
+  }
 
-  const snapshot = await prisma.lifeFlowEntity.findMany({
+  if (!snapshot) return [];
+  const all = await tx.lifeFlowEntity.findMany({
     where: { userId, kind: { in: [...lifeFlowKinds] } },
     orderBy: [{ kind: "asc" }, { entityId: "asc" }],
   });
-  return snapshot.map((entity) => ({
+  return all.map((entity) => ({
     kind: entity.kind,
     id: entity.entityId,
     updatedAt: entity.updatedAt.toISOString(),
     deleted: entity.deletedAt !== null,
     data: entity.deletedAt ? null : entity.payload,
   }));
+}
+
+export async function syncLifeFlow(userId: string, entities: LifeFlowSyncEntity[]) {
+  return withLifeFlowTransaction(userId, (tx) => applyLifeFlowMutations(tx, userId, entities));
 }

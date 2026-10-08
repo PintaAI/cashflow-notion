@@ -12,6 +12,8 @@ const item = (overrides: Partial<ItemPayload> = {}) => itemPayloadSchema.parse({
 });
 
 test("validates unified identities and rejects old kinds", () => {
+  assert.equal(item().notify_start, true);
+  assert.equal(item({ notify_start: false, notify_end: false }).notify_end, false);
   assert.equal(lifeFlowEntitySchema.safeParse({ kind: "habit", id: "old", updatedAt: "2026-08-05T00:00:00.000Z", deleted: true }).success, false);
   assert.equal(lifeFlowEntitySchema.safeParse({ kind: "habit_log", id: "wrong", updatedAt: "2026-08-05T00:00:00.000Z", data: { item_id: "item", date: "2026-08-05", completed_at: "2026-08-05T01:00:00.000Z", updated_at: "2026-08-05T01:00:00.000Z" } }).success, false);
 });
@@ -47,7 +49,7 @@ test("resolver retains overlaps, applies logs, cancellation, and moves into rang
   const other = item({ id: "other", starts_on: "2026-08-01", start_time: "19:30", end_time: "20:30" });
   const exceptions = [
     { item_id: "event", original_date: "2026-08-05", replacement_date: null, cancelled: true, replacement: null, created_at: "2026-08-01T00:00:00.000Z", updated_at: "2026-08-01T00:00:00.000Z" },
-    { item_id: "event", original_date: "2026-08-01", replacement_date: "2026-08-06", cancelled: false, replacement: { name: "Moved", color: "#EF4444", start_time: null, end_time: null, break_durations_json: "[]" }, created_at: "2026-08-01T00:00:00.000Z", updated_at: "2026-08-01T00:00:00.000Z" },
+    { item_id: "event", original_date: "2026-08-01", replacement_date: "2026-08-06", cancelled: false, replacement: { name: "Moved", color: "#EF4444", start_time: null, end_time: null, notify_start: true, notify_end: true, break_durations_json: "[]" }, created_at: "2026-08-01T00:00:00.000Z", updated_at: "2026-08-01T00:00:00.000Z" },
   ];
   const logs = [{ item_id: "habit", date: "2026-08-06", completed_at: "2026-08-06T01:00:00.000Z", updated_at: "2026-08-06T01:00:00.000Z" }];
   const result = resolveItemOccurrences("2026-08-05", 2, [habit, event, other], exceptions, logs);

@@ -40,6 +40,7 @@ enum WerewolfRoomStatus {
 }
 
 model User {
+  lifeFlowSyncState LifeFlowSyncState?
   id                 String   @id
   name               String
   email              String   @unique
@@ -274,6 +275,7 @@ model Verification {
 }
 
 model Management {
+  syncRevision WalletSyncRevision?
   id                 String              @id @default(uuid())
   name               String
   category           ManagementCategory?
@@ -618,4 +620,42 @@ model OAuthConsent {
 
   @@unique([clientId, userId])
   @@map("OAuthConsent")
+}
+
+model LifeFlowSyncState {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  epoch String @default(dbgenerated("(gen_random_uuid())::text"))
+  revision BigInt @default(0)
+  changes LifeFlowChange[]
+  receipts LifeFlowSyncReceipt[]
+}
+model LifeFlowChange {
+  userId String
+  state LifeFlowSyncState @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  revision BigInt
+  kind String
+  entityId String
+  payload Json?
+  updatedAt DateTime @db.Timestamp(3)
+  deletedAt DateTime? @db.Timestamp(3)
+  @@id([userId, revision])
+  @@index([userId, kind, entityId, revision(sort: Desc)], map: "LifeFlowChange_entity_idx")
+}
+model LifeFlowSyncReceipt {
+  userId String
+  state LifeFlowSyncState @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  mutationId String
+  fingerprint String
+  result Json
+  @@id([userId, mutationId])
+}
+model WalletSyncRevision {
+  managementId String @id
+  management Management @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  epoch String @default(dbgenerated("(gen_random_uuid())::text"))
+  categories BigInt @default(0)
+  quickFills BigInt @default(0)
+  budgets BigInt @default(0)
+  recurring BigInt @default(0)
 }

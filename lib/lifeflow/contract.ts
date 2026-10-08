@@ -31,6 +31,8 @@ export function canonicalSystemItem(type: "app_check_in" | "journal") {
     starts_on: SYSTEM_ITEM_ANCHOR_DATE,
     start_time: null,
     end_time: null,
+    notify_start: true,
+    notify_end: true,
     break_durations_json: "[]",
     recurrence_frequency: "daily" as const,
     recurrence_interval: 1,
@@ -56,9 +58,13 @@ const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value
 const duration = (start: string, end: string) => (minutes(end) - minutes(start) + 1440) % 1440;
 const parsedArray = (value: string) => { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } };
 
+const notificationFlag = z.preprocess((value) => value === 0 ? false : value === 1 ? true : value, z.boolean().default(true));
+
 const occurrenceSnapshotFields = {
   name: z.string().trim().min(1).max(200), color: z.string().regex(/^#[0-9a-f]{6}$/i, "must be a six-digit hex color"),
-  start_time: time.nullable(), end_time: time.nullable(), break_durations_json: breakDurations,
+  start_time: time.nullable(), end_time: time.nullable(),
+  notify_start: notificationFlag, notify_end: notificationFlag,
+  break_durations_json: breakDurations,
 };
 export const itemOccurrenceSnapshotSchema = z.object(occurrenceSnapshotFields).strict().superRefine(validateTiming);
 

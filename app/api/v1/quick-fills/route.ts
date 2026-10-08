@@ -24,9 +24,9 @@ export async function POST(request: Request) {
     if (!body?.name || typeof body.name !== "string") {
       return Response.json({ error: "name is required" }, { status: 400 });
     }
-    if (typeof body?.nominal !== "number" || body.nominal <= 0) {
+    if (typeof body?.nominal !== "number" || body.nominal < 0) {
       return Response.json(
-        { error: "nominal must be a positive number" },
+        { error: "nominal must be a non-negative number" },
         { status: 400 },
       );
     }
