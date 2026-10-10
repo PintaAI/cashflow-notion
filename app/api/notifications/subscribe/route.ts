@@ -11,7 +11,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid push subscription" }, { status: 400 });
   }
 
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await auth.api.getSession({
+    headers: request.headers,
+    query: { disableRefresh: true },
+  });
   const stored = await saveSubscription(subscription);
 
   if (session) {

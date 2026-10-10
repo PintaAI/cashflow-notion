@@ -6,7 +6,10 @@ import { prisma } from "@/lib/db";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await auth.api.getSession({
+    headers: request.headers,
+    query: { disableRefresh: true },
+  });
   if (!session) {
     return new Response("Unauthorized", { status: 401 });
   }

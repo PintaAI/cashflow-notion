@@ -59,6 +59,13 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
   trustedOrigins: ["https://cashflow-notion.vercel.app", "https://jennie-linux.tail2268a1.ts.net", "https://appleid.apple.com", "ethos://", "ethos://*"],
+  // Sessions effectively never expire. Only the client-facing /get-session
+  // rolls them (API routes pass disableRefresh), so each refresh returns a
+  // Set-Cookie that older Expo builds persist with the new expiry.
+  session: {
+    expiresIn: 60 * 60 * 24 * 365 * 10,
+    updateAge: 60 * 60 * 24,
+  },
   emailAndPassword: {
     enabled: true,
   },

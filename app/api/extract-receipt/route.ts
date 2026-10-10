@@ -32,7 +32,10 @@ const receiptSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await auth.api.getSession({
+      headers: request.headers,
+      query: { disableRefresh: true },
+    });
     if (!session) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

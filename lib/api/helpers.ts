@@ -25,7 +25,10 @@ export type AuthenticatedSession = NonNullable<
 export async function requireSession(
   request: Request,
 ): Promise<AuthenticatedSession> {
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await auth.api.getSession({
+    headers: request.headers,
+    query: { disableRefresh: true },
+  });
   if (!session) {
     throw new ApiError("Unauthorized", 401);
   }
